@@ -77,14 +77,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Painel de Higienização Terminal" },
+      { name: "description", content: "Sistema de controle de altas e higienização terminal de leitos hospitalares." },
+      { name: "author", content: "Hospital Operations" },
+      { property: "og:title", content: "Painel de Higienização Terminal" },
+      { property: "og:description", content: "Sistema de controle de altas e higienização terminal de leitos hospitalares." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
