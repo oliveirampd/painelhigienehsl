@@ -1,24 +1,46 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Painel de Higienização Terminal" },
+      { name: "description", content: "Sistema de operações para higienização terminal de leitos hospitalares." },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="max-w-xl w-full text-center space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Higienização Terminal</h1>
+          <p className="mt-2 text-muted-foreground">
+            Sistema de controle de altas e limpeza de leitos hospitalares.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Link
+            to="/control"
+            className="rounded-xl border border-border bg-card p-6 text-left hover:border-primary transition-colors"
+          >
+            <div className="text-lg font-semibold">Painel de Controle</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Para o operador. Atribuir equipe, atualizar status, gerenciar pausas.
+            </p>
+          </Link>
+          <Link
+            to="/tv"
+            className="rounded-xl border border-border bg-card p-6 text-left hover:border-primary transition-colors"
+          >
+            <div className="text-lg font-semibold">Painel TV</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Exibição em tela cheia para monitor. Somente leitura.
+            </p>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
