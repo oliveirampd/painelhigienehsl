@@ -14,7 +14,85 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      discharges: {
+        Row: {
+          assigned_staff_id: string | null
+          bed_number: string
+          created_at: string
+          id: string
+          pause_reason: string | null
+          priority: boolean
+          status: Database["public"]["Enums"]["discharge_status"]
+          status_updated_at: string
+          unit: string
+        }
+        Insert: {
+          assigned_staff_id?: string | null
+          bed_number: string
+          created_at?: string
+          id?: string
+          pause_reason?: string | null
+          priority?: boolean
+          status?: Database["public"]["Enums"]["discharge_status"]
+          status_updated_at?: string
+          unit: string
+        }
+        Update: {
+          assigned_staff_id?: string | null
+          bed_number?: string
+          created_at?: string
+          id?: string
+          pause_reason?: string | null
+          priority?: boolean
+          status?: Database["public"]["Enums"]["discharge_status"]
+          status_updated_at?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discharges_assigned_staff_id_fkey"
+            columns: ["assigned_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff: {
+        Row: {
+          created_at: string
+          current_discharge_id: string | null
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["staff_status"]
+          status_updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_discharge_id?: string | null
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["staff_status"]
+          status_updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_discharge_id?: string | null
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["staff_status"]
+          status_updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_current_discharge_fk"
+            columns: ["current_discharge_id"]
+            isOneToOne: false
+            referencedRelation: "discharges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +101,20 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      discharge_status:
+        | "waiting_cleaning"
+        | "en_route"
+        | "in_progress"
+        | "paused"
+        | "maintenance"
+        | "completed"
+      staff_status:
+        | "available"
+        | "assigned"
+        | "coffee_break"
+        | "lunch_break"
+        | "dinner_break"
+        | "off_duty"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +241,23 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      discharge_status: [
+        "waiting_cleaning",
+        "en_route",
+        "in_progress",
+        "paused",
+        "maintenance",
+        "completed",
+      ],
+      staff_status: [
+        "available",
+        "assigned",
+        "coffee_break",
+        "lunch_break",
+        "dinner_break",
+        "off_duty",
+      ],
+    },
   },
 } as const
