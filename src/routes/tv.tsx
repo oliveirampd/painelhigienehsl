@@ -4,7 +4,6 @@ import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
   DISCHARGE_STATUS_LABELS,
-  STAFF_STATUS_LABELS,
   elapsedMinutes,
   formatElapsed,
   isBreakOverLimit,
@@ -367,9 +366,6 @@ function MaintenanceStrip({ rows, nowMs }: { rows: Discharge[]; nowMs: number })
             </span>
           </div>
         ))}
-        <span className="ml-auto text-xs text-white/30 shrink-0 pl-4">
-          Suppress warning: {STAFF_STATUS_LABELS.available.length > 0 ? "" : ""}
-        </span>
       </div>
     </div>
   );
