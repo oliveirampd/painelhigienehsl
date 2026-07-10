@@ -112,7 +112,8 @@ function TvPage() {
 }
 
 function useClock() {
-  const [t, setT] = useState<string>(() => new Date().toLocaleTimeString("pt-BR"));
+  const [t, setT] = useState<string>("");
+  useEffect(() => { setT(new Date().toLocaleTimeString("pt-BR")); }, []);
   useEffect(() => {
     const id = setInterval(() => setT(new Date().toLocaleTimeString("pt-BR")), 1000);
     return () => clearInterval(id);

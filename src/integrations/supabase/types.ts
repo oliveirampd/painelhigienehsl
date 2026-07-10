@@ -19,6 +19,7 @@ export type Database = {
           assigned_staff_id: string | null
           bed_number: string
           created_at: string
+          external_id: string | null
           id: string
           pause_reason: string | null
           priority: boolean
@@ -30,6 +31,7 @@ export type Database = {
           assigned_staff_id?: string | null
           bed_number: string
           created_at?: string
+          external_id?: string | null
           id?: string
           pause_reason?: string | null
           priority?: boolean
@@ -41,6 +43,7 @@ export type Database = {
           assigned_staff_id?: string | null
           bed_number?: string
           created_at?: string
+          external_id?: string | null
           id?: string
           pause_reason?: string | null
           priority?: boolean
@@ -62,6 +65,7 @@ export type Database = {
         Row: {
           created_at: string
           current_discharge_id: string | null
+          external_id: string | null
           id: string
           name: string
           status: Database["public"]["Enums"]["staff_status"]
@@ -70,6 +74,7 @@ export type Database = {
         Insert: {
           created_at?: string
           current_discharge_id?: string | null
+          external_id?: string | null
           id?: string
           name: string
           status?: Database["public"]["Enums"]["staff_status"]
@@ -78,6 +83,7 @@ export type Database = {
         Update: {
           created_at?: string
           current_discharge_id?: string | null
+          external_id?: string | null
           id?: string
           name?: string
           status?: Database["public"]["Enums"]["staff_status"]
