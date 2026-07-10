@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TvRouteImport } from './routes/tv'
 import { Route as ControlRouteImport } from './routes/control'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHooksSyncListo360RouteImport } from './routes/api/public/hooks/sync-listo360'
 
 const TvRoute = TvRouteImport.update({
   id: '/tv',
@@ -28,35 +29,45 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksSyncListo360Route =
+  ApiPublicHooksSyncListo360RouteImport.update({
+    id: '/api/public/hooks/sync-listo360',
+    path: '/api/public/hooks/sync-listo360',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
   '/tv': typeof TvRoute
+  '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
   '/tv': typeof TvRoute
+  '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
   '/tv': typeof TvRoute
+  '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/control' | '/tv'
+  fullPaths: '/' | '/control' | '/tv' | '/api/public/hooks/sync-listo360'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/control' | '/tv'
-  id: '__root__' | '/' | '/control' | '/tv'
+  to: '/' | '/control' | '/tv' | '/api/public/hooks/sync-listo360'
+  id: '__root__' | '/' | '/control' | '/tv' | '/api/public/hooks/sync-listo360'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ControlRoute: typeof ControlRoute
   TvRoute: typeof TvRoute
+  ApiPublicHooksSyncListo360Route: typeof ApiPublicHooksSyncListo360Route
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +93,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/sync-listo360': {
+      id: '/api/public/hooks/sync-listo360'
+      path: '/api/public/hooks/sync-listo360'
+      fullPath: '/api/public/hooks/sync-listo360'
+      preLoaderRoute: typeof ApiPublicHooksSyncListo360RouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +107,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ControlRoute: ControlRoute,
   TvRoute: TvRoute,
+  ApiPublicHooksSyncListo360Route: ApiPublicHooksSyncListo360Route,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
