@@ -19,6 +19,7 @@ export const DISCHARGE_STATUS_LABELS: Record<DischargeStatus, string> = {
   paused: "Parada",
   maintenance: "Manutenção",
   completed: "Concluída",
+  completed_with_issues: "Concluída com Pendências",
 };
 
 export const STAFF_STATUS_LABELS: Record<StaffStatus, string> = {
