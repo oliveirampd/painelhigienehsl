@@ -8,11 +8,13 @@ const ESTABLISHMENT_ID = 1;
 type ListoAnswer = {
   id: number;
   sectorName: string | null;
+  sectorDescription: string | null;
   locationName: string | null;
   routeName: string | null;
+  inspectionName: string | null;
   userName: string | null;
   isPriority: boolean;
-  answerComment: string | null;
+  answerComment: { comment?: string | null } | string | null;
   startTime: string | null;
   endTime: string | null;
   date: string | null;
@@ -25,19 +27,36 @@ type DischargeStatus =
   | "in_progress"
   | "paused"
   | "maintenance"
-  | "completed";
+  | "completed"
+  | "completed_with_issues";
 
 function mapStatus(id?: number): DischargeStatus {
   switch (id) {
     case 1: return "waiting_cleaning";
     case 2: return "in_progress";
+    case 4: return "completed_with_issues";
     case 5: return "maintenance";
     case 7: return "paused";
     case 3:
-    case 4:
     case 6: return "completed";
     default: return "waiting_cleaning";
   }
+}
+
+// Filtra apenas rotinas de Limpeza Terminal de Leitos (ignora camareira, áreas comuns, etc.)
+function isTerminalBed(a: ListoAnswer): boolean {
+  const route = (a.routeName || "").toLowerCase();
+  const insp = (a.inspectionName || "").toLowerCase();
+  const loc = (a.locationName || "").toLowerCase();
+  const isBed = loc.startsWith("leito");
+  const isTerminal = route.includes("limpeza terminal") || insp.includes("terminal");
+  return isBed && isTerminal;
+}
+
+function extractComment(c: ListoAnswer["answerComment"]): string | null {
+  if (!c) return null;
+  if (typeof c === "string") return c;
+  return c.comment ?? null;
 }
 
 async function login(): Promise<string> {
