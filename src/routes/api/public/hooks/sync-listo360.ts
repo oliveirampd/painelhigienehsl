@@ -115,9 +115,12 @@ async function handle() {
     const token = await login();
     const answers = await fetchAnswers(token);
 
+    // Só limpezas terminais de leitos.
+    const bedAnswers = answers.filter(isTerminalBed);
+
     // 1) upsert staff (unique per userName)
     const staffNames = Array.from(new Set(
-      answers.map((a) => (a.userName || "").trim()).filter(Boolean),
+      bedAnswers.map((a) => (a.userName || "").trim()).filter(Boolean),
     ));
 
     if (staffNames.length) {
@@ -141,12 +144,11 @@ async function handle() {
     }
 
     // 2) upsert discharges
-    const dischargeRows = answers.map((a) => {
+    const dischargeRows = bedAnswers.map((a) => {
       const status = mapStatus(a.statusAnswer?.id);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
-      // Número do leito vem de `locationName` (campo "Local" no Listo).
       const bed = (a.locationName || `Leito ${a.id}`).trim();
-      const unit = (a.sectorName || a.routeName || "—").trim();
+      const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
       const statusUpdatedAt = a.endTime || a.startTime || a.date || new Date().toISOString();
       return {
         external_id: `listo:answer:${a.id}`,
@@ -154,7 +156,7 @@ async function handle() {
         unit,
         status,
         priority: !!a.isPriority,
-        pause_reason: a.answerComment || null,
+        pause_reason: extractComment(a.answerComment),
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
       };
