@@ -8,11 +8,13 @@ const ESTABLISHMENT_ID = 1;
 type ListoAnswer = {
   id: number;
   sectorName: string | null;
+  sectorDescription: string | null;
   locationName: string | null;
   routeName: string | null;
+  inspectionName: string | null;
   userName: string | null;
   isPriority: boolean;
-  answerComment: string | null;
+  answerComment: { comment?: string | null } | string | null;
   startTime: string | null;
   endTime: string | null;
   date: string | null;
@@ -25,19 +27,36 @@ type DischargeStatus =
   | "in_progress"
   | "paused"
   | "maintenance"
-  | "completed";
+  | "completed"
+  | "completed_with_issues";
 
 function mapStatus(id?: number): DischargeStatus {
   switch (id) {
     case 1: return "waiting_cleaning";
     case 2: return "in_progress";
+    case 4: return "completed_with_issues";
     case 5: return "maintenance";
     case 7: return "paused";
     case 3:
-    case 4:
     case 6: return "completed";
     default: return "waiting_cleaning";
   }
+}
+
+// Filtra apenas rotinas de Limpeza Terminal de Leitos (ignora camareira, áreas comuns, etc.)
+function isTerminalBed(a: ListoAnswer): boolean {
+  const route = (a.routeName || "").toLowerCase();
+  const insp = (a.inspectionName || "").toLowerCase();
+  const loc = (a.locationName || "").toLowerCase();
+  const isBed = loc.startsWith("leito");
+  const isTerminal = route.includes("limpeza terminal") || insp.includes("terminal");
+  return isBed && isTerminal;
+}
+
+function extractComment(c: ListoAnswer["answerComment"]): string | null {
+  if (!c) return null;
+  if (typeof c === "string") return c;
+  return c.comment ?? null;
 }
 
 async function login(): Promise<string> {
@@ -60,13 +79,20 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
-  const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=500&pageNumber=1&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-  const res = await fetch(url, {
-    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`all-answers ${res.status}`);
-  const body = await res.json() as ListoAnswer[] | { data?: ListoAnswer[] };
-  return Array.isArray(body) ? body : (body.data ?? []);
+  const all: ListoAnswer[] = [];
+  const pageSize = 500;
+  for (let page = 1; page <= 6; page++) {
+    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
+    const res = await fetch(url, {
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`all-answers p${page} ${res.status}`);
+    const body = await res.json() as ListoAnswer[] | { data?: ListoAnswer[] };
+    const rows = Array.isArray(body) ? body : (body.data ?? []);
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return all;
 }
 
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
@@ -89,9 +115,12 @@ async function handle() {
     const token = await login();
     const answers = await fetchAnswers(token);
 
+    // Só limpezas terminais de leitos.
+    const bedAnswers = answers.filter(isTerminalBed);
+
     // 1) upsert staff (unique per userName)
     const staffNames = Array.from(new Set(
-      answers.map((a) => (a.userName || "").trim()).filter(Boolean),
+      bedAnswers.map((a) => (a.userName || "").trim()).filter(Boolean),
     ));
 
     if (staffNames.length) {
@@ -115,12 +144,11 @@ async function handle() {
     }
 
     // 2) upsert discharges
-    const dischargeRows = answers.map((a) => {
+    const dischargeRows = bedAnswers.map((a) => {
       const status = mapStatus(a.statusAnswer?.id);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
-      // Número do leito vem de `locationName` (campo "Local" no Listo).
       const bed = (a.locationName || `Leito ${a.id}`).trim();
-      const unit = (a.sectorName || a.routeName || "—").trim();
+      const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
       const statusUpdatedAt = a.endTime || a.startTime || a.date || new Date().toISOString();
       return {
         external_id: `listo:answer:${a.id}`,
@@ -128,7 +156,7 @@ async function handle() {
         unit,
         status,
         priority: !!a.isPriority,
-        pause_reason: a.answerComment || null,
+        pause_reason: extractComment(a.answerComment),
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
       };
