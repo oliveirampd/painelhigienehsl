@@ -118,8 +118,9 @@ async function handle() {
     const dischargeRows = answers.map((a) => {
       const status = mapStatus(a.statusAnswer?.id);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
-      const bed = (a.sectorName || a.locationName || `Leito ${a.id}`).trim();
-      const unit = (a.locationName || a.routeName || "—").trim();
+      // Número do leito vem de `locationName` (campo "Local" no Listo).
+      const bed = (a.locationName || `Leito ${a.id}`).trim();
+      const unit = (a.sectorName || a.routeName || "—").trim();
       const statusUpdatedAt = a.endTime || a.startTime || a.date || new Date().toISOString();
       return {
         external_id: `listo:answer:${a.id}`,
