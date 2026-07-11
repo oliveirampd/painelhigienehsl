@@ -79,13 +79,20 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
-  const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=500&pageNumber=1&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-  const res = await fetch(url, {
-    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`all-answers ${res.status}`);
-  const body = await res.json() as ListoAnswer[] | { data?: ListoAnswer[] };
-  return Array.isArray(body) ? body : (body.data ?? []);
+  const all: ListoAnswer[] = [];
+  const pageSize = 500;
+  for (let page = 1; page <= 6; page++) {
+    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
+    const res = await fetch(url, {
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`all-answers p${page} ${res.status}`);
+    const body = await res.json() as ListoAnswer[] | { data?: ListoAnswer[] };
+    const rows = Array.isArray(body) ? body : (body.data ?? []);
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return all;
 }
 
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
