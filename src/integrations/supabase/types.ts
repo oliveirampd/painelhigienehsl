@@ -114,6 +114,7 @@ export type Database = {
         | "paused"
         | "maintenance"
         | "completed"
+        | "completed_with_issues"
       staff_status:
         | "available"
         | "assigned"
@@ -255,6 +256,7 @@ export const Constants = {
         "paused",
         "maintenance",
         "completed",
+        "completed_with_issues",
       ],
       staff_status: [
         "available",
