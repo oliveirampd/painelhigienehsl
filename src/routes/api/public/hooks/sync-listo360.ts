@@ -43,14 +43,20 @@ function mapStatus(id?: number): DischargeStatus {
   }
 }
 
-// Filtra apenas rotinas de Limpeza Terminal de Leitos (ignora camareira, áreas comuns, etc.)
+function isBedLocation(a: ListoAnswer): boolean {
+  return (a.locationName || "").toLowerCase().startsWith("leito");
+}
+
 function isTerminalBed(a: ListoAnswer): boolean {
   const route = (a.routeName || "").toLowerCase();
   const insp = (a.inspectionName || "").toLowerCase();
-  const loc = (a.locationName || "").toLowerCase();
-  const isBed = loc.startsWith("leito");
-  const isTerminal = route.includes("limpeza terminal") || insp.includes("terminal");
-  return isBed && isTerminal;
+  return isBedLocation(a) && (route.includes("limpeza terminal") || insp.includes("terminal"));
+}
+
+function isDismantleBed(a: ListoAnswer): boolean {
+  const route = (a.routeName || "").toLowerCase();
+  const insp = (a.inspectionName || "").toLowerCase();
+  return isBedLocation(a) && (route.includes("desmontagem") || insp.includes("desmontagem"));
 }
 
 function extractComment(c: ListoAnswer["answerComment"]): string | null {
@@ -115,12 +121,13 @@ async function handle() {
     const token = await login();
     const answers = await fetchAnswers(token);
 
-    // Só limpezas terminais de leitos.
     const bedAnswers = answers.filter(isTerminalBed);
+    const dismantleAnswers = answers.filter(isDismantleBed);
+    const relevant = [...bedAnswers, ...dismantleAnswers];
 
-    // 1) upsert staff (unique per userName)
+    // 1) upsert staff (unique per userName) — inclui quem está em desmontagem
     const staffNames = Array.from(new Set(
-      bedAnswers.map((a) => (a.userName || "").trim()).filter(Boolean),
+      relevant.map((a) => (a.userName || "").trim()).filter(Boolean),
     ));
 
     if (staffNames.length) {
@@ -131,7 +138,7 @@ async function handle() {
       }));
       await supabase.from("staff").upsert(staffRows, {
         onConflict: "external_id",
-        ignoreDuplicates: true, // do not overwrite manual status
+        ignoreDuplicates: true,
       });
     }
 
@@ -143,15 +150,15 @@ async function handle() {
       if (s.name) staffByName.set(s.name, s.id);
     }
 
-    // 2) upsert discharges
-    const dischargeRows = bedAnswers.map((a) => {
+    // 2) upsert discharges (terminal + desmontagem, distinguíveis pelo external_id)
+    const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
       const status = mapStatus(a.statusAnswer?.id);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
       const statusUpdatedAt = a.endTime || a.startTime || a.date || new Date().toISOString();
       return {
-        external_id: `listo:answer:${a.id}`,
+        external_id: `listo:${kind}:${a.id}`,
         bed_number: bed,
         unit,
         status,
@@ -160,7 +167,12 @@ async function handle() {
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
       };
-    });
+    };
+
+    const dischargeRows = [
+      ...bedAnswers.map((a) => buildRow(a, "answer")),
+      ...dismantleAnswers.map((a) => buildRow(a, "desmont")),
+    ];
 
     if (dischargeRows.length) {
       const { error } = await supabase
@@ -169,10 +181,10 @@ async function handle() {
       if (error) throw error;
     }
 
-    // 3) recompute staff status: assigned if has active discharge, else available
+    // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
     const activeIds = new Set(
       dischargeRows
-        .filter((d) => d.status === "in_progress" || d.status === "waiting_cleaning" || d.status === "en_route")
+        .filter((d) => d.status === "in_progress")
         .map((d) => d.assigned_staff_id)
         .filter(Boolean) as string[],
     );
@@ -184,7 +196,6 @@ async function handle() {
         await supabase.from("staff").update({ status: "assigned" }).in("id", toAssign);
       }
       if (toFree.length) {
-        // only reset if currently 'assigned' to avoid clobbering manual break statuses
         await supabase.from("staff").update({ status: "available" }).in("id", toFree).eq("status", "assigned");
       }
     }
@@ -192,6 +203,8 @@ async function handle() {
     return Response.json({
       ok: true,
       answers: answers.length,
+      terminal: bedAnswers.length,
+      desmontagem: dismantleAnswers.length,
       staff: staffNames.length,
       at: new Date().toISOString(),
     });
