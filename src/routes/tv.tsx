@@ -13,14 +13,14 @@ export const Route = createFileRoute("/tv")({
   head: () => ({
     meta: [
       { title: "TV — Painel de Higienização Terminal" },
-      { name: "description", content: "Exibição em tempo real: leitos em limpeza terminal, altas paradas e altas concluídas com pendências." },
+      { name: "description", content: "Painel em tempo real: leitos em limpeza terminal, altas paradas, concluídas com pendências e colaboradores." },
     ],
   }),
   component: TvPage,
 });
 
-// Unidades excluídas do painel.
 const EXCLUDED_UNITS = ["3D", "3C", "11C", "12C", "5B"];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function isExcluded(d: Discharge): boolean {
   const u = (d.unit || "").toUpperCase();
@@ -28,105 +28,137 @@ function isExcluded(d: Discharge): boolean {
   return EXCLUDED_UNITS.some((ex) => u.includes(ex) || b.includes(` ${ex}`));
 }
 
+const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
+const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
+const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
+
+type StaffActivity = "desmontando" | "em_alta" | "disponivel";
+
 function TvPage() {
   const { discharges, staff } = useHospitalData();
-  const now = useNow(30000);
+  const now = useNow(15000);
   const clock = useClock();
 
   const filtered = useMemo(
-    () => discharges.filter((d) => !isExcluded(d)),
+    () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
     [discharges],
   );
 
-  // Leitos em execução (in_progress ou a caminho)
+  // Em Limpeza: terminal + in_progress
   const inFlight = useMemo(
     () =>
       filtered
-        .filter((d) => d.status === "in_progress" || d.status === "en_route")
-        .sort(
-          (a, b) =>
-            new Date(b.status_updated_at).getTime() -
-            new Date(a.status_updated_at).getTime(),
-        ),
+        .filter((d) => isTerminal(d) && d.status === "in_progress")
+        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
 
-  // Altas paradas (rotinas pendentes / paused)
+  // Altas Paradas: terminal + paused (aba Rotinas Pendentes do Listo)
   const paused = useMemo(
     () =>
       filtered
-        .filter((d) => d.status === "paused" || d.status === "waiting_cleaning")
-        .sort(
-          (a, b) =>
-            new Date(b.status_updated_at).getTime() -
-            new Date(a.status_updated_at).getTime(),
-        ),
+        .filter((d) => isTerminal(d) && d.status === "paused")
+        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
 
-  // Altas concluídas com pendências
-  const completedIssues = useMemo(
-    () =>
-      filtered
-        .filter((d) => d.status === "completed_with_issues")
-        .sort(
-          (a, b) =>
-            new Date(b.status_updated_at).getTime() -
-            new Date(a.status_updated_at).getTime(),
-        ),
+  // Concluídas c/ Pendências: terminal + completed_with_issues nas últimas 24h
+  const completedIssues = useMemo(() => {
+    const cutoff = now - ONE_DAY_MS;
+    return filtered
+      .filter(
+        (d) =>
+          isTerminal(d) &&
+          d.status === "completed_with_issues" &&
+          new Date(d.status_updated_at).getTime() >= cutoff,
+      )
+      .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime());
+  }, [filtered, now]);
+
+  // Desmontagens em andamento
+  const activeDesmont = useMemo(
+    () => filtered.filter((d) => isDesmont(d) && d.status === "in_progress"),
     [filtered],
   );
 
-  const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
+  // Colaboradores: derivar atividade por staff
+  const staffRows = useMemo(() => {
+    const activity = new Map<string, { kind: StaffActivity; start: string; bed: string }>();
 
-  // Colaboradores em atividade: apenas quem tem leito em execução.
-  // Ordenados pelo início mais recente.
-  const activeStaff = useMemo(() => {
-    const startByStaff = new Map<string, { start: string; bed: string }>();
-    for (const d of inFlight) {
+    for (const d of activeDesmont) {
       if (!d.assigned_staff_id) continue;
-      const prev = startByStaff.get(d.assigned_staff_id);
+      const prev = activity.get(d.assigned_staff_id);
       if (!prev || new Date(d.status_updated_at) > new Date(prev.start)) {
-        startByStaff.set(d.assigned_staff_id, {
+        activity.set(d.assigned_staff_id, {
+          kind: "desmontando",
           start: d.status_updated_at,
           bed: d.bed_number,
         });
       }
     }
-    return Array.from(startByStaff.entries())
-      .map(([id, info]) => ({ staff: staffMap.get(id), ...info }))
-      .filter((x): x is { staff: Staff; start: string; bed: string } => !!x.staff)
-      .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
-  }, [inFlight, staffMap]);
+    for (const d of inFlight) {
+      if (!d.assigned_staff_id) continue;
+      // desmontando tem prioridade se ambos existirem (raro), mas mais recente vence
+      const prev = activity.get(d.assigned_staff_id);
+      if (!prev || new Date(d.status_updated_at) > new Date(prev.start)) {
+        activity.set(d.assigned_staff_id, {
+          kind: "em_alta",
+          start: d.status_updated_at,
+          bed: d.bed_number,
+        });
+      }
+    }
+
+    const listoStaff = staff.filter((s) => (s.external_id || "").startsWith("listo:user:"));
+    return listoStaff
+      .map((s) => {
+        const a = activity.get(s.id);
+        return {
+          staff: s,
+          kind: (a?.kind ?? "disponivel") as StaffActivity,
+          start: a?.start ?? null,
+          bed: a?.bed ?? null,
+        };
+      })
+      .sort((a, b) => {
+        const order = { desmontando: 0, em_alta: 1, disponivel: 2 };
+        if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
+        if (a.start && b.start) return new Date(b.start).getTime() - new Date(a.start).getTime();
+        return a.staff.name.localeCompare(b.staff.name);
+      });
+  }, [inFlight, activeDesmont, staff]);
+
+  const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
+  const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
   return (
-    <div className="min-h-screen bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans">
-      <header className="flex items-center justify-between px-8 py-4 border-b border-white/10">
-        <h1 className="text-2xl xl:text-3xl font-bold tracking-tight">
+    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans">
+      <header className="flex-none flex items-center justify-between px-6 py-2 border-b border-white/10">
+        <h1 className="text-xl xl:text-2xl font-bold tracking-tight">
           Painel de Higienização Terminal
         </h1>
-        <div className="flex items-center gap-6">
-          <div className="text-xs uppercase tracking-widest text-white/50">ao vivo</div>
-          <div className="text-4xl xl:text-5xl font-mono tabular-nums">{clock}</div>
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] uppercase tracking-widest text-white/50">ao vivo</span>
+          <span className="text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
 
-      <div className="grid grid-cols-4 gap-4 px-8 py-5">
+      <div className="flex-none grid grid-cols-4 gap-3 px-6 py-3">
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.72 0.19 155)" />
         <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.75 0.17 60)" />
         <KpiCard label="Concluídas c/ Pendência" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
-        <KpiCard label="Colaboradores Ativos" value={activeStaff.length} accent="oklch(0.7 0.17 245)" />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.7 0.17 245)" />
       </div>
 
-      <div className="grid grid-cols-12 gap-4 px-8 pb-8">
-        <section className="col-span-8 space-y-4">
-          <BedsTable rows={inFlight} nowMs={now} staffMap={staffMap} />
-          <PausedTable rows={paused} nowMs={now} staffMap={staffMap} />
-          <CompletedIssuesTable rows={completedIssues} nowMs={now} staffMap={staffMap} />
-        </section>
-        <section className="col-span-4">
-          <ActiveStaffColumn rows={activeStaff} nowMs={now} />
-        </section>
+      <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
+        <div className="col-span-8 grid grid-rows-3 gap-3 min-h-0">
+          <BedsPanel title="Leitos em Limpeza Terminal" rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
+          <BedsPanel title="Altas Paradas (Rotinas Pendentes)" rows={paused} nowMs={now} staffMap={staffMap} tone="amber" showReason empty="Nenhuma alta parada." />
+          <BedsPanel title="Concluídas c/ Pendência (últimas 24h)" rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhuma pendência nas últimas 24h." />
+        </div>
+        <div className="col-span-4 min-h-0">
+          <StaffPanel rows={staffRows} nowMs={now} />
+        </div>
       </div>
     </div>
   );
@@ -145,172 +177,209 @@ function useClock() {
 function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="rounded-2xl p-5 border border-white/10"
+      className="rounded-xl px-4 py-2 border border-white/10 flex items-center justify-between"
       style={{
         background: `linear-gradient(180deg, ${accent.replace(")", " / 0.14)")} 0%, oklch(0.19 0.03 265) 100%)`,
         boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.35)")}`,
       }}
     >
-      <div className="text-xs uppercase tracking-widest text-white/60">{label}</div>
-      <div className="mt-2 text-5xl font-bold tabular-nums" style={{ color: accent }}>
-        {value}
-      </div>
+      <div className="text-[11px] uppercase tracking-widest text-white/60">{label}</div>
+      <div className="text-3xl font-bold tabular-nums" style={{ color: accent }}>{value}</div>
     </div>
   );
 }
 
-function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+type Tone = "green" | "amber" | "red";
+const toneBg: Record<Tone, string> = {
+  green: "oklch(0.3 0.1 155 / 0.12)",
+  amber: "oklch(0.45 0.15 60 / 0.18)",
+  red: "oklch(0.4 0.15 25 / 0.18)",
+};
+
+function BedsPanel({
+  title,
+  rows,
+  nowMs,
+  staffMap,
+  tone,
+  showReason,
+  empty,
+}: {
+  title: string;
+  rows: Discharge[];
+  nowMs: number;
+  staffMap: Map<string, Staff>;
+  tone: Tone;
+  showReason?: boolean;
+  empty: string;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
-      <div className="px-6 py-3 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-xl font-bold">{title}</h2>
-        {subtitle && <span className="text-xs text-white/50">{subtitle}</span>}
+    <section className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col min-h-0">
+      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
+        <h2 className="text-base font-bold">{title}</h2>
+        <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
-      {children}
-    </div>
-  );
-}
-
-function BedsTable({ rows, nowMs, staffMap }: { rows: Discharge[]; nowMs: number; staffMap: Map<string, Staff> }) {
-  return (
-    <SectionCard title="Leitos em Limpeza Terminal" subtitle="Mais recentes primeiro">
-      {rows.length === 0 ? (
-        <div className="p-6 text-center text-white/40">Nenhum leito em limpeza.</div>
-      ) : (
-        <table className="w-full text-base">
-          <thead className="text-xs uppercase tracking-widest text-white/50">
-            <tr>
-              <th className="text-left px-6 py-2">Leito</th>
-              <th className="text-left px-4 py-2">Unidade</th>
-              <th className="text-left px-4 py-2">Tempo</th>
-              <th className="text-left px-6 py-2">Colaborador</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((d) => {
-              const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
-              const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-              return (
-                <tr
-                  key={d.id}
-                  className="border-t border-white/5"
-                  style={{ background: overtime ? "oklch(0.4 0.13 55 / 0.3)" : "oklch(0.3 0.1 155 / 0.12)" }}
-                >
-                  <td className="px-6 py-3 font-bold text-xl">{d.bed_number}</td>
-                  <td className="px-4 py-3 text-white/80">{d.unit}</td>
-                  <td className="px-4 py-3 font-mono tabular-nums font-semibold">
-                    {formatElapsed(d.status_updated_at, nowMs)}
-                  </td>
-                  <td className="px-6 py-3">{name || "—"}</td>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
+        ) : (
+          <AutoScroll>
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-[oklch(0.16_0.02_265)]">
+                <tr>
+                  <th className="text-left px-4 py-1.5">Leito</th>
+                  <th className="text-left px-3 py-1.5">Unidade</th>
+                  {showReason ? (
+                    <th className="text-left px-3 py-1.5">Motivo</th>
+                  ) : (
+                    <th className="text-left px-3 py-1.5">Tempo</th>
+                  )}
+                  <th className="text-left px-4 py-1.5">Colaborador</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </SectionCard>
+              </thead>
+              <tbody>
+                {rows.map((d) => {
+                  const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
+                  const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
+                  return (
+                    <tr key={d.id} className="border-t border-white/5" style={{ background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone] }}>
+                      <td className="px-4 py-1.5 font-bold text-base">{d.bed_number}</td>
+                      <td className="px-3 py-1.5 text-white/80 text-xs">{d.unit}</td>
+                      {showReason ? (
+                        <td className="px-3 py-1.5 text-white/90 text-xs">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                      ) : (
+                        <td className="px-3 py-1.5 font-mono tabular-nums text-sm">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                      )}
+                      <td className="px-4 py-1.5 text-xs">{name || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
   );
 }
 
-function PausedTable({ rows, nowMs, staffMap }: { rows: Discharge[]; nowMs: number; staffMap: Map<string, Staff> }) {
-  return (
-    <SectionCard title="Altas Paradas (Rotinas Pendentes)" subtitle={`${rows.length} leitos`}>
-      {rows.length === 0 ? (
-        <div className="p-6 text-center text-white/40">Nenhuma alta parada no momento.</div>
-      ) : (
-        <table className="w-full text-base">
-          <thead className="text-xs uppercase tracking-widest text-white/50">
-            <tr>
-              <th className="text-left px-6 py-2">Leito</th>
-              <th className="text-left px-4 py-2">Unidade</th>
-              <th className="text-left px-4 py-2">Motivo</th>
-              <th className="text-left px-6 py-2">Colaborador</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((d) => {
-              const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-              return (
-                <tr key={d.id} className="border-t border-white/5" style={{ background: "oklch(0.45 0.15 60 / 0.18)" }}>
-                  <td className="px-6 py-3 font-bold text-xl">{d.bed_number}</td>
-                  <td className="px-4 py-3 text-white/80">{d.unit}</td>
-                  <td className="px-4 py-3 text-white/90">{d.pause_reason || <span className="text-white/40">—</span>}</td>
-                  <td className="px-6 py-3">{name || "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </SectionCard>
-  );
-}
-
-function CompletedIssuesTable({ rows, nowMs, staffMap }: { rows: Discharge[]; nowMs: number; staffMap: Map<string, Staff> }) {
-  void nowMs;
-  return (
-    <SectionCard title="Altas Concluídas com Pendências" subtitle={`${rows.length} leitos`}>
-      {rows.length === 0 ? (
-        <div className="p-6 text-center text-white/40">Nenhuma alta concluída com pendência.</div>
-      ) : (
-        <table className="w-full text-base">
-          <thead className="text-xs uppercase tracking-widest text-white/50">
-            <tr>
-              <th className="text-left px-6 py-2">Leito</th>
-              <th className="text-left px-4 py-2">Unidade</th>
-              <th className="text-left px-4 py-2">Pendência</th>
-              <th className="text-left px-6 py-2">Colaborador</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((d) => {
-              const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-              return (
-                <tr key={d.id} className="border-t border-white/5" style={{ background: "oklch(0.4 0.15 25 / 0.18)" }}>
-                  <td className="px-6 py-3 font-bold text-xl">{d.bed_number}</td>
-                  <td className="px-4 py-3 text-white/80">{d.unit}</td>
-                  <td className="px-4 py-3 text-white/90">{d.pause_reason || <span className="text-white/40">—</span>}</td>
-                  <td className="px-6 py-3">{name || "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </SectionCard>
-  );
-}
-
-function ActiveStaffColumn({
+function StaffPanel({
   rows,
   nowMs,
 }: {
-  rows: Array<{ staff: Staff; start: string; bed: string }>;
+  rows: Array<{ staff: Staff; kind: StaffActivity; start: string | null; bed: string | null }>;
   nowMs: number;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-      <h2 className="text-xl font-bold mb-4">Colaboradores em Atividade</h2>
-      {rows.length === 0 ? (
-        <p className="text-white/40">Nenhum colaborador em atividade.</p>
-      ) : (
-        <ul className="space-y-2">
-          {rows.map(({ staff, start, bed }) => (
-            <li
-              key={staff.id}
-              className="flex items-center justify-between rounded-lg px-4 py-3 bg-[oklch(0.3_0.12_245)/0.18] border border-[oklch(0.6_0.15_245)/0.25]"
-            >
-              <div className="min-w-0">
-                <div className="font-semibold truncate">{staff.name}</div>
-                <div className="text-xs text-white/60">{bed}</div>
-              </div>
-              <span className="font-mono tabular-nums text-sm text-white/70">
-                {formatElapsed(start, nowMs)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
+        <h2 className="text-base font-bold">Colaboradores</h2>
+        <span className="text-[11px] text-white/50">{rows.length}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">Nenhum colaborador.</div>
+        ) : (
+          <AutoScroll>
+            <ul className="p-2 space-y-1.5">
+              {rows.map(({ staff, kind, start, bed }) => (
+                <li
+                  key={staff.id}
+                  className="flex items-center justify-between rounded-md px-3 py-2 border"
+                  style={{
+                    background:
+                      kind === "desmontando"
+                        ? "oklch(0.35 0.14 300 / 0.22)"
+                        : kind === "em_alta"
+                          ? "oklch(0.32 0.13 245 / 0.22)"
+                          : "oklch(0.25 0.02 265 / 0.4)",
+                    borderColor:
+                      kind === "desmontando"
+                        ? "oklch(0.65 0.18 300 / 0.35)"
+                        : kind === "em_alta"
+                          ? "oklch(0.6 0.15 245 / 0.35)"
+                          : "oklch(0.4 0.02 265 / 0.4)",
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold truncate text-sm">{staff.name}</div>
+                    <div className="text-[11px] text-white/60 truncate">
+                      <StatusPill kind={kind} />
+                      {bed ? <span className="ml-1">· {bed}</span> : null}
+                    </div>
+                  </div>
+                  {start && (
+                    <span className="font-mono tabular-nums text-xs text-white/70 ml-2">
+                      {formatElapsed(start, nowMs)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StatusPill({ kind }: { kind: StaffActivity }) {
+  const label = kind === "desmontando" ? "Desmontando" : kind === "em_alta" ? "Em Alta" : "Disponível";
+  const color =
+    kind === "desmontando"
+      ? "oklch(0.8 0.15 300)"
+      : kind === "em_alta"
+        ? "oklch(0.75 0.15 245)"
+        : "oklch(0.7 0.02 265)";
+  return (
+    <span className="uppercase tracking-widest text-[10px] font-semibold" style={{ color }}>
+      {label}
+    </span>
+  );
+}
+
+// Auto-scroll vertical: se o conteúdo não couber, rola devagar em loop.
+function AutoScroll({ children }: { children: React.ReactNode }) {
+  const [needsScroll, setNeedsScroll] = useState(false);
+  const [ref, setRef] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref) return;
+    const check = () => setNeedsScroll(ref.scrollHeight > ref.clientHeight + 4);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(ref);
+    for (const el of Array.from(ref.children)) ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, children]);
+
+  useEffect(() => {
+    if (!ref || !needsScroll) return;
+    let raf = 0;
+    let dir = 1;
+    let paused = 0;
+    const step = () => {
+      if (paused > 0) {
+        paused -= 1;
+      } else {
+        ref.scrollTop += dir * 0.4;
+        if (ref.scrollTop + ref.clientHeight >= ref.scrollHeight - 1) {
+          dir = -1;
+          paused = 120;
+        } else if (ref.scrollTop <= 0) {
+          dir = 1;
+          paused = 120;
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [ref, needsScroll]);
+
+  return (
+    <div ref={setRef} className="h-full overflow-hidden">
+      {children}
     </div>
   );
 }
