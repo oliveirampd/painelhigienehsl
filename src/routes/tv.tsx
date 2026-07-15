@@ -340,42 +340,57 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
 
 // Auto-scroll vertical: se o conteúdo não couber, rola devagar em loop.
 function AutoScroll({ children }: { children: React.ReactNode }) {
-  const [needsScroll, setNeedsScroll] = useState(false);
   const [ref, setRef] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!ref) return;
-    const check = () => setNeedsScroll(ref.scrollHeight > ref.clientHeight + 4);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(ref);
-    for (const el of Array.from(ref.children)) ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, children]);
-
-  useEffect(() => {
-    if (!ref || !needsScroll) return;
     let raf = 0;
     let dir = 1;
     let paused = 0;
+    let pos = 0;
+    let needs = ref.scrollHeight > ref.clientHeight + 4;
+
+    const recheck = () => {
+      needs = ref.scrollHeight > ref.clientHeight + 4;
+      if (!needs) {
+        pos = 0;
+        ref.scrollTop = 0;
+      }
+    };
+
+    const ro = new ResizeObserver(recheck);
+    ro.observe(ref);
+    const mo = new MutationObserver(recheck);
+    mo.observe(ref, { childList: true, subtree: true, characterData: true });
+
     const step = () => {
-      if (paused > 0) {
-        paused -= 1;
-      } else {
-        ref.scrollTop += dir * 0.4;
-        if (ref.scrollTop + ref.clientHeight >= ref.scrollHeight - 1) {
-          dir = -1;
-          paused = 120;
-        } else if (ref.scrollTop <= 0) {
-          dir = 1;
-          paused = 120;
+      if (needs) {
+        if (paused > 0) {
+          paused -= 1;
+        } else {
+          pos += dir * 0.35;
+          const max = ref.scrollHeight - ref.clientHeight;
+          if (pos >= max) {
+            pos = max;
+            dir = -1;
+            paused = 120;
+          } else if (pos <= 0) {
+            pos = 0;
+            dir = 1;
+            paused = 120;
+          }
+          ref.scrollTop = Math.floor(pos);
         }
       }
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [ref, needsScroll]);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [ref]);
 
   return (
     <div ref={setRef} className="h-full overflow-hidden">
