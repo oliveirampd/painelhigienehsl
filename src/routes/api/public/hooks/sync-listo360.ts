@@ -170,7 +170,8 @@ async function handle() {
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-      const statusUpdatedAt = a.endTime || a.startTime || a.date || new Date().toISOString();
+      const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
+      const statusUpdatedAt = ref.toISOString();
       return {
         external_id: `listo:${kind}:${a.id}`,
         bed_number: bed,
