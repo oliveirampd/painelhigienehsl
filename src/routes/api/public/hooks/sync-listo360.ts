@@ -155,7 +155,7 @@ async function handle() {
 
     // 2) upsert discharges (terminal + desmontagem, distinguíveis pelo external_id)
     const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
-      const status = mapStatus(a.statusAnswer?.id);
+      const status = mapStatus(a);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
