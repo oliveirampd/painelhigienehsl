@@ -30,16 +30,27 @@ type DischargeStatus =
   | "completed"
   | "completed_with_issues";
 
+// Listo devolve datas em horário local de Brasília (UTC-3) sem timezone.
+// Normaliza para ISO com offset -03:00 para que o painel calcule o tempo real.
+function parseBRT(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+  const iso = hasTz ? s : `${s}-03:00`;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function mapStatus(a: ListoAnswer): DischargeStatus {
   const id = a.statusAnswer?.id;
   const hasEnd = !!a.endTime;
-  // "Pendente" no Listo = rotina em aberto (sem endTime). Se tem endTime, já foi encerrada.
+  // "Pendente" no Listo: sem endTime = ainda aberta (Altas Paradas / aba Rotinas Pendentes);
+  // com endTime = encerrada com pendência.
   switch (id) {
     case 1: return "waiting_cleaning";
     case 2: return hasEnd ? "completed" : "in_progress";
-    case 4: return "completed_with_issues";
+    case 4:
+    case 7: return hasEnd ? "completed_with_issues" : "paused";
     case 5: return "maintenance";
-    case 7: return hasEnd ? "completed" : "paused";
     case 3:
     case 6: return "completed";
     default: return hasEnd ? "completed" : "waiting_cleaning";
