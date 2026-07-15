@@ -30,16 +30,19 @@ type DischargeStatus =
   | "completed"
   | "completed_with_issues";
 
-function mapStatus(id?: number): DischargeStatus {
+function mapStatus(a: ListoAnswer): DischargeStatus {
+  const id = a.statusAnswer?.id;
+  const hasEnd = !!a.endTime;
+  // "Pendente" no Listo = rotina em aberto (sem endTime). Se tem endTime, já foi encerrada.
   switch (id) {
     case 1: return "waiting_cleaning";
-    case 2: return "in_progress";
+    case 2: return hasEnd ? "completed" : "in_progress";
     case 4: return "completed_with_issues";
     case 5: return "maintenance";
-    case 7: return "paused";
+    case 7: return hasEnd ? "completed" : "paused";
     case 3:
     case 6: return "completed";
-    default: return "waiting_cleaning";
+    default: return hasEnd ? "completed" : "waiting_cleaning";
   }
 }
 
