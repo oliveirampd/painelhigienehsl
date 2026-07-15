@@ -1,0 +1,2 @@
+DELETE FROM public.discharges WHERE external_id LIKE 'listo:answer:%' AND bed_number NOT ILIKE 'Leito%';
+DELETE FROM public.discharges WHERE external_id LIKE 'listo:answer:%' AND status = 'paused' AND status_updated_at < now() - interval '2 days';
