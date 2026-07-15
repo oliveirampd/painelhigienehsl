@@ -1,37 +1,59 @@
-## Objetivo
+## O que está errado
 
-Corrigir a seção **Altas Paradas** do painel `/tv` para contabilizar **apenas** leitos que estão simultaneamente:
+1. **Tempo sempre "3h"** — o Listo devolve `startTime`/`endTime` em horário local de Brasília (UTC−3) sem timezone (`"2026-07-15T09:00:00"`). Nosso código passa isso direto para `new Date(...)`, que interpreta como UTC. Resultado: todo horário fica 3h "no passado". Precisa normalizar como BRT (append `-03:00` quando não tiver timezone).
 
-1. Com `locationName` iniciando por "Leito" (é leito, não área comum)
-2. Com `routeName` = "Limpeza Terminal Leitos" (é rotina terminal)
-3. Com status **pendente** no Listo (aba Rotinas Pendentes)
+2. **Swap Altas Paradas ↔ Concluídas c/ Pendência** — a regra correta é a mesma origem (`statusAnswer` "Pendente" no Listo), separado por `endTime`:
+   - `endTime IS NULL` → **Altas Paradas** (aparece na aba Rotinas Pendentes, ainda aberta)
+   - `endTime NOT NULL` → **Concluídas c/ Pendência** (foi encerrada com pendência)
 
-Hoje o filtro está pegando qualquer `statusAnswer.id = 7` (paused) do último dia, incluindo respostas antigas já finalizadas ou reabertas, o que infla o contador.
+   Hoje o `mapStatus` faz `id=7 && hasEnd → "completed"` (genérico), então itens que deveriam ser "concluída com pendência" caem em "completed" e somem do painel. E `id=4` está sendo tratado como o único caminho para `completed_with_issues`, o que provavelmente não bate com o id real do Listo para "Pendente".
 
-## O que muda
+3. **Auto-scroll parado** — o `AutoScroll` mede a altura do conteúdo no mount, mas quando a tabela cresce depois (dados chegam via realtime), o `ResizeObserver` observa apenas os filhos diretos existentes no momento; o `<table>` interno cresce sem disparar. Além disso, `scrollTop += 0.4` é arredondado para 0 pelo browser quando o container tem `overflow-hidden` estrito em alguns casos.
 
-### `src/routes/api/public/hooks/sync-listo360.ts`
+4. **`status_updated_at` reescrito pelo trigger** — a trigger `touch_status_updated_at` sobrescreve o valor que mandamos no upsert quando o status muda, então o "tempo" no painel vira "quando o sync rodou", não "quando a rotina começou/terminou no Listo". Para o painel refletir tempo real do Listo, precisamos usar o `startTime`/`endTime` do Listo direto — guardar num campo próprio ou ignorar a trigger para linhas do Listo.
 
-- Ajustar `mapStatus`: uma resposta só é considerada `paused` quando o Listo indica pendência real — status pausado **e** `endTime` nulo (rotina em aberto). Se tiver `endTime`, é uma execução já encerrada e vai para `completed`/`completed_with_issues` conforme o id.
-- Garantir que só leitos terminais (`isTerminalBed`) entram como discharges do tipo `answer` — já é o caso, mas revalidar que nenhuma linha antiga com prefixo `listo:answer:` de área comum sobreviva (limpeza no banco das entradas cujo `bed_number` não começa com "Leito").
-- Adicionar log do total de "pendentes reais" no retorno JSON para diagnóstico.
+## Plano
 
-### `src/routes/tv.tsx`
+### 1. `sync-listo360.ts` — parsing de data e mapeamento de status
 
-- Manter o filtro atual (`isTerminal && status === "paused"`), agora confiável porque a origem foi apertada.
-- Nenhuma mudança visual.
+- Adicionar helper `parseBRT(s)`: se a string não tem `Z` nem `±HH:MM`, concatenar `-03:00` antes do `new Date`.
+- Reescrever `mapStatus(a)` para tratar "Pendente" como a chave e separar por `endTime`:
+  ```
+  id 7 (Pendente):        endTime? "completed_with_issues" : "paused"
+  id 4 (também pendente): mesmo tratamento (fallback)
+  id 2 (Em Andamento):    endTime? "completed" : "in_progress"
+  id 1:                   "waiting_cleaning"
+  id 5:                   "maintenance"
+  id 3, 6, default:       endTime? "completed" : "waiting_cleaning"
+  ```
+- `status_updated_at` = `parseBRT(endTime ?? startTime ?? date).toISOString()`.
 
-### Banco (migration curta)
+### 2. Migration — desativar o trigger para linhas do Listo
 
-- `DELETE FROM public.discharges WHERE external_id LIKE 'listo:answer:%' AND (bed_number NOT ILIKE 'Leito%');` — remove qualquer resíduo de resposta não-leito de sincronizações antigas.
-- `DELETE FROM public.discharges WHERE external_id LIKE 'listo:answer:%' AND status = 'paused' AND status_updated_at < now() - interval '2 days';` — zera pausas antigas que não são mais pendentes reais; o próximo sync (30s) repovoa as legítimas.
+Duas opções, vou pela mais simples: alterar `touch_status_updated_at` para **não** mexer quando `NEW.external_id LIKE 'listo:%'` (o sync já manda o timestamp certo). Assim linhas manuais (do `/control`) continuam com o comportamento atual.
 
-## Validação
+Também vou fazer um `UPDATE` pontual para recomputar `status_updated_at` das linhas Listo existentes com base no que estiver no banco (não temos os timestamps originais, mas o próximo sync corrige — o UPDATE só zera o "3h fixo" atual pondo `now()` como placeholder, opcional).
 
-1. Aguardar 1 ciclo do cron (30s) após deploy.
-2. Consultar `discharges` com `status = 'paused' AND external_id LIKE 'listo:answer:%'` — contagem deve bater com o número visível na aba **Rotinas Pendentes** do Listo (filtrando por "Limpeza Terminal Leitos", excluindo unidades 3D/3C/11C/12C/5B).
-3. Conferir o painel `/tv` — card "Altas Paradas" e tabela devem refletir o mesmo conjunto.
+### 3. `/tv` — auto-scroll robusto
 
-## Nota
+- Trocar a heurística por `MutationObserver` na subtree (observa qualquer mudança de conteúdo, inclusive linhas novas dentro do `<table>`).
+- Trocar `scrollTop += 0.4` por acumulador em `ref` (float) e aplicar `Math.floor` — evita perda de sub-pixel.
+- Recalcular `needsScroll` sempre que o conteúdo mudar; se voltar a caber, parar a animação.
 
-Se o número ainda divergir após o ajuste, o próximo passo é inspecionar 1 resposta específica que aparece indevidamente (comparar payload do Listo com o esperado) para descobrir qual campo distingue "pendente" de "encerrada" no modelo deles — o filtro `endTime IS NULL` cobre o caso mais comum, mas o Listo pode ter uma flag adicional.
+### 4. Verificação
+
+- Após deploy, rodar 1 ciclo do sync (ou chamar o endpoint manualmente) e checar no banco:
+  ```sql
+  select external_id, bed_number, status, status_updated_at, pause_reason
+  from discharges
+  where external_id like 'listo:answer:%'
+    and status in ('paused','completed_with_issues')
+  order by status_updated_at desc;
+  ```
+- No `/tv`: **Altas Paradas** só com rotinas terminais sem `endTime`; **Concluídas c/ Pendência** com as que têm `endTime` nas últimas 24h; tempos batendo com o horário de Brasília; scroll rolando quando a lista passa da altura visível.
+
+## Arquivos alterados
+
+- `src/routes/api/public/hooks/sync-listo360.ts` — `parseBRT`, novo `mapStatus`, `status_updated_at` a partir do horário do Listo.
+- `supabase/migrations/<novo>.sql` — atualiza `touch_status_updated_at` para ignorar `external_id LIKE 'listo:%'`.
+- `src/routes/tv.tsx` — `AutoScroll` com `MutationObserver` + acumulador float.
