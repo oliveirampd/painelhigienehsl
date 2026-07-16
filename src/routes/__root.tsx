@@ -79,12 +79,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Painel de Higienização Terminal" },
-      { name: "description", content: "Sistema de controle de altas e higienização terminal de leitos hospitalares." },
+      { name: "description", content: "Sistema de operações para higienização terminal de leitos hospitalares." },
       { name: "author", content: "Hospital Operations" },
       { property: "og:title", content: "Painel de Higienização Terminal" },
-      { property: "og:description", content: "Sistema de controle de altas e higienização terminal de leitos hospitalares." },
+      { property: "og:description", content: "Sistema de operações para higienização terminal de leitos hospitalares." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Painel de Higienização Terminal" },
+      { name: "twitter:description", content: "Sistema de operações para higienização terminal de leitos hospitalares." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/606d75ca-9b55-4286-9504-91ae06c83add/id-preview-a1c92a84--62d1874f-b738-477e-aeca-607c6d6094cf.lovable.app-1784115717754.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/606d75ca-9b55-4286-9504-91ae06c83add/id-preview-a1c92a84--62d1874f-b738-477e-aeca-607c6d6094cf.lovable.app-1784115717754.png" },
     ],
     links: [
       {
