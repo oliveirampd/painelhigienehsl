@@ -151,7 +151,7 @@ function TvPage() {
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
-        <div className="col-span-8 grid grid-rows-[2.5fr_1fr_1fr] gap-3 min-h-0">
+        <div className="col-span-8 grid grid-rows-[1.5fr_1fr_1fr] gap-3 min-h-0">
           <BedsPanel title="Leitos em Limpeza Terminal" rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
           <BedsPanel title="Altas Paradas (Rotinas Pendentes)" rows={paused} nowMs={now} staffMap={staffMap} tone="amber" showReason empty="Nenhuma alta parada." />
           <BedsPanel title="Concluídas c/ Pendência (últimas 24h)" rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhuma pendência nas últimas 24h." />
