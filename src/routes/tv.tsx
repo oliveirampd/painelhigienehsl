@@ -70,7 +70,7 @@ function TvPage() {
     [filtered],
   );
 
-  // Altas Paradas: terminal + paused (aba Rotinas Pendentes do Listo)
+  // Altas Paradas: terminal (aba Rotinas Pendentes do Listo)
   const paused = useMemo(
     () =>
       filtered
@@ -79,7 +79,7 @@ function TvPage() {
     [filtered],
   );
 
-  // Concluídas c/ Pendências: terminal + completed_with_issues nas últimas 24h
+  // Pausadas: completed_with_issues nas últimas 24h
   const completedIssues = useMemo(() => {
     const cutoff = now - ONE_DAY_MS;
     return filtered
