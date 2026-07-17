@@ -16,7 +16,7 @@ export const Route = createFileRoute("/tv")({
   head: () => ({
     meta: [
       { title: "TV — Painel de Higienização Terminal" },
-      { name: "description", content: "Painel em tempo real: leitos em limpeza terminal, altas paradas, concluídas com pendências e colaboradores." },
+      { name: "description", content: "Painel em tempo real: leitos em limpeza terminal, altas paradas, pausadas e colaboradores." },
     ],
   }),
   component: TvPage,
