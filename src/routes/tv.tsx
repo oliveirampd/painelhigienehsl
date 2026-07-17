@@ -22,16 +22,27 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-const EXCLUDED_UNITS = ["3D", "3C", "11C", "12C", "5B"];
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+// Unidades excluídas, no formato { andar, bloco } — ex: 5º Andar, Bloco B.
+// Cobre textos como "Bloco B 05º Andar" ou "Bloco B 5º Andar · Ala X".
+const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
+  { floor: 3, block: "D" },
+  { floor: 3, block: "C" },
+  { floor: 11, block: "C" },
+  { floor: 12, block: "C" },
+  { floor: 5, block: "B" },
+];
 
 function isExcluded(d: Discharge): boolean {
   const u = (d.unit || "").toUpperCase();
-  const b = (d.bed_number || "").toUpperCase();
-  return EXCLUDED_UNITS.some((ex) => u.includes(ex) || b.includes(` ${ex}`));
+  const m = u.match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
+  if (!m) return false;
+  const block = m[1];
+  const floor = parseInt(m[2], 10);
+  return EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
 }
 
 const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 
@@ -70,23 +81,23 @@ function TvPage() {
     [filtered],
   );
 
-  // Altas Paradas: terminal (aba Rotinas Pendentes do Listo)
+  // Altas Paradas: sem colaborador alocado ainda (nenhum "a caminho")
   const paused = useMemo(
     () =>
       filtered
-        .filter((d) => isTerminal(d) && d.status === "paused")
+        .filter((d) => isTerminal(d) && d.status === "waiting_cleaning")
         .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
 
-  // Pausadas: completed_with_issues nas últimas 24h
+  // Leitos Pausados: "Pendente" no Listo (motivo/comentário), só as de hoje
   const completedIssues = useMemo(() => {
     const cutoff = now - ONE_DAY_MS;
     return filtered
       .filter(
         (d) =>
           isTerminal(d) &&
-          d.status === "completed_with_issues" &&
+          (d.status === "paused" || d.status === "completed_with_issues") &&
           new Date(d.status_updated_at).getTime() >= cutoff,
       )
       .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime());
@@ -128,13 +139,14 @@ function TvPage() {
 
     const listoStaff = staff.filter((s) => (s.external_id || "").startsWith("listo:user:"));
     return listoStaff
+      .filter((s) => activity.has(s.id)) // só quem está ativo agora (desmontando ou em alta)
       .map((s) => {
-        const a = activity.get(s.id);
+        const a = activity.get(s.id)!;
         return {
           staff: s,
-          kind: (a?.kind ?? "disponivel") as StaffActivity,
-          start: a?.start ?? null,
-          bed: a?.bed ?? null,
+          kind: a.kind,
+          start: a.start,
+          bed: a.bed,
         };
       })
       .sort((a, b) => {
@@ -177,7 +189,7 @@ function TvPage() {
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.72 0.19 155)" />
         <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.72 0.15 230)" />
         <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.75 0.17 60)" />
-        <KpiCard label="Concluídas c/ Pendência" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
         <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.7 0.17 245)" />
       </div>
 
@@ -185,8 +197,8 @@ function TvPage() {
         <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
           <BedsPanel title="Leitos em Limpeza Terminal" rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
           <BedsPanel title="A Caminho" rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
-          <BedsPanel title="Altas Paradas (Rotinas Pendentes)" rows={paused} nowMs={now} staffMap={staffMap} tone="amber" showReason empty="Nenhuma alta parada." />
-          <BedsPanel title="Concluídas c/ Pendência (últimas 24h)" rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhuma pendência nas últimas 24h." />
+          <BedsPanel title="Altas Paradas" rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." />
+          <BedsPanel title="Leitos Pausados" rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." />
         </div>
         <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
           <StaffPanel rows={staffRows} nowMs={now} />
