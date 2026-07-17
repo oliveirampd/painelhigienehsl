@@ -5,8 +5,11 @@ import { useNow } from "@/hooks/useNow";
 import {
   elapsedMinutes,
   formatElapsed,
+  isBreakOverLimit,
+  STAFF_STATUS_LABELS,
   type Discharge,
   type Staff,
+  type StaffStatus,
 } from "@/lib/hospital";
 
 export const Route = createFileRoute("/tv")({
@@ -34,6 +37,11 @@ const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("l
 
 type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
+// NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
+// igual ao padrão já usado em `discharges.status_updated_at`. Se o nome real da coluna
+// for diferente, troca só a referência `s.status_updated_at` abaixo.
+const BREAK_STATUSES: StaffStatus[] = ["coffee_break", "lunch_break", "dinner_break"];
+
 function TvPage() {
   const { discharges, staff } = useHospitalData();
   const now = useNow(15000);
@@ -49,6 +57,15 @@ function TvPage() {
     () =>
       filtered
         .filter((d) => isTerminal(d) && d.status === "in_progress")
+        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+    [filtered],
+  );
+
+  // A Caminho: terminal + en_route (colaborador alocado, ainda não iniciou)
+  const enRoute = useMemo(
+    () =>
+      filtered
+        .filter((d) => isTerminal(d) && d.status === "en_route")
         .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
@@ -128,6 +145,19 @@ function TvPage() {
       });
   }, [inFlight, activeDesmont, staff]);
 
+  // Colaboradores em pausa (Café / Almoço / Janta), vindos direto de staff.status
+  const breakRows = useMemo(
+    () =>
+      staff
+        .filter((s) => BREAK_STATUSES.includes(s.status as StaffStatus))
+        .sort(
+          (a, b) =>
+            new Date((b as any).status_updated_at).getTime() -
+            new Date((a as any).status_updated_at).getTime(),
+        ),
+    [staff],
+  );
+
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
@@ -143,21 +173,24 @@ function TvPage() {
         </div>
       </header>
 
-      <div className="flex-none grid grid-cols-4 gap-3 px-6 py-3">
+      <div className="flex-none grid grid-cols-5 gap-3 px-6 py-3">
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.72 0.19 155)" />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.72 0.15 230)" />
         <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.75 0.17 60)" />
         <KpiCard label="Concluídas c/ Pendência" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
         <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.7 0.17 245)" />
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
-        <div className="col-span-8 grid grid-rows-[1.5fr_1fr_1fr] gap-3 min-h-0">
+        <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
           <BedsPanel title="Leitos em Limpeza Terminal" rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
+          <BedsPanel title="A Caminho" rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
           <BedsPanel title="Altas Paradas (Rotinas Pendentes)" rows={paused} nowMs={now} staffMap={staffMap} tone="amber" showReason empty="Nenhuma alta parada." />
           <BedsPanel title="Concluídas c/ Pendência (últimas 24h)" rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhuma pendência nas últimas 24h." />
         </div>
-        <div className="col-span-4 min-h-0">
+        <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
           <StaffPanel rows={staffRows} nowMs={now} />
+          <BreaksPanel rows={breakRows} nowMs={now} />
         </div>
       </div>
     </div>
@@ -189,11 +222,12 @@ function KpiCard({ label, value, accent }: { label: string; value: number; accen
   );
 }
 
-type Tone = "green" | "amber" | "red";
+type Tone = "green" | "amber" | "red" | "blue";
 const toneBg: Record<Tone, string> = {
   green: "oklch(0.3 0.1 155 / 0.12)",
   amber: "oklch(0.45 0.15 60 / 0.18)",
   red: "oklch(0.4 0.15 25 / 0.18)",
+  blue: "oklch(0.35 0.12 230 / 0.16)",
 };
 
 function BedsPanel({
@@ -315,6 +349,59 @@ function StaffPanel({
                   )}
                 </li>
               ))}
+            </ul>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// Café / Almoço / Janta — direto de staff.status, com alerta quando passa do limite (hospital.ts)
+function BreaksPanel({ rows, nowMs }: { rows: Staff[]; nowMs: number }) {
+  return (
+    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
+        <h2 className="text-base font-bold">Café / Almoço / Janta</h2>
+        <span className="text-[11px] text-white/50">{rows.length}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">Ninguém em pausa agora.</div>
+        ) : (
+          <AutoScroll>
+            <ul className="p-2 space-y-1.5">
+              {rows.map((s) => {
+                // NOTA: assume coluna `status_updated_at` na tabela staff — confirmar nome real.
+                const startIso = (s as any).status_updated_at as string | undefined;
+                const minutes = startIso ? elapsedMinutes(startIso, nowMs) : 0;
+                const over = startIso ? isBreakOverLimit(s.status as StaffStatus, minutes) : false;
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between rounded-md px-3 py-2 border"
+                    style={{
+                      background: over ? "oklch(0.4 0.13 55 / 0.3)" : "oklch(0.3 0.1 245 / 0.16)",
+                      borderColor: over ? "oklch(0.7 0.17 55 / 0.5)" : "oklch(0.5 0.12 245 / 0.35)",
+                    }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold truncate text-sm">{s.name}</div>
+                      <div className="text-[11px] text-white/60 truncate uppercase tracking-widest">
+                        {STAFF_STATUS_LABELS[s.status as StaffStatus] ?? s.status}
+                      </div>
+                    </div>
+                    {startIso && (
+                      <span
+                        className="font-mono tabular-nums text-xs ml-2"
+                        style={{ color: over ? "oklch(0.8 0.17 55)" : "rgba(255,255,255,0.7)" }}
+                      >
+                        {formatElapsed(startIso, nowMs)}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </AutoScroll>
         )}
