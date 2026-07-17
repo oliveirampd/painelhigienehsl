@@ -104,7 +104,8 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
   const all: ListoAnswer[] = [];
   const pageSize = 500;
-  for (let page = 1; page <= 6; page++) {
+  const MAX_PAGES = 50; // seguranca contra loop infinito, mas nao trunca cedo como antes
+  for (let page = 1; page <= MAX_PAGES; page++) {
     const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
     const res = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -275,6 +276,21 @@ async function handle() {
       }
     }
 
+    const debugWaiting = bedAnswersDedup
+      .filter((a) => mapStatus(a) === "waiting_cleaning")
+      .slice(0, 5)
+      .map((a) => ({
+        locationName: a.locationName,
+        userName: a.userName,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        date: a.date,
+        statusAnswerId: a.statusAnswer?.id,
+        statusAnswerName: a.statusAnswer?.name,
+        routeName: a.routeName,
+        inspectionName: a.inspectionName,
+      }));
+
     return Response.json({
       ok: true,
       answers: answers.length,
@@ -283,6 +299,7 @@ async function handle() {
       desmontagem: dismantleAnswersDedup.length,
       staff: staffNames.length,
       removidos_orfaos: staleIds.length,
+      amostra_altas_paradas: debugWaiting,
       at: new Date().toISOString(),
     });
   } catch (err) {
