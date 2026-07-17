@@ -43,18 +43,21 @@ function parseBRT(s: string | null | undefined): Date | null {
 function mapStatus(a: ListoAnswer): DischargeStatus {
   const id = a.statusAnswer?.id;
   const hasEnd = !!a.endTime;
-  // "Pendente" no Listo: sem endTime = ainda aberta (Altas Paradas / aba Rotinas Pendentes);
-  // com endTime = encerrada com pendência.
-  switch (id) {
-    case 1: return "waiting_cleaning";
-    case 2: return hasEnd ? "completed" : "in_progress";
-    case 4:
-    case 7: return hasEnd ? "completed_with_issues" : "paused";
-    case 5: return "maintenance";
-    case 3:
-    case 6: return "completed";
-    default: return hasEnd ? "completed" : "waiting_cleaning";
-  }
+  const hasStart = !!a.startTime;
+  const hasUser = !!(a.userName && a.userName.trim());
+
+  // "Pendente" no Listo (id 4 ou 7): vira "Leitos Pausados" no /tv, independente de ter
+  // endTime ou não — é o mesmo status "paused" nos dois casos agora.
+  if (id === 4 || id === 7) return "paused";
+  if (id === 5) return "maintenance";
+  if (id === 3 || id === 6) return "completed";
+  if (id === 2) return hasEnd ? "completed" : "in_progress";
+
+  // Demais casos (ex: id 1) — deriva pelo estado real do processo, não pelo id:
+  if (hasEnd) return "completed";
+  if (hasStart) return "in_progress";
+  if (hasUser) return "en_route"; // colaborador alocado, ainda não iniciou = a caminho
+  return "waiting_cleaning"; // sem colaborador alocado ainda = Altas Paradas
 }
 
 function isBedLocation(a: ListoAnswer): boolean {
