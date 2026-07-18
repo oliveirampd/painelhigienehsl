@@ -168,15 +168,63 @@ async function handle() {
     }
 
     // 2) upsert discharges (terminal + desmontagem, distinguíveis pelo external_id)
+    //    Dedup por leito: o Listo pode gerar várias respostas pro mesmo leito no mesmo
+    //    dia — sem isso, um leito pode aparecer em "A Caminho" E "Em Limpeza" ao mesmo
+    //    tempo, um contradizendo o outro. Só a resposta mais recente por leito importa.
+    const refTime = (a: ListoAnswer): number => {
+      const d = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
+      return d ? d.getTime() : a.id;
+    };
+
+    function dedupByBed(list: ListoAnswer[]): ListoAnswer[] {
+      const byBed = new Map<string, ListoAnswer>();
+      for (const a of list) {
+        const bedKey = (a.locationName || `leito-${a.id}`).trim().toLowerCase();
+        const prev = byBed.get(bedKey);
+        if (!prev || refTime(a) > refTime(prev)) {
+          byBed.set(bedKey, a);
+        }
+      }
+      return Array.from(byBed.values());
+    }
+
+    const bedAnswersDedup = dedupByBed(bedAnswers);
+    const dismantleAnswersDedup = dedupByBed(dismantleAnswers);
+
+    // Estado atual no banco, pra manter o horário estável quando o status não muda
+    // entre sincronizações (importante pro "A Caminho"/"Altas Paradas", que não têm
+    // um campo de horário confiável vindo do Listo).
+    const { data: existingDischarges } = await supabase
+      .from("discharges")
+      .select("external_id, status, status_updated_at")
+      .like("external_id", "listo:%");
+    const existingByExternalId = new Map(
+      (existingDischarges ?? []).map((d) => [d.external_id as string, d]),
+    );
+
+    const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
+
     const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
       const status = mapStatus(a);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-      const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
-      const statusUpdatedAt = ref.toISOString();
+      const bedSlug = bed.toLowerCase().replace(/\s+/g, "-");
+      const externalId = `listo:${kind}:bed:${bedSlug}`;
+
+      let statusUpdatedAt: string;
+      if (NO_RELIABLE_TIMESTAMP.includes(status)) {
+        const prev = existingByExternalId.get(externalId);
+        statusUpdatedAt = prev && prev.status === status
+          ? prev.status_updated_at
+          : new Date().toISOString();
+      } else {
+        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
+        statusUpdatedAt = ref.toISOString();
+      }
+
       return {
-        external_id: `listo:${kind}:${a.id}`,
+        external_id: externalId,
         bed_number: bed,
         unit,
         status,
@@ -188,8 +236,8 @@ async function handle() {
     };
 
     const dischargeRows = [
-      ...bedAnswers.map((a) => buildRow(a, "answer")),
-      ...dismantleAnswers.map((a) => buildRow(a, "desmont")),
+      ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
+      ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
     ];
 
     if (dischargeRows.length) {
@@ -197,6 +245,16 @@ async function handle() {
         .from("discharges")
         .upsert(dischargeRows, { onConflict: "external_id" });
       if (error) throw error;
+    }
+
+    // Limpa registros órfãos: leitos que não vieram mais nesta sincronização
+    // (inclui registros antigos, de antes da deduplicação, com external_id por id).
+    const freshIds = new Set(dischargeRows.map((d) => d.external_id));
+    const staleIds = (existingDischarges ?? [])
+      .map((d) => d.external_id as string)
+      .filter((id) => !freshIds.has(id));
+    if (staleIds.length) {
+      await supabase.from("discharges").delete().in("external_id", staleIds);
     }
 
     // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
@@ -221,9 +279,11 @@ async function handle() {
     return Response.json({
       ok: true,
       answers: answers.length,
-      terminal: bedAnswers.length,
-      desmontagem: dismantleAnswers.length,
+      terminal: bedAnswersDedup.length,
+      terminal_bruto: bedAnswers.length,
+      desmontagem: dismantleAnswersDedup.length,
       staff: staffNames.length,
+      removidos_orfaos: staleIds.length,
       at: new Date().toISOString(),
     });
   } catch (err) {
