@@ -104,8 +104,7 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
   const all: ListoAnswer[] = [];
   const pageSize = 500;
-  const MAX_PAGES = 50; // seguranca contra loop infinito, mas nao trunca cedo como antes
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  for (let page = 1; page <= 6; page++) {
     const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
     const res = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -169,62 +168,15 @@ async function handle() {
     }
 
     // 2) upsert discharges (terminal + desmontagem, distinguíveis pelo external_id)
-    //    Dedup por leito: o Listo pode gerar várias respostas para o mesmo leito no
-    //    mesmo dia (ex: checklist com múltiplos itens) — só a mais recente importa.
-    const refTime = (a: ListoAnswer): number => {
-      const d = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
-      return d ? d.getTime() : a.id;
-    };
-
-    function dedupByBed(list: ListoAnswer[]): ListoAnswer[] {
-      const byBed = new Map<string, ListoAnswer>();
-      for (const a of list) {
-        const bedKey = (a.locationName || `leito-${a.id}`).trim().toLowerCase();
-        const prev = byBed.get(bedKey);
-        if (!prev || refTime(a) > refTime(prev)) {
-          byBed.set(bedKey, a);
-        }
-      }
-      return Array.from(byBed.values());
-    }
-
-    const bedAnswersDedup = dedupByBed(bedAnswers);
-    const dismantleAnswersDedup = dedupByBed(dismantleAnswers);
-
-    // Busca o estado atual no banco (pra manter o horário estável quando o status
-    // não muda entre sincronizações — importante pro "A Caminho" e "Altas Paradas",
-    // que não têm um campo de horário confiável vindo do Listo).
-    const { data: existingDischarges } = await supabase
-      .from("discharges")
-      .select("external_id, status, status_updated_at")
-      .like("external_id", "listo:%");
-    const existingByExternalId = new Map(
-      (existingDischarges ?? []).map((d) => [d.external_id as string, d]),
-    );
-
-    const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
-
     const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
       const status = mapStatus(a);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-      const bedSlug = bed.toLowerCase().replace(/\s+/g, "-");
-      const externalId = `listo:${kind}:bed:${bedSlug}`;
-
-      let statusUpdatedAt: string;
-      if (NO_RELIABLE_TIMESTAMP.includes(status)) {
-        const prev = existingByExternalId.get(externalId);
-        statusUpdatedAt = prev && prev.status === status
-          ? prev.status_updated_at
-          : new Date().toISOString();
-      } else {
-        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
-        statusUpdatedAt = ref.toISOString();
-      }
-
+      const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
+      const statusUpdatedAt = ref.toISOString();
       return {
-        external_id: externalId,
+        external_id: `listo:${kind}:${a.id}`,
         bed_number: bed,
         unit,
         status,
@@ -236,8 +188,8 @@ async function handle() {
     };
 
     const dischargeRows = [
-      ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
-      ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
+      ...bedAnswers.map((a) => buildRow(a, "answer")),
+      ...dismantleAnswers.map((a) => buildRow(a, "desmont")),
     ];
 
     if (dischargeRows.length) {
@@ -245,16 +197,6 @@ async function handle() {
         .from("discharges")
         .upsert(dischargeRows, { onConflict: "external_id" });
       if (error) throw error;
-    }
-
-    // Limpa registros órfãos: leitos que não vieram mais nesta sincronização
-    // (inclui os antigos, de antes da deduplicação por leito, com external_id por id).
-    const freshIds = new Set(dischargeRows.map((d) => d.external_id));
-    const staleIds = (existingDischarges ?? [])
-      .map((d) => d.external_id as string)
-      .filter((id) => !freshIds.has(id));
-    if (staleIds.length) {
-      await supabase.from("discharges").delete().in("external_id", staleIds);
     }
 
     // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
@@ -276,30 +218,12 @@ async function handle() {
       }
     }
 
-    const debugWaiting = bedAnswersDedup
-      .filter((a) => mapStatus(a) === "waiting_cleaning")
-      .slice(0, 5)
-      .map((a) => ({
-        locationName: a.locationName,
-        userName: a.userName,
-        startTime: a.startTime,
-        endTime: a.endTime,
-        date: a.date,
-        statusAnswerId: a.statusAnswer?.id,
-        statusAnswerName: a.statusAnswer?.name,
-        routeName: a.routeName,
-        inspectionName: a.inspectionName,
-      }));
-
     return Response.json({
       ok: true,
       answers: answers.length,
-      terminal: bedAnswersDedup.length,
-      terminal_bruto: bedAnswers.length,
-      desmontagem: dismantleAnswersDedup.length,
+      terminal: bedAnswers.length,
+      desmontagem: dismantleAnswers.length,
       staff: staffNames.length,
-      removidos_orfaos: staleIds.length,
-      amostra_altas_paradas: debugWaiting,
       at: new Date().toISOString(),
     });
   } catch (err) {
