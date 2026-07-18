@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { UtensilsCrossed } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound } from "lucide-react";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -202,10 +202,10 @@ function TvPage() {
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
         <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
-          <BedsPanel title="Leitos em Limpeza Terminal" rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
-          <BedsPanel title="A Caminho" rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
-          <BedsPanel title="Altas Paradas" rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." />
-          <BedsPanel title="Leitos Pausados" rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." />
+          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
+          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
+          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." />
+          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." />
         </div>
         <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
           <StaffPanel rows={staffRows} nowMs={now} />
@@ -251,6 +251,7 @@ const toneBg: Record<Tone, string> = {
 
 function BedsPanel({
   title,
+  icon,
   rows,
   nowMs,
   staffMap,
@@ -259,6 +260,7 @@ function BedsPanel({
   empty,
 }: {
   title: string;
+  icon?: React.ReactNode;
   rows: Discharge[];
   nowMs: number;
   staffMap: Map<string, Staff>;
@@ -269,7 +271,10 @@ function BedsPanel({
   return (
     <section className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col min-h-0">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold">{title}</h2>
+        <h2 className="text-base font-bold flex items-center gap-2">
+          {icon}
+          {title}
+        </h2>
         <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -326,7 +331,10 @@ function StaffPanel({
   return (
     <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold">Colaboradores</h2>
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <UsersRound className="w-4 h-4 text-white/60" />
+          Colaboradores
+        </h2>
         <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
