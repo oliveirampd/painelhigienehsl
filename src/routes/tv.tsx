@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { UtensilsCrossed } from "lucide-react";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -180,7 +181,13 @@ function TvPage() {
           Painel de Higienização Terminal
         </h1>
         <div className="flex items-center gap-4">
-          <span className="text-[10px] uppercase tracking-widest text-white/50">ao vivo</span>
+          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-white/50">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
+            ao vivo
+          </span>
           <span className="text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
@@ -374,7 +381,10 @@ function BreaksPanel({ rows, nowMs }: { rows: Staff[]; nowMs: number }) {
   return (
     <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold">Café / Almoço / Janta</h2>
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <UtensilsCrossed className="w-4 h-4 text-white/60" />
+          Café / Almoço / Janta
+        </h2>
         <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
