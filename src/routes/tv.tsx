@@ -42,7 +42,6 @@ function isExcluded(d: Discharge): boolean {
 }
 
 const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
-const isHealthcon = (d: Discharge) => (d.external_id || "").startsWith("painel:") && !(d.external_id || "").startsWith("painel:staff:");
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
@@ -64,42 +63,41 @@ function TvPage() {
     [discharges],
   );
 
-  // Em Limpeza: healthcon (nome + início do colaborador) — fonte mais confiável que o Listo pra isso
+  // Em Limpeza: terminal + in_progress
   const inFlight = useMemo(
     () =>
       filtered
-        .filter((d) => isHealthcon(d) && d.status === "in_progress")
+        .filter((d) => isTerminal(d) && d.status === "in_progress")
         .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
 
-  // A Caminho: healthcon (tem colaborador alocado, ainda não iniciou)
+  // A Caminho: terminal + en_route (colaborador alocado, ainda não iniciou)
   const enRoute = useMemo(
     () =>
       filtered
-        .filter((d) => isHealthcon(d) && d.status === "en_route")
+        .filter((d) => isTerminal(d) && d.status === "en_route")
         .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
 
-  // Altas Paradas: healthcon, sem colaborador alocado ainda
+  // Altas Paradas: sem colaborador alocado ainda
   const paused = useMemo(
     () =>
       filtered
-        .filter((d) => isHealthcon(d) && d.status === "waiting_cleaning")
+        .filter((d) => isTerminal(d) && d.status === "waiting_cleaning")
         .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
     [filtered],
   );
 
-  // Leitos Pausados: junta o "Pendente" do Listo (com motivo/comentário) e o
-  // isolamento/pausa do healthcon (status "5"), só as de hoje
+  // Leitos Pausados: "Pendente" no Listo (motivo/comentário), só as de hoje
   const completedIssues = useMemo(() => {
     const cutoff = now - ONE_DAY_MS;
     return filtered
       .filter(
         (d) =>
-          ((isTerminal(d) && (d.status === "paused" || d.status === "completed_with_issues")) ||
-            (isHealthcon(d) && d.status === "paused")) &&
+          isTerminal(d) &&
+          (d.status === "paused" || d.status === "completed_with_issues") &&
           new Date(d.status_updated_at).getTime() >= cutoff,
       )
       .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime());
@@ -288,9 +286,7 @@ function BedsPanel({
               <tbody>
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
-                  const name = d.assigned_staff_id
-                    ? staffMap.get(d.assigned_staff_id)?.name
-                    : (!showReason ? d.pause_reason : null) || "—";
+                  const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
                   return (
                     <tr key={d.id} className="border-t border-white/5" style={{ background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone] }}>
                       <td className="px-4 py-1.5 font-bold text-base">{d.bed_number}</td>
