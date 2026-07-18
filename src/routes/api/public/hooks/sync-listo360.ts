@@ -104,7 +104,7 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
   const all: ListoAnswer[] = [];
   const pageSize = 500;
-  for (let page = 1; page <= 6; page++) {
+  for (let page = 1; page <= 50; page++) {
     const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
     const res = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -204,8 +204,18 @@ async function handle() {
 
     const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
 
+    // Limites de "travado" por status — depois disso, vira "completed" sozinho e some
+    // do painel/control, sem precisar de ninguém clicar em nada. Não é o Listo que
+    // fecha o registro, é só o nosso painel que para de mostrar.
+    const STALE_LIMIT_MIN: Partial<Record<DischargeStatus, number>> = {
+      in_progress: 4 * 60,       // Em Limpeza Terminal: 4h
+      en_route: 40,               // A Caminho: 40min
+      waiting_cleaning: 20 * 60,  // Altas Paradas: 20h
+      paused: 4 * 24 * 60,        // Leitos Pausados: 4 dias
+    };
+
     const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
-      const status = mapStatus(a);
+      const rawStatus = mapStatus(a);
       const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
@@ -213,14 +223,30 @@ async function handle() {
       const externalId = `listo:${kind}:bed:${bedSlug}`;
 
       let statusUpdatedAt: string;
-      if (NO_RELIABLE_TIMESTAMP.includes(status)) {
+      let debugInfo: string | null = null;
+      if (NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
         const prev = existingByExternalId.get(externalId);
-        statusUpdatedAt = prev && prev.status === status
-          ? prev.status_updated_at
-          : new Date().toISOString();
+        if (prev && prev.status === rawStatus) {
+          statusUpdatedAt = prev.status_updated_at;
+          debugInfo = `mantido (prev status=${prev.status})`;
+        } else {
+          statusUpdatedAt = new Date().toISOString();
+          debugInfo = prev
+            ? `resetado (prev status=${prev.status} != novo=${rawStatus})`
+            : "resetado (nenhum registro anterior encontrado)";
+        }
       } else {
         const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
         statusUpdatedAt = ref.toISOString();
+      }
+
+      // Registro travado (parado além do limite pra esse status) -> conclui sozinho
+      const ageMin = (Date.now() - new Date(statusUpdatedAt).getTime()) / 60000;
+      const limit = STALE_LIMIT_MIN[rawStatus];
+      const status: DischargeStatus =
+        limit !== undefined && ageMin >= limit ? "completed" : rawStatus;
+      if (status === "completed" && status !== rawStatus) {
+        debugInfo = `auto-concluido (travado ha ${Math.round(ageMin / 60)}h, limite era ${Math.round((limit ?? 0) / 60)}h)`;
       }
 
       return {
@@ -232,13 +258,16 @@ async function handle() {
         pause_reason: extractComment(a.answerComment),
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
+        _debug: debugInfo,
       };
     };
 
-    const dischargeRows = [
+    const dischargeRowsWithDebug = [
       ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
       ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
     ];
+
+    const dischargeRows = dischargeRowsWithDebug.map(({ _debug, ...row }) => row);
 
     if (dischargeRows.length) {
       const { error } = await supabase
@@ -276,6 +305,11 @@ async function handle() {
       }
     }
 
+    const debugSample = dischargeRowsWithDebug
+      .filter((d) => d._debug)
+      .slice(0, 8)
+      .map((d) => ({ external_id: d.external_id, status: d.status, _debug: d._debug }));
+
     return Response.json({
       ok: true,
       answers: answers.length,
@@ -284,6 +318,7 @@ async function handle() {
       desmontagem: dismantleAnswersDedup.length,
       staff: staffNames.length,
       removidos_orfaos: staleIds.length,
+      debug_estabilidade_horario: debugSample,
       at: new Date().toISOString(),
     });
   } catch (err) {
