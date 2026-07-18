@@ -28,7 +28,6 @@ export const Route = createFileRoute("/tv")({
 const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
   { floor: 3, block: "D" },
   { floor: 3, block: "C" },
-  { floor: 11, block: "C" },
   { floor: 12, block: "C" },
   { floor: 5, block: "B" },
 ];
