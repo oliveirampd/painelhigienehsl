@@ -194,12 +194,31 @@ async function handle() {
     // Estado atual no banco, pra manter o horário estável quando o status não muda
     // entre sincronizações (importante pro "A Caminho"/"Altas Paradas", que não têm
     // um campo de horário confiável vindo do Listo).
-    const { data: existingDischarges } = await supabase
-      .from("discharges")
-      .select("external_id, status, status_updated_at")
-      .like("external_id", "listo:%");
+    // IMPORTANTE: o Supabase só devolve até 1000 linhas por consulta por padrão —
+    // sem paginar aqui, registros além dos primeiros 1000 "somem" da nossa visão,
+    // fazendo o horário resetar à toa e a limpeza de órfãos apagar coisa demais.
+    async function fetchAllDischarges() {
+      const pageSize = 1000;
+      let from = 0;
+      const all: { external_id: string; status: string; status_updated_at: string }[] = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from("discharges")
+          .select("external_id, status, status_updated_at")
+          .like("external_id", "listo:%")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...(data as typeof all));
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return all;
+    }
+
+    const existingDischarges = await fetchAllDischarges();
     const existingByExternalId = new Map(
-      (existingDischarges ?? []).map((d) => [d.external_id as string, d]),
+      existingDischarges.map((d) => [d.external_id, d]),
     );
 
     const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
