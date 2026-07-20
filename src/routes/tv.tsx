@@ -1,350 +1,516 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
+import { useEffect, useMemo, useState } from "react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound } from "lucide-react";
+import { useHospitalData } from "@/hooks/useHospitalData";
+import { useNow } from "@/hooks/useNow";
+import {
+  elapsedMinutes,
+  formatElapsed,
+  isBreakOverLimit,
+  STAFF_STATUS_LABELS,
+  type Discharge,
+  type Staff,
+  type StaffStatus,
+} from "@/lib/hospital";
 
-const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
-const ESTABLISHMENT_ID = 1;
-
-type ListoAnswer = {
-  id: number;
-  sectorName: string | null;
-  sectorDescription: string | null;
-  locationName: string | null;
-  routeName: string | null;
-  inspectionName: string | null;
-  userName: string | null;
-  isPriority: boolean;
-  answerComment: { comment?: string | null } | string | null;
-  startTime: string | null;
-  endTime: string | null;
-  date: string | null;
-  statusAnswer: { id: number; name: string } | null;
-};
-
-type DischargeStatus =
-  | "waiting_cleaning"
-  | "en_route"
-  | "in_progress"
-  | "paused"
-  | "maintenance"
-  | "completed"
-  | "completed_with_issues";
-
-// Listo devolve datas em horário local de Brasília (UTC-3) sem timezone.
-// Normaliza para ISO com offset -03:00 para que o painel calcule o tempo real.
-function parseBRT(s: string | null | undefined): Date | null {
-  if (!s) return null;
-  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
-  const iso = hasTz ? s : `${s}-03:00`;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-function mapStatus(a: ListoAnswer): DischargeStatus {
-  const id = a.statusAnswer?.id;
-  const hasEnd = !!a.endTime;
-  const hasStart = !!a.startTime;
-  const hasUser = !!(a.userName && a.userName.trim());
-
-  // "Pendente" no Listo (id 4 ou 7): vira "Leitos Pausados" no /tv, independente de ter
-  // endTime ou não — é o mesmo status "paused" nos dois casos agora.
-  if (id === 4 || id === 7) return "paused";
-  if (id === 5) return "maintenance";
-  if (id === 3 || id === 6) return "completed";
-  if (id === 2) return hasEnd ? "completed" : "in_progress";
-
-  // Demais casos (ex: id 1) — deriva pelo estado real do processo, não pelo id:
-  if (hasEnd) return "completed";
-  if (hasStart) return "in_progress";
-  if (hasUser) return "en_route"; // colaborador alocado, ainda não iniciou = a caminho
-  return "waiting_cleaning"; // sem colaborador alocado ainda = Altas Paradas
-}
-
-function isBedLocation(a: ListoAnswer): boolean {
-  return (a.locationName || "").toLowerCase().startsWith("leito");
-}
-
-function isTerminalBed(a: ListoAnswer): boolean {
-  const route = (a.routeName || "").toLowerCase();
-  const insp = (a.inspectionName || "").toLowerCase();
-  return isBedLocation(a) && (route.includes("limpeza terminal") || insp.includes("terminal"));
-}
-
-function isDismantleBed(a: ListoAnswer): boolean {
-  const route = (a.routeName || "").toLowerCase();
-  const insp = (a.inspectionName || "").toLowerCase();
-  return isBedLocation(a) && (route.includes("desmontagem") || insp.includes("desmontagem"));
-}
-
-function extractComment(c: ListoAnswer["answerComment"]): string | null {
-  if (!c) return null;
-  if (typeof c === "string") return c;
-  return c.comment ?? null;
-}
-
-async function login(): Promise<string> {
-  const res = await fetch(`${LISTO_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      email: process.env.LISTO360_EMAIL,
-      password: process.env.LISTO360_PASSWORD,
-    }),
-  });
-  if (!res.ok) throw new Error(`Login Listo360 falhou: ${res.status}`);
-  const data = await res.json() as { token?: string; accessToken?: string };
-  const token = data.token || data.accessToken;
-  if (!token) throw new Error("Login Listo360 sem token");
-  return token;
-}
-
-async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
-  const end = new Date();
-  const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 19);
-  const all: ListoAnswer[] = [];
-  const pageSize = 500;
-  for (let page = 1; page <= 50; page++) {
-    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-    const res = await fetch(url, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-    });
-    if (!res.ok) throw new Error(`all-answers p${page} ${res.status}`);
-    const body = await res.json() as ListoAnswer[] | { data?: ListoAnswer[] };
-    const rows = Array.isArray(body) ? body : (body.data ?? []);
-    all.push(...rows);
-    if (rows.length < pageSize) break;
-  }
-  return all;
-}
-
-export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
-  server: {
-    handlers: {
-      GET: () => handle(),
-      POST: () => handle(),
-    },
-  },
+export const Route = createFileRoute("/tv")({
+  head: () => ({
+    meta: [
+      { title: "TV — Painel de Higienização Terminal" },
+      { name: "description", content: "Painel em tempo real: leitos em limpeza terminal, altas paradas, pausadas e colaboradores." },
+    ],
+  }),
+  component: TvPage,
 });
 
-async function handle() {
-  try {
-    const supabase = createClient<Database>(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
+// Unidades excluídas, no formato { andar, bloco } — ex: 5º Andar, Bloco B.
+// Cobre textos como "Bloco B 05º Andar" ou "Bloco B 5º Andar · Ala X".
+const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
+  { floor: 3, block: "D" },
+  { floor: 3, block: "C" },
+  { floor: 12, block: "C" },
+  { floor: 5, block: "B" },
+];
 
-    const token = await login();
-    const answers = await fetchAnswers(token);
+function isExcluded(d: Discharge): boolean {
+  const u = (d.unit || "").toUpperCase();
+  const m = u.match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
+  if (!m) return false;
+  const block = m[1];
+  const floor = parseInt(m[2], 10);
+  return EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
+}
 
-    const bedAnswers = answers.filter(isTerminalBed);
-    const dismantleAnswers = answers.filter(isDismantleBed);
-    const relevant = [...bedAnswers, ...dismantleAnswers];
+const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
+const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 
-    // 1) upsert staff (unique per userName) — inclui quem está em desmontagem
-    const staffNames = Array.from(new Set(
-      relevant.map((a) => (a.userName || "").trim()).filter(Boolean),
-    ));
+type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
-    if (staffNames.length) {
-      const staffRows = staffNames.map((name) => ({
-        external_id: `listo:user:${name}`,
-        name,
-        status: "available" as const,
-      }));
-      await supabase.from("staff").upsert(staffRows, {
-        onConflict: "external_id",
-        ignoreDuplicates: true,
+// NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
+// igual ao padrão já usado em `discharges.status_updated_at`. Se o nome real da coluna
+// for diferente, troca só a referência `s.status_updated_at` abaixo.
+const BREAK_STATUSES: StaffStatus[] = ["coffee_break", "lunch_break", "dinner_break"];
+
+function TvPage() {
+  const { discharges, staff } = useHospitalData();
+  const now = useNow(15000);
+  const clock = useClock();
+
+  const filtered = useMemo(
+    () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
+    [discharges],
+  );
+
+  // Em Limpeza: terminal + in_progress
+  const inFlight = useMemo(
+    () =>
+      filtered
+        .filter((d) => isTerminal(d) && d.status === "in_progress")
+        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+    [filtered],
+  );
+
+  // A Caminho: terminal + en_route (colaborador alocado, ainda não iniciou)
+  const enRoute = useMemo(
+    () =>
+      filtered
+        .filter((d) => isTerminal(d) && d.status === "en_route")
+        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+    [filtered],
+  );
+
+  // Altas Paradas: sem colaborador alocado ainda
+  const paused = useMemo(
+    () =>
+      filtered
+        .filter((d) => isTerminal(d) && d.status === "waiting_cleaning")
+        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+    [filtered],
+  );
+
+  // Leitos Pausados: "Pendente" no Listo (motivo/comentário), só as de hoje
+  const completedIssues = useMemo(() => {
+    const cutoff = now - ONE_DAY_MS;
+    return filtered
+      .filter(
+        (d) =>
+          isTerminal(d) &&
+          (d.status === "paused" || d.status === "completed_with_issues") &&
+          new Date(d.status_updated_at).getTime() >= cutoff,
+      )
+      .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime());
+  }, [filtered, now]);
+
+  // Desmontagens em andamento
+  const activeDesmont = useMemo(
+    () => filtered.filter((d) => isDesmont(d) && d.status === "in_progress"),
+    [filtered],
+  );
+
+  // Colaboradores: derivar atividade por staff
+  const staffRows = useMemo(() => {
+    const activity = new Map<string, { kind: StaffActivity; start: string; bed: string }>();
+
+    for (const d of activeDesmont) {
+      if (!d.assigned_staff_id) continue;
+      const prev = activity.get(d.assigned_staff_id);
+      if (!prev || new Date(d.status_updated_at) > new Date(prev.start)) {
+        activity.set(d.assigned_staff_id, {
+          kind: "desmontando",
+          start: d.status_updated_at,
+          bed: d.bed_number,
+        });
+      }
+    }
+    for (const d of inFlight) {
+      if (!d.assigned_staff_id) continue;
+      // desmontando tem prioridade se ambos existirem (raro), mas mais recente vence
+      const prev = activity.get(d.assigned_staff_id);
+      if (!prev || new Date(d.status_updated_at) > new Date(prev.start)) {
+        activity.set(d.assigned_staff_id, {
+          kind: "em_alta",
+          start: d.status_updated_at,
+          bed: d.bed_number,
+        });
+      }
+    }
+
+    const listoStaff = staff.filter((s) => (s.external_id || "").startsWith("listo:user:"));
+    return listoStaff
+      .filter((s) => activity.has(s.id)) // só quem está ativo agora (desmontando ou em alta)
+      .map((s) => {
+        const a = activity.get(s.id)!;
+        return {
+          staff: s,
+          kind: a.kind,
+          start: a.start,
+          bed: a.bed,
+        };
+      })
+      .sort((a, b) => {
+        const order = { desmontando: 0, em_alta: 1, disponivel: 2 };
+        if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
+        if (a.start && b.start) return new Date(b.start).getTime() - new Date(a.start).getTime();
+        return a.staff.name.localeCompare(b.staff.name);
       });
-    }
+  }, [inFlight, activeDesmont, staff]);
 
-    const { data: staffAll } = await supabase
-      .from("staff")
-      .select("id, external_id, name");
-    const staffByName = new Map<string, string>();
-    for (const s of staffAll ?? []) {
-      if (s.name) staffByName.set(s.name, s.id);
-    }
+  // Colaboradores em pausa (Café / Almoço / Janta), vindos direto de staff.status
+  const breakRows = useMemo(
+    () =>
+      staff
+        .filter((s) => BREAK_STATUSES.includes(s.status as StaffStatus))
+        .sort(
+          (a, b) =>
+            new Date((b as any).status_updated_at).getTime() -
+            new Date((a as any).status_updated_at).getTime(),
+        ),
+    [staff],
+  );
 
-    // 2) upsert discharges (terminal + desmontagem, distinguíveis pelo external_id)
-    //    Dedup por leito: o Listo pode gerar várias respostas pro mesmo leito no mesmo
-    //    dia — sem isso, um leito pode aparecer em "A Caminho" E "Em Limpeza" ao mesmo
-    //    tempo, um contradizendo o outro. Só a resposta mais recente por leito importa.
-    const refTime = (a: ListoAnswer): number => {
-      const d = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
-      return d ? d.getTime() : a.id;
+  const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
+  const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
+
+  return (
+    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans">
+      <header className="flex-none flex items-center justify-between px-6 py-2 border-b border-white/10">
+        <h1 className="text-xl xl:text-2xl font-bold tracking-tight">
+          Painel de Higienização Terminal
+        </h1>
+        <div className="flex items-center gap-4">
+          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-white/50">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+            </span>
+            ao vivo
+          </span>
+          <span className="text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
+        </div>
+      </header>
+
+      <div className="flex-none grid grid-cols-5 gap-3 px-6 py-3">
+        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.72 0.19 155)" />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.72 0.15 230)" />
+        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.75 0.17 60)" />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.7 0.17 245)" />
+      </div>
+
+      <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
+        <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
+          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
+          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
+          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." />
+          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." />
+        </div>
+        <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
+          <StaffPanel rows={staffRows} nowMs={now} />
+          <BreaksPanel rows={breakRows} nowMs={now} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function useClock() {
+  const [t, setT] = useState<string>("");
+  useEffect(() => {
+    setT(new Date().toLocaleTimeString("pt-BR"));
+    const id = setInterval(() => setT(new Date().toLocaleTimeString("pt-BR")), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return t;
+}
+
+function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+  return (
+    <div
+      className="rounded-xl px-4 py-2 border border-white/10 flex items-center justify-between"
+      style={{
+        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.14)")} 0%, oklch(0.19 0.03 265) 100%)`,
+        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.35)")}`,
+      }}
+    >
+      <div className="text-[11px] uppercase tracking-widest text-white/60">{label}</div>
+      <div className="text-3xl font-bold tabular-nums" style={{ color: accent }}>{value}</div>
+    </div>
+  );
+}
+
+type Tone = "green" | "amber" | "red" | "blue";
+const toneBg: Record<Tone, string> = {
+  green: "oklch(0.3 0.1 155 / 0.12)",
+  amber: "oklch(0.45 0.15 60 / 0.18)",
+  red: "oklch(0.4 0.15 25 / 0.18)",
+  blue: "oklch(0.35 0.12 230 / 0.16)",
+};
+
+function BedsPanel({
+  title,
+  icon,
+  rows,
+  nowMs,
+  staffMap,
+  tone,
+  showReason,
+  empty,
+}: {
+  title: string;
+  icon?: React.ReactNode;
+  rows: Discharge[];
+  nowMs: number;
+  staffMap: Map<string, Staff>;
+  tone: Tone;
+  showReason?: boolean;
+  empty: string;
+}) {
+  return (
+    <section className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col min-h-0">
+      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          {icon}
+          {title}
+        </h2>
+        <span className="text-[11px] text-white/50">{rows.length}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
+        ) : (
+          <AutoScroll>
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-[oklch(0.16_0.02_265)]">
+                <tr>
+                  <th className="text-left px-4 py-1.5">Leito</th>
+                  <th className="text-left px-3 py-1.5">Unidade</th>
+                  {showReason ? (
+                    <th className="text-left px-3 py-1.5">Motivo</th>
+                  ) : (
+                    <th className="text-left px-3 py-1.5">Tempo</th>
+                  )}
+                  <th className="text-left px-4 py-1.5">Colaborador</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((d) => {
+                  const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
+                  const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
+                  return (
+                    <tr key={d.id} className="border-t border-white/5" style={{ background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone] }}>
+                      <td className="px-4 py-1.5 font-bold text-base">{d.bed_number}</td>
+                      <td className="px-3 py-1.5 text-white/80 text-xs">{d.unit}</td>
+                      {showReason ? (
+                        <td className="px-3 py-1.5 text-white/90 text-xs">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                      ) : (
+                        <td className="px-3 py-1.5 font-mono tabular-nums text-sm">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                      )}
+                      <td className="px-4 py-1.5 text-xs">{name || "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StaffPanel({
+  rows,
+  nowMs,
+}: {
+  rows: Array<{ staff: Staff; kind: StaffActivity; start: string | null; bed: string | null }>;
+  nowMs: number;
+}) {
+  return (
+    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <UsersRound className="w-4 h-4 text-white/60" />
+          Colaboradores
+        </h2>
+        <span className="text-[11px] text-white/50">{rows.length}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">Nenhum colaborador.</div>
+        ) : (
+          <AutoScroll>
+            <ul className="p-2 space-y-1.5">
+              {rows.map(({ staff, kind, start, bed }) => (
+                <li
+                  key={staff.id}
+                  className="flex items-center justify-between rounded-md px-3 py-2 border"
+                  style={{
+                    background:
+                      kind === "desmontando"
+                        ? "oklch(0.35 0.14 300 / 0.22)"
+                        : kind === "em_alta"
+                          ? "oklch(0.32 0.13 245 / 0.22)"
+                          : "oklch(0.25 0.02 265 / 0.4)",
+                    borderColor:
+                      kind === "desmontando"
+                        ? "oklch(0.65 0.18 300 / 0.35)"
+                        : kind === "em_alta"
+                          ? "oklch(0.6 0.15 245 / 0.35)"
+                          : "oklch(0.4 0.02 265 / 0.4)",
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold truncate text-sm">{staff.name}</div>
+                    <div className="text-[11px] text-white/60 truncate">
+                      <StatusPill kind={kind} />
+                      {bed ? <span className="ml-1">· {bed}</span> : null}
+                    </div>
+                  </div>
+                  {start && (
+                    <span className="font-mono tabular-nums text-xs text-white/70 ml-2">
+                      {formatElapsed(start, nowMs)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// Café / Almoço / Janta — direto de staff.status, com alerta quando passa do limite (hospital.ts)
+function BreaksPanel({ rows, nowMs }: { rows: Staff[]; nowMs: number }) {
+  return (
+    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
+        <h2 className="text-base font-bold flex items-center gap-2">
+          <UtensilsCrossed className="w-4 h-4 text-white/60" />
+          Café / Almoço / Janta
+        </h2>
+        <span className="text-[11px] text-white/50">{rows.length}</span>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {rows.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">Ninguém em pausa agora.</div>
+        ) : (
+          <AutoScroll>
+            <ul className="p-2 space-y-1.5">
+              {rows.map((s) => {
+                // NOTA: assume coluna `status_updated_at` na tabela staff — confirmar nome real.
+                const startIso = (s as any).status_updated_at as string | undefined;
+                const minutes = startIso ? elapsedMinutes(startIso, nowMs) : 0;
+                const over = startIso ? isBreakOverLimit(s.status as StaffStatus, minutes) : false;
+                return (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between rounded-md px-3 py-2 border"
+                    style={{
+                      background: over ? "oklch(0.4 0.13 55 / 0.3)" : "oklch(0.3 0.1 245 / 0.16)",
+                      borderColor: over ? "oklch(0.7 0.17 55 / 0.5)" : "oklch(0.5 0.12 245 / 0.35)",
+                    }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold truncate text-sm">{s.name}</div>
+                      <div className="text-[11px] text-white/60 truncate uppercase tracking-widest">
+                        {STAFF_STATUS_LABELS[s.status as StaffStatus] ?? s.status}
+                      </div>
+                    </div>
+                    {startIso && (
+                      <span
+                        className="font-mono tabular-nums text-xs ml-2"
+                        style={{ color: over ? "oklch(0.8 0.17 55)" : "rgba(255,255,255,0.7)" }}
+                      >
+                        {formatElapsed(startIso, nowMs)}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StatusPill({ kind }: { kind: StaffActivity }) {
+  const label = kind === "desmontando" ? "Desmontando" : kind === "em_alta" ? "Em Alta" : "Disponível";
+  const color =
+    kind === "desmontando"
+      ? "oklch(0.8 0.15 300)"
+      : kind === "em_alta"
+        ? "oklch(0.75 0.15 245)"
+        : "oklch(0.7 0.02 265)";
+  return (
+    <span className="uppercase tracking-widest text-[10px] font-semibold" style={{ color }}>
+      {label}
+    </span>
+  );
+}
+
+// Auto-scroll vertical: se o conteúdo não couber, rola devagar em loop.
+function AutoScroll({ children }: { children: React.ReactNode }) {
+  const [ref, setRef] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref) return;
+    let raf = 0;
+    let dir = 1;
+    let paused = 0;
+    let pos = 0;
+    let needs = ref.scrollHeight > ref.clientHeight + 4;
+
+    const recheck = () => {
+      needs = ref.scrollHeight > ref.clientHeight + 4;
+      if (!needs) {
+        pos = 0;
+        ref.scrollTop = 0;
+      }
     };
 
-    function dedupByBed(list: ListoAnswer[]): ListoAnswer[] {
-      const byBed = new Map<string, ListoAnswer>();
-      for (const a of list) {
-        const bedKey = (a.locationName || `leito-${a.id}`).trim().toLowerCase();
-        const prev = byBed.get(bedKey);
-        if (!prev || refTime(a) > refTime(prev)) {
-          byBed.set(bedKey, a);
-        }
-      }
-      return Array.from(byBed.values());
-    }
+    const ro = new ResizeObserver(recheck);
+    ro.observe(ref);
+    const mo = new MutationObserver(recheck);
+    mo.observe(ref, { childList: true, subtree: true, characterData: true });
 
-    const bedAnswersDedup = dedupByBed(bedAnswers);
-    const dismantleAnswersDedup = dedupByBed(dismantleAnswers);
-
-    // Estado atual no banco, pra manter o horário estável quando o status não muda
-    // entre sincronizações (importante pro "A Caminho"/"Altas Paradas", que não têm
-    // um campo de horário confiável vindo do Listo).
-    // IMPORTANTE: o Supabase só devolve até 1000 linhas por consulta por padrão —
-    // sem paginar aqui, registros além dos primeiros 1000 "somem" da nossa visão,
-    // fazendo o horário resetar à toa e a limpeza de órfãos apagar coisa demais.
-    async function fetchAllDischarges() {
-      const pageSize = 1000;
-      let from = 0;
-      const all: { external_id: string; status: string; status_updated_at: string }[] = [];
-      while (true) {
-        const { data, error } = await supabase
-          .from("discharges")
-          .select("external_id, status, status_updated_at")
-          .like("external_id", "listo:%")
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        all.push(...(data as typeof all));
-        if (data.length < pageSize) break;
-        from += pageSize;
-      }
-      return all;
-    }
-
-    const existingDischarges = await fetchAllDischarges();
-    const existingByExternalId = new Map(
-      existingDischarges.map((d) => [d.external_id, d]),
-    );
-
-    const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
-
-    // Limites de "travado" por status — depois disso, vira "completed" sozinho e some
-    // do painel/control, sem precisar de ninguém clicar em nada. Não é o Listo que
-    // fecha o registro, é só o nosso painel que para de mostrar.
-    const STALE_LIMIT_MIN: Partial<Record<DischargeStatus, number>> = {
-      in_progress: 4 * 60,       // Em Limpeza Terminal: 4h
-      en_route: 40,               // A Caminho: 40min
-      waiting_cleaning: 20 * 60,  // Altas Paradas: 20h
-      paused: 4 * 24 * 60,        // Leitos Pausados: 4 dias
-    };
-
-    const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
-      const rawStatus = mapStatus(a);
-      const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
-      const bed = (a.locationName || `Leito ${a.id}`).trim();
-      const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-      const bedSlug = bed.toLowerCase().replace(/\s+/g, "-");
-      const externalId = `listo:${kind}:bed:${bedSlug}`;
-
-      let statusUpdatedAt: string;
-      let debugInfo: string | null = null;
-      if (NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
-        const prev = existingByExternalId.get(externalId);
-        if (prev && prev.status === rawStatus) {
-          statusUpdatedAt = prev.status_updated_at;
-          debugInfo = `mantido (prev status=${prev.status})`;
+    const step = () => {
+      if (needs) {
+        if (paused > 0) {
+          paused -= 1;
         } else {
-          statusUpdatedAt = new Date().toISOString();
-          debugInfo = prev
-            ? `resetado (prev status=${prev.status} != novo=${rawStatus})`
-            : "resetado (nenhum registro anterior encontrado)";
+          pos += dir * 0.35;
+          const max = ref.scrollHeight - ref.clientHeight;
+          if (pos >= max) {
+            pos = max;
+            dir = -1;
+            paused = 120;
+          } else if (pos <= 0) {
+            pos = 0;
+            dir = 1;
+            paused = 120;
+          }
+          ref.scrollTop = Math.floor(pos);
         }
-      } else {
-        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
-        statusUpdatedAt = ref.toISOString();
       }
-
-      // Registro travado (parado além do limite pra esse status) -> conclui sozinho
-      const ageMin = (Date.now() - new Date(statusUpdatedAt).getTime()) / 60000;
-      const limit = STALE_LIMIT_MIN[rawStatus];
-      const status: DischargeStatus =
-        limit !== undefined && ageMin >= limit ? "completed" : rawStatus;
-      if (status === "completed" && status !== rawStatus) {
-        debugInfo = `auto-concluido (travado ha ${Math.round(ageMin / 60)}h, limite era ${Math.round((limit ?? 0) / 60)}h)`;
-      }
-
-      return {
-        external_id: externalId,
-        bed_number: bed,
-        unit,
-        status,
-        priority: !!a.isPriority,
-        pause_reason: extractComment(a.answerComment),
-        assigned_staff_id: assigned,
-        status_updated_at: statusUpdatedAt,
-        _debug: debugInfo,
-      };
+      raf = requestAnimationFrame(step);
     };
+    raf = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [ref]);
 
-    const dischargeRowsWithDebug = [
-      ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
-      ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
-    ];
-
-    const dischargeRows = dischargeRowsWithDebug.map(({ _debug, ...row }) => row);
-
-    if (dischargeRows.length) {
-      const { error } = await supabase
-        .from("discharges")
-        .upsert(dischargeRows, { onConflict: "external_id" });
-      if (error) throw error;
-    }
-
-    // Limpa registros órfãos: leitos que não vieram mais nesta sincronização
-    // (inclui registros antigos, de antes da deduplicação, com external_id por id).
-    const freshIds = new Set(dischargeRows.map((d) => d.external_id));
-    const staleIds = (existingDischarges ?? [])
-      .map((d) => d.external_id as string)
-      .filter((id) => !freshIds.has(id));
-    if (staleIds.length) {
-      await supabase.from("discharges").delete().in("external_id", staleIds);
-    }
-
-    // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
-    const activeIds = new Set(
-      dischargeRows
-        .filter((d) => d.status === "in_progress")
-        .map((d) => d.assigned_staff_id)
-        .filter(Boolean) as string[],
-    );
-
-    if (staffAll) {
-      const toAssign = staffAll.filter((s) => activeIds.has(s.id)).map((s) => s.id);
-      const toFree = staffAll.filter((s) => !activeIds.has(s.id) && s.external_id?.startsWith("listo:user:")).map((s) => s.id);
-      if (toAssign.length) {
-        await supabase.from("staff").update({ status: "assigned" }).in("id", toAssign);
-      }
-      if (toFree.length) {
-        await supabase.from("staff").update({ status: "available" }).in("id", toFree).eq("status", "assigned");
-      }
-    }
-
-    const debugSample = dischargeRowsWithDebug
-      .filter((d) => d._debug)
-      .slice(0, 8)
-      .map((d) => ({ external_id: d.external_id, status: d.status, _debug: d._debug }));
-
-    return Response.json({
-      ok: true,
-      answers: answers.length,
-      terminal: bedAnswersDedup.length,
-      terminal_bruto: bedAnswers.length,
-      desmontagem: dismantleAnswersDedup.length,
-      staff: staffNames.length,
-      removidos_orfaos: staleIds.length,
-      debug_estabilidade_horario: debugSample,
-      at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("[sync-listo360]", err);
-    return Response.json(
-      { ok: false, error: (err as Error).message },
-      { status: 500 },
-    );
-  }
+  return (
+    <div ref={setRef} className="h-full overflow-hidden">
+      {children}
+    </div>
+  );
 }
