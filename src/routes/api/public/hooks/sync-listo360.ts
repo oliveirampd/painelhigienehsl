@@ -200,11 +200,11 @@ async function handle() {
     async function fetchAllDischarges() {
       const pageSize = 1000;
       let from = 0;
-      const all: { external_id: string; status: string; status_updated_at: string }[] = [];
+      const all: { external_id: string; status: string; status_updated_at: string; last_answer_id: number | null }[] = [];
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
-          .select("external_id, status, status_updated_at")
+          .select("external_id, status, status_updated_at, last_answer_id")
           .like("external_id", "listo:%")
           .range(from, from + pageSize - 1);
         if (error) throw error;
@@ -246,22 +246,36 @@ async function handle() {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Já tinha sido concluído por estagnação (auto-conclusão) — não reviver só
-      // porque o Listo ainda mostra o mesmo estado antigo de sempre. Isso evita o
-      // ciclo "conclui -> Listo ainda mostra igual -> reseta relógio -> desfaz a
-      // conclusão -> conclui de novo depois -> repete pra sempre".
-      if (prevRow && prevRow.status === "completed" && NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
-        return {
-          external_id: externalId,
-          bed_number: bed,
-          unit,
-          status: "completed" as DischargeStatus,
-          priority: !!a.isPriority,
-          pause_reason: extractComment(a.answerComment),
-          assigned_staff_id: assigned,
-          status_updated_at: prevRow.status_updated_at,
-          _debug: "mantido concluido (ja tinha sido auto-concluido antes)",
-        };
+      // Horário "natural" desse ciclo, quando o status tem um campo confiável do
+      // Listo (endTime/startTime/date). Serve pra saber se há novidade real.
+      const naturalRef = !NO_RELIABLE_TIMESTAMP.includes(rawStatus)
+        ? (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date())
+        : null;
+
+      // Já estava concluído (manualmente, ou por estagnação) — só reviver se o
+      // Listo mostrar novidade REAL:
+      // - Pra status com horário confiável (in_progress/paused/etc): horário mais novo.
+      // - Pra en_route/waiting_cleaning (sem horário confiável): só é novidade se o
+      //   ID da resposta do Listo for DIFERENTE do que gerou a conclusão anterior —
+      //   isso distingue "o mesmo registro velho de sempre" de "uma alta nova de verdade".
+      if (prevRow && prevRow.status === "completed") {
+        const semNovidade = naturalRef !== null
+          ? naturalRef.getTime() <= new Date(prevRow.status_updated_at).getTime()
+          : (prevRow.last_answer_id === a.id);
+        if (semNovidade) {
+          return {
+            external_id: externalId,
+            bed_number: bed,
+            unit,
+            status: "completed" as DischargeStatus,
+            priority: !!a.isPriority,
+            pause_reason: extractComment(a.answerComment),
+            assigned_staff_id: assigned,
+            status_updated_at: prevRow.status_updated_at,
+            last_answer_id: a.id,
+            _debug: "mantido concluido (sem novidade real do Listo)",
+          };
+        }
       }
 
       if (NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
@@ -276,8 +290,7 @@ async function handle() {
             : "resetado (nenhum registro anterior encontrado)";
         }
       } else {
-        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
-        statusUpdatedAt = ref.toISOString();
+        statusUpdatedAt = naturalRef!.toISOString();
       }
 
       // Registro travado (parado além do limite pra esse status) -> conclui sozinho
@@ -298,6 +311,7 @@ async function handle() {
         pause_reason: extractComment(a.answerComment),
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
+        last_answer_id: a.id,
         _debug: debugInfo,
       };
     };
