@@ -243,8 +243,29 @@ async function handle() {
 
       let statusUpdatedAt: string;
       let debugInfo: string | null = null;
+
+      const prevRow = existingByExternalId.get(externalId);
+
+      // Já tinha sido concluído por estagnação (auto-conclusão) — não reviver só
+      // porque o Listo ainda mostra o mesmo estado antigo de sempre. Isso evita o
+      // ciclo "conclui -> Listo ainda mostra igual -> reseta relógio -> desfaz a
+      // conclusão -> conclui de novo depois -> repete pra sempre".
+      if (prevRow && prevRow.status === "completed" && NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
+        return {
+          external_id: externalId,
+          bed_number: bed,
+          unit,
+          status: "completed" as DischargeStatus,
+          priority: !!a.isPriority,
+          pause_reason: extractComment(a.answerComment),
+          assigned_staff_id: assigned,
+          status_updated_at: prevRow.status_updated_at,
+          _debug: "mantido concluido (ja tinha sido auto-concluido antes)",
+        };
+      }
+
       if (NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
-        const prev = existingByExternalId.get(externalId);
+        const prev = prevRow;
         if (prev && prev.status === rawStatus) {
           statusUpdatedAt = prev.status_updated_at;
           debugInfo = `mantido (prev status=${prev.status})`;
