@@ -218,11 +218,11 @@ function TvPage() {
       </header>
 
       <div className="flex-none grid grid-cols-5 gap-3 px-6 py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.72 0.19 155)" />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.72 0.15 230)" />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.75 0.17 60)" />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.7 0.17 245)" />
+        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" />
+        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
@@ -254,13 +254,14 @@ function useClock() {
 function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="rounded-xl px-4 py-2 border border-white/10 flex items-center justify-between"
+      className="rounded-xl px-4 py-2 border flex items-center justify-between"
       style={{
-        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.14)")} 0%, oklch(0.19 0.03 265) 100%)`,
-        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.35)")}`,
+        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
+        borderColor: accent.replace(")", " / 0.45)"),
+        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="text-[11px] uppercase tracking-widest text-white/60">{label}</div>
+      <div className="text-[11px] uppercase tracking-widest text-white/70 font-medium">{label}</div>
       <div className="text-3xl font-bold tabular-nums" style={{ color: accent }}>{value}</div>
     </div>
   );
@@ -268,10 +269,10 @@ function KpiCard({ label, value, accent }: { label: string; value: number; accen
 
 type Tone = "green" | "amber" | "red" | "blue";
 const toneBg: Record<Tone, string> = {
-  green: "oklch(0.3 0.1 155 / 0.12)",
-  amber: "oklch(0.45 0.15 60 / 0.18)",
-  red: "oklch(0.4 0.15 25 / 0.18)",
-  blue: "oklch(0.35 0.12 230 / 0.16)",
+  green: "oklch(0.32 0.13 155 / 0.2)",
+  amber: "oklch(0.45 0.18 60 / 0.26)",
+  red: "oklch(0.42 0.19 25 / 0.26)",
+  blue: "oklch(0.37 0.15 230 / 0.24)",
 };
 
 function BedsPanel({
@@ -294,7 +295,7 @@ function BedsPanel({
   empty: string;
 }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col min-h-0">
+    <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-0">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           {icon}
@@ -354,7 +355,7 @@ function StaffPanel({
   nowMs: number;
 }) {
   return (
-    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+    <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           <UsersRound className="w-4 h-4 text-white/60" />
@@ -375,15 +376,15 @@ function StaffPanel({
                   style={{
                     background:
                       kind === "desmontando"
-                        ? "oklch(0.35 0.14 300 / 0.22)"
+                        ? "oklch(0.37 0.18 300 / 0.32)"
                         : kind === "em_alta"
-                          ? "oklch(0.32 0.13 245 / 0.22)"
+                          ? "oklch(0.34 0.17 245 / 0.32)"
                           : "oklch(0.25 0.02 265 / 0.4)",
                     borderColor:
                       kind === "desmontando"
-                        ? "oklch(0.65 0.18 300 / 0.35)"
+                        ? "oklch(0.68 0.2 300 / 0.5)"
                         : kind === "em_alta"
-                          ? "oklch(0.6 0.15 245 / 0.35)"
+                          ? "oklch(0.63 0.19 245 / 0.5)"
                           : "oklch(0.4 0.02 265 / 0.4)",
                   }}
                 >
@@ -422,11 +423,11 @@ const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
 };
 
 const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text: string }> = {
-  cafe: { bg: "oklch(0.4 0.15 55 / 0.3)", border: "oklch(0.7 0.19 55 / 0.5)", text: "oklch(0.8 0.19 55)" },
-  almoco: { bg: "oklch(0.4 0.15 55 / 0.3)", border: "oklch(0.7 0.19 55 / 0.5)", text: "oklch(0.8 0.19 55)" },
-  jantar: { bg: "oklch(0.4 0.15 55 / 0.3)", border: "oklch(0.7 0.19 55 / 0.5)", text: "oklch(0.8 0.19 55)" },
-  em_alta: { bg: "oklch(0.35 0.1 230 / 0.25)", border: "oklch(0.6 0.15 230 / 0.5)", text: "oklch(0.75 0.15 230)" },
-  sem_alta: { bg: "oklch(0.35 0.13 25 / 0.25)", border: "oklch(0.6 0.18 25 / 0.5)", text: "oklch(0.75 0.18 25)" },
+  cafe: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
+  almoco: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
+  jantar: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
+  em_alta: { bg: "oklch(0.37 0.15 230 / 0.32)", border: "oklch(0.63 0.19 230 / 0.55)", text: "oklch(0.78 0.19 230)" },
+  sem_alta: { bg: "oklch(0.37 0.17 25 / 0.32)", border: "oklch(0.63 0.21 25 / 0.55)", text: "oklch(0.78 0.21 25)" },
   deslogou: { bg: "oklch(0.22 0.005 0 / 0.4)", border: "oklch(0.32 0.005 0 / 0.5)", text: "rgba(255,255,255,0.35)" },
 };
 
@@ -438,7 +439,7 @@ function BreaksPanel({
   nowMs: number;
 }) {
   return (
-    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+    <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           <UtensilsCrossed className="w-4 h-4 text-white/60" />
