@@ -422,12 +422,12 @@ const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
 };
 
 const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text: string }> = {
-  cafe: { bg: "oklch(0.4 0.13 55 / 0.3)", border: "oklch(0.7 0.17 55 / 0.5)", text: "oklch(0.8 0.17 55)" },
-  almoco: { bg: "oklch(0.4 0.13 55 / 0.3)", border: "oklch(0.7 0.17 55 / 0.5)", text: "oklch(0.8 0.17 55)" },
-  jantar: { bg: "oklch(0.4 0.13 55 / 0.3)", border: "oklch(0.7 0.17 55 / 0.5)", text: "oklch(0.8 0.17 55)" },
-  em_alta: { bg: "oklch(0.35 0.1 155 / 0.25)", border: "oklch(0.6 0.15 155 / 0.5)", text: "oklch(0.75 0.17 155)" },
-  sem_alta: { bg: "oklch(0.3 0.1 245 / 0.16)", border: "oklch(0.5 0.12 245 / 0.35)", text: "rgba(255,255,255,0.7)" },
-  deslogou: { bg: "oklch(0.25 0.01 0 / 0.3)", border: "oklch(0.4 0.01 0 / 0.5)", text: "rgba(255,255,255,0.4)" },
+  cafe: { bg: "oklch(0.4 0.15 55 / 0.3)", border: "oklch(0.7 0.19 55 / 0.5)", text: "oklch(0.8 0.19 55)" },
+  almoco: { bg: "oklch(0.4 0.15 55 / 0.3)", border: "oklch(0.7 0.19 55 / 0.5)", text: "oklch(0.8 0.19 55)" },
+  jantar: { bg: "oklch(0.4 0.15 55 / 0.3)", border: "oklch(0.7 0.19 55 / 0.5)", text: "oklch(0.8 0.19 55)" },
+  em_alta: { bg: "oklch(0.35 0.1 230 / 0.25)", border: "oklch(0.6 0.15 230 / 0.5)", text: "oklch(0.75 0.15 230)" },
+  sem_alta: { bg: "oklch(0.35 0.13 25 / 0.25)", border: "oklch(0.6 0.18 25 / 0.5)", text: "oklch(0.75 0.18 25)" },
+  deslogou: { bg: "oklch(0.22 0.005 0 / 0.4)", border: "oklch(0.32 0.005 0 / 0.5)", text: "rgba(255,255,255,0.35)" },
 };
 
 function BreaksPanel({
@@ -465,8 +465,8 @@ function BreaksPanel({
                     key={s.id}
                     className="flex items-center justify-between rounded-md px-3 py-2 border"
                     style={{
-                      background: over ? "oklch(0.4 0.13 55 / 0.3)" : style.bg,
-                      borderColor: over ? "oklch(0.7 0.17 55 / 0.5)" : style.border,
+                      background: over ? "oklch(0.45 0.2 25 / 0.4)" : style.bg,
+                      borderColor: over ? "oklch(0.65 0.22 25 / 0.6)" : style.border,
                     }}
                   >
                     <div className="min-w-0 flex-1">
@@ -478,7 +478,7 @@ function BreaksPanel({
                     {startIso && (
                       <span
                         className="font-mono tabular-nums text-xs ml-2"
-                        style={{ color: over ? "oklch(0.8 0.17 55)" : style.text }}
+                        style={{ color: over ? "oklch(0.8 0.22 25)" : style.text }}
                       >
                         {formatElapsed(startIso, nowMs)}
                       </span>
