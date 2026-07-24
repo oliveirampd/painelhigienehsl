@@ -135,6 +135,16 @@ async function handle() {
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
 
+    // Reset diário do "Time Altas" (painel:staff:*) — evita que colaborador que
+    // logou ontem e nunca sumiu do healthcon fique aparecendo o dia todo depois.
+    // Roda só na janela 00:00-00:05 no horário de Brasília (esse job já roda
+    // sozinho a cada ~1min, então dispara algumas vezes nesse intervalo — sem
+    // problema, o delete é idempotente).
+    const nowBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    if (nowBRT.getUTCHours() === 0 && nowBRT.getUTCMinutes() < 5) {
+      await supabase.from("staff").delete().like("external_id", "painel:staff:%");
+    }
+
     const token = await login();
     const answers = await fetchAnswers(token);
 
@@ -246,22 +256,14 @@ async function handle() {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Horário "natural" desse ciclo, quando o status tem um campo confiável do
-      // Listo (endTime/startTime/date). Serve pra saber se há novidade real.
-      const naturalRef = !NO_RELIABLE_TIMESTAMP.includes(rawStatus)
-        ? (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date())
-        : null;
-
-      // Já estava concluído (manualmente, ou por estagnação) — só reviver se o
-      // Listo mostrar novidade REAL:
-      // - Pra status com horário confiável (in_progress/paused/etc): horário mais novo.
-      // - Pra en_route/waiting_cleaning (sem horário confiável): só é novidade se o
-      //   ID da resposta do Listo for DIFERENTE do que gerou a conclusão anterior —
-      //   isso distingue "o mesmo registro velho de sempre" de "uma alta nova de verdade".
-      if (prevRow && prevRow.status === "completed") {
-        const semNovidade = naturalRef !== null
-          ? naturalRef.getTime() <= new Date(prevRow.status_updated_at).getTime()
-          : (prevRow.last_answer_id === a.id);
+      // Só pra "Leitos Pausados": se já foi concluído (manual ou automático), só
+      // volta a aparecer se o Listo mostrar um horário realmente mais novo — sem
+      // isso, a mesma pendência antiga reaparecia toda hora mesmo já resolvida.
+      // As outras categorias (Em Limpeza, A Caminho, Altas Paradas) não têm essa
+      // trava — funcionam do jeito simples de sempre.
+      if (rawStatus === "paused" && prevRow && prevRow.status === "completed") {
+        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
+        const semNovidade = ref.getTime() <= new Date(prevRow.status_updated_at).getTime();
         if (semNovidade) {
           return {
             external_id: externalId,
@@ -272,8 +274,7 @@ async function handle() {
             pause_reason: extractComment(a.answerComment),
             assigned_staff_id: assigned,
             status_updated_at: prevRow.status_updated_at,
-            last_answer_id: a.id,
-            _debug: "mantido concluido (sem novidade real do Listo)",
+            _debug: "mantido concluido (Leitos Pausados sem novidade real do Listo)",
           };
         }
       }
@@ -290,7 +291,8 @@ async function handle() {
             : "resetado (nenhum registro anterior encontrado)";
         }
       } else {
-        statusUpdatedAt = naturalRef!.toISOString();
+        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
+        statusUpdatedAt = ref.toISOString();
       }
 
       // Registro travado (parado além do limite pra esse status) -> conclui sozinho
