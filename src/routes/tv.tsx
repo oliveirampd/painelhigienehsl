@@ -157,18 +157,44 @@ function TvPage() {
       });
   }, [inFlight, activeDesmont, staff]);
 
-  // Colaboradores em pausa (Café / Almoço / Janta), vindos direto de staff.status
-  const breakRows = useMemo(
-    () =>
-      staff
-        .filter((s) => BREAK_STATUSES.includes(s.status as StaffStatus))
-        .sort(
-          (a, b) =>
-            new Date((b as any).status_updated_at).getTime() -
-            new Date((a as any).status_updated_at).getTime(),
-        ),
-    [staff],
-  );
+  // "Time Altas": todo mundo logado no Listo (via healthcon), com o status derivado:
+  // - em pausa (café/almoço/janta) -> mostra a pausa
+  // - deslogado (sumiu do healthcon) -> "DESLOGOU"
+  // - logado mas sem leito ativo (en_route/in_progress) -> "SEM ALTA"
+  // - logado com leito ativo -> "EM ALTA"
+  const timeAltasRows = useMemo(() => {
+    const byId = new Map(staff.map((s) => [s.id, s]));
+    const painelStaff = staff.filter((s) => (s.external_id || "").startsWith("painel:staff:"));
+
+    const nomesComAlta = new Set(
+      filtered
+        .filter((d) => isTerminal(d) && (d.status === "en_route" || d.status === "in_progress"))
+        .map((d) => (d.assigned_staff_id ? byId.get(d.assigned_staff_id)?.name : null))
+        .filter(Boolean)
+        .map((n) => (n as string).trim().toLowerCase()),
+    );
+
+    return painelStaff
+      .map((s) => {
+        let kind: "cafe" | "almoco" | "jantar" | "deslogou" | "em_alta" | "sem_alta";
+        switch (s.status) {
+          case "coffee_break": kind = "cafe"; break;
+          case "lunch_break": kind = "almoco"; break;
+          case "dinner_break": kind = "jantar"; break;
+          case "off_duty": kind = "deslogou"; break;
+          default:
+            kind = nomesComAlta.has((s.name || "").trim().toLowerCase()) ? "em_alta" : "sem_alta";
+        }
+        return { staff: s, kind };
+      })
+      .sort((a, b) => {
+        const order = { em_alta: 0, cafe: 1, almoco: 1, jantar: 1, sem_alta: 2, deslogou: 3 };
+        if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
+        const aT = (a.staff as any).status_updated_at ?? "";
+        const bT = (b.staff as any).status_updated_at ?? "";
+        return new Date(bT).getTime() - new Date(aT).getTime();
+      });
+  }, [staff, filtered]);
 
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
@@ -208,7 +234,7 @@ function TvPage() {
         </div>
         <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
           <StaffPanel rows={staffRows} nowMs={now} />
-          <BreaksPanel rows={breakRows} nowMs={now} />
+          <BreaksPanel rows={timeAltasRows} nowMs={now} />
         </div>
       </div>
     </div>
@@ -384,46 +410,75 @@ function StaffPanel({
 }
 
 // Café / Almoço / Janta — direto de staff.status, com alerta quando passa do limite (hospital.ts)
-function BreaksPanel({ rows, nowMs }: { rows: Staff[]; nowMs: number }) {
+type TimeAltasKind = "cafe" | "almoco" | "jantar" | "deslogou" | "em_alta" | "sem_alta";
+
+const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
+  cafe: "CAFÉ",
+  almoco: "ALMOÇO",
+  jantar: "JANTAR",
+  deslogou: "DESLOGOU",
+  em_alta: "EM ALTA",
+  sem_alta: "SEM ALTA",
+};
+
+const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text: string }> = {
+  cafe: { bg: "oklch(0.4 0.13 55 / 0.3)", border: "oklch(0.7 0.17 55 / 0.5)", text: "oklch(0.8 0.17 55)" },
+  almoco: { bg: "oklch(0.4 0.13 55 / 0.3)", border: "oklch(0.7 0.17 55 / 0.5)", text: "oklch(0.8 0.17 55)" },
+  jantar: { bg: "oklch(0.4 0.13 55 / 0.3)", border: "oklch(0.7 0.17 55 / 0.5)", text: "oklch(0.8 0.17 55)" },
+  em_alta: { bg: "oklch(0.35 0.1 155 / 0.25)", border: "oklch(0.6 0.15 155 / 0.5)", text: "oklch(0.75 0.17 155)" },
+  sem_alta: { bg: "oklch(0.3 0.1 245 / 0.16)", border: "oklch(0.5 0.12 245 / 0.35)", text: "rgba(255,255,255,0.7)" },
+  deslogou: { bg: "oklch(0.25 0.01 0 / 0.3)", border: "oklch(0.4 0.01 0 / 0.5)", text: "rgba(255,255,255,0.4)" },
+};
+
+function BreaksPanel({
+  rows,
+  nowMs,
+}: {
+  rows: { staff: Staff; kind: TimeAltasKind }[];
+  nowMs: number;
+}) {
   return (
     <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           <UtensilsCrossed className="w-4 h-4 text-white/60" />
-          Café / Almoço / Janta
+          Time Altas
         </h2>
         <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">Ninguém em pausa agora.</div>
+          <div className="p-4 text-center text-white/40 text-sm">Ninguém do time logado agora.</div>
         ) : (
           <AutoScroll>
             <ul className="p-2 space-y-1.5">
-              {rows.map((s) => {
-                // NOTA: assume coluna `status_updated_at` na tabela staff — confirmar nome real.
+              {rows.map(({ staff: s, kind }) => {
                 const startIso = (s as any).status_updated_at as string | undefined;
                 const minutes = startIso ? elapsedMinutes(startIso, nowMs) : 0;
-                const over = startIso ? isBreakOverLimit(s.status as StaffStatus, minutes) : false;
+                const over =
+                  startIso && (kind === "cafe" || kind === "almoco" || kind === "jantar")
+                    ? isBreakOverLimit(s.status as StaffStatus, minutes)
+                    : false;
+                const style = TIME_ALTAS_STYLE[kind];
                 return (
                   <li
                     key={s.id}
                     className="flex items-center justify-between rounded-md px-3 py-2 border"
                     style={{
-                      background: over ? "oklch(0.4 0.13 55 / 0.3)" : "oklch(0.3 0.1 245 / 0.16)",
-                      borderColor: over ? "oklch(0.7 0.17 55 / 0.5)" : "oklch(0.5 0.12 245 / 0.35)",
+                      background: over ? "oklch(0.4 0.13 55 / 0.3)" : style.bg,
+                      borderColor: over ? "oklch(0.7 0.17 55 / 0.5)" : style.border,
                     }}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold truncate text-sm">{s.name}</div>
                       <div className="text-[11px] text-white/60 truncate uppercase tracking-widest">
-                        {STAFF_STATUS_LABELS[s.status as StaffStatus] ?? s.status}
+                        {TIME_ALTAS_LABELS[kind]}
                       </div>
                     </div>
                     {startIso && (
                       <span
                         className="font-mono tabular-nums text-xs ml-2"
-                        style={{ color: over ? "oklch(0.8 0.17 55)" : "rgba(255,255,255,0.7)" }}
+                        style={{ color: over ? "oklch(0.8 0.17 55)" : style.text }}
                       >
                         {formatElapsed(startIso, nowMs)}
                       </span>
