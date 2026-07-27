@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound } from "lucide-react";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -263,10 +263,10 @@ function TvPage() {
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
         <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
-          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
-          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
-          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." />
-          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." />
+          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." justChanged={justChanged} />
+          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." justChanged={justChanged} />
+          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." justChanged={justChanged} />
+          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." justChanged={justChanged} />
         </div>
         <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
           <StaffPanel rows={staffRows} nowMs={now} />
@@ -325,6 +325,7 @@ function BedsPanel({
   tone,
   showReason,
   empty,
+  justChanged,
 }: {
   title: string;
   icon?: React.ReactNode;
@@ -334,6 +335,7 @@ function BedsPanel({
   tone: Tone;
   showReason?: boolean;
   empty: string;
+  justChanged?: Set<string>;
 }) {
   return (
     <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-0">
@@ -366,8 +368,19 @@ function BedsPanel({
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
+                  const flashed = justChanged?.has(d.external_id);
                   return (
-                    <tr key={d.id} className="border-t border-white/5" style={{ background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone] }}>
+                    <tr
+                      key={d.id}
+                      className="border-t border-white/5 transition-colors duration-[1800ms]"
+                      style={{
+                        background: flashed
+                          ? "oklch(0.6 0.15 245 / 0.55)"
+                          : overtime && tone === "green"
+                            ? "oklch(0.4 0.13 55 / 0.3)"
+                            : toneBg[tone],
+                      }}
+                    >
                       <td className="px-4 py-1.5 font-bold text-base">{d.bed_number}</td>
                       <td className="px-3 py-1.5 text-white/80 text-xs">{d.unit}</td>
                       {showReason ? (
