@@ -58,6 +58,26 @@ function TvPage() {
   const now = useNow(15000);
   const clock = useClock();
 
+  // Detecta leitos cujo status mudou desde a última leitura, pra dar um flash
+  // rápido de destaque (chama atenção pra mudança, sem ficar animação demais).
+  const prevStatusRef = useRef<Map<string, string>>(new Map());
+  const [justChanged, setJustChanged] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const changed = new Set<string>();
+    for (const d of discharges) {
+      const before = prev.get(d.external_id);
+      if (before !== undefined && before !== d.status) changed.add(d.external_id);
+    }
+    if (changed.size > 0) {
+      setJustChanged(changed);
+      const t = setTimeout(() => setJustChanged(new Set()), 2200);
+      prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
+      return () => clearTimeout(t);
+    }
+    prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
+  }, [discharges]);
+
   const filtered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
     [discharges],
@@ -157,25 +177,67 @@ function TvPage() {
       });
   }, [inFlight, activeDesmont, staff]);
 
-  // Colaboradores em pausa (Café / Almoço / Janta), vindos direto de staff.status
-  const breakRows = useMemo(
-    () =>
-      staff
-        .filter((s) => BREAK_STATUSES.includes(s.status as StaffStatus))
-        .sort(
-          (a, b) =>
-            new Date((b as any).status_updated_at).getTime() -
-            new Date((a as any).status_updated_at).getTime(),
-        ),
-    [staff],
-  );
+  // "Time Altas": todo mundo logado no Listo (via healthcon), com o status derivado.
+  // O que o Listo mostra (a caminho / desmontando / em higiene) tem PRIORIDADE sobre
+  // o status do healthcon — a pessoa some da tela do healthcon assim que começa a
+  // trabalhar de verdade, então isso não pode virar "deslogou".
+  const timeAltasRows = useMemo(() => {
+    const byId = new Map(staff.map((s) => [s.id, s]));
+    const painelStaff = staff.filter((s) => (s.external_id || "").startsWith("painel:staff:"));
+
+    const nameSetFor = (pred: (d: Discharge) => boolean) =>
+      new Set(
+        filtered
+          .filter(pred)
+          .map((d) => (d.assigned_staff_id ? byId.get(d.assigned_staff_id)?.name : null))
+          .filter(Boolean)
+          .map((n) => (n as string).trim().toLowerCase()),
+      );
+
+    const nomesEmAlta = nameSetFor((d) => isTerminal(d) && d.status === "in_progress");
+    const nomesACaminho = nameSetFor((d) => isTerminal(d) && d.status === "en_route");
+    const nomesDesmontando = nameSetFor((d) => isDesmont(d) && d.status === "in_progress");
+
+    return painelStaff
+      .map((s) => {
+        const nome = (s.name || "").trim().toLowerCase();
+        let kind: TimeAltasKind;
+        if (nomesEmAlta.has(nome)) kind = "em_alta";
+        else if (nomesACaminho.has(nome)) kind = "a_caminho";
+        else if (nomesDesmontando.has(nome)) kind = "desmontando";
+        else {
+          switch (s.status) {
+            case "coffee_break": kind = "cafe"; break;
+            case "lunch_break": kind = "almoco"; break;
+            case "dinner_break": kind = "jantar"; break;
+            case "off_duty": kind = "deslogou"; break;
+            default: kind = "sem_alta";
+          }
+        }
+        return { staff: s, kind };
+      })
+      .sort((a, b) => {
+        const order = { em_alta: 0, a_caminho: 0, desmontando: 0, cafe: 1, almoco: 1, jantar: 1, sem_alta: 2, deslogou: 3 };
+        if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
+        const aT = (a.staff as any).status_updated_at ?? "";
+        const bT = (b.staff as any).status_updated_at ?? "";
+        return new Date(bT).getTime() - new Date(aT).getTime();
+      });
+  }, [staff, filtered]);
 
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans">
-      <header className="flex-none flex items-center justify-between px-6 py-2 border-b border-white/10">
+    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative">
+      <div
+        className="absolute top-0 left-0 right-0 h-px"
+        style={{
+          background: "linear-gradient(90deg, transparent 0%, oklch(0.6 0.15 245 / 0.7) 25%, oklch(0.65 0.18 155 / 0.6) 50%, oklch(0.65 0.19 60 / 0.6) 75%, transparent 100%)",
+          boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
+        }}
+      />
+      <header className="flex-none flex items-center justify-between px-6 py-2 border-b border-white/15">
         <h1 className="text-xl xl:text-2xl font-bold tracking-tight">
           Painel de Higienização Terminal
         </h1>
@@ -192,11 +254,11 @@ function TvPage() {
       </header>
 
       <div className="flex-none grid grid-cols-5 gap-3 px-6 py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.72 0.19 155)" />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.72 0.15 230)" />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.75 0.17 60)" />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.7 0.2 25)" />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.7 0.17 245)" />
+        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" />
+        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
       </div>
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
@@ -208,7 +270,7 @@ function TvPage() {
         </div>
         <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
           <StaffPanel rows={staffRows} nowMs={now} />
-          <BreaksPanel rows={breakRows} nowMs={now} />
+          <BreaksPanel rows={timeAltasRows} nowMs={now} />
         </div>
       </div>
     </div>
@@ -228,24 +290,30 @@ function useClock() {
 function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="rounded-xl px-4 py-2 border border-white/10 flex items-center justify-between"
+      className="rounded-xl px-4 py-2 border flex items-center justify-between"
       style={{
-        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.14)")} 0%, oklch(0.19 0.03 265) 100%)`,
-        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.35)")}`,
+        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
+        borderColor: accent.replace(")", " / 0.45)"),
+        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="text-[11px] uppercase tracking-widest text-white/60">{label}</div>
-      <div className="text-3xl font-bold tabular-nums" style={{ color: accent }}>{value}</div>
+      <div className="text-[11px] uppercase tracking-widest text-white/70 font-medium">{label}</div>
+      <div
+        className="text-4xl tabular-nums leading-none"
+        style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
 
 type Tone = "green" | "amber" | "red" | "blue";
 const toneBg: Record<Tone, string> = {
-  green: "oklch(0.3 0.1 155 / 0.12)",
-  amber: "oklch(0.45 0.15 60 / 0.18)",
-  red: "oklch(0.4 0.15 25 / 0.18)",
-  blue: "oklch(0.35 0.12 230 / 0.16)",
+  green: "oklch(0.32 0.13 155 / 0.2)",
+  amber: "oklch(0.45 0.18 60 / 0.26)",
+  red: "oklch(0.42 0.19 25 / 0.26)",
+  blue: "oklch(0.37 0.15 230 / 0.24)",
 };
 
 function BedsPanel({
@@ -268,7 +336,7 @@ function BedsPanel({
   empty: string;
 }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col min-h-0">
+    <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-0">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           {icon}
@@ -328,7 +396,7 @@ function StaffPanel({
   nowMs: number;
 }) {
   return (
-    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+    <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           <UsersRound className="w-4 h-4 text-white/60" />
@@ -349,15 +417,15 @@ function StaffPanel({
                   style={{
                     background:
                       kind === "desmontando"
-                        ? "oklch(0.35 0.14 300 / 0.22)"
+                        ? "oklch(0.37 0.18 300 / 0.32)"
                         : kind === "em_alta"
-                          ? "oklch(0.32 0.13 245 / 0.22)"
+                          ? "oklch(0.34 0.17 245 / 0.32)"
                           : "oklch(0.25 0.02 265 / 0.4)",
                     borderColor:
                       kind === "desmontando"
-                        ? "oklch(0.65 0.18 300 / 0.35)"
+                        ? "oklch(0.68 0.2 300 / 0.5)"
                         : kind === "em_alta"
-                          ? "oklch(0.6 0.15 245 / 0.35)"
+                          ? "oklch(0.63 0.19 245 / 0.5)"
                           : "oklch(0.4 0.02 265 / 0.4)",
                   }}
                 >
@@ -384,46 +452,79 @@ function StaffPanel({
 }
 
 // Café / Almoço / Janta — direto de staff.status, com alerta quando passa do limite (hospital.ts)
-function BreaksPanel({ rows, nowMs }: { rows: Staff[]; nowMs: number }) {
+type TimeAltasKind = "cafe" | "almoco" | "jantar" | "deslogou" | "em_alta" | "a_caminho" | "desmontando" | "sem_alta";
+
+const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
+  cafe: "CAFÉ",
+  almoco: "ALMOÇO",
+  jantar: "JANTAR",
+  deslogou: "DESLOGOU",
+  em_alta: "EM ALTA",
+  a_caminho: "A CAMINHO",
+  desmontando: "DESMONTANDO",
+  sem_alta: "SEM ALTA",
+};
+
+const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text: string }> = {
+  cafe: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
+  almoco: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
+  jantar: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
+  em_alta: { bg: "oklch(0.37 0.15 230 / 0.32)", border: "oklch(0.63 0.19 230 / 0.55)", text: "oklch(0.78 0.19 230)" },
+  a_caminho: { bg: "oklch(0.37 0.14 230 / 0.22)", border: "oklch(0.63 0.17 230 / 0.4)", text: "oklch(0.78 0.17 230)" },
+  desmontando: { bg: "oklch(0.37 0.16 300 / 0.32)", border: "oklch(0.66 0.2 300 / 0.55)", text: "oklch(0.8 0.2 300)" },
+  sem_alta: { bg: "oklch(0.37 0.17 25 / 0.32)", border: "oklch(0.63 0.21 25 / 0.55)", text: "oklch(0.78 0.21 25)" },
+  deslogou: { bg: "oklch(0.22 0.005 0 / 0.4)", border: "oklch(0.32 0.005 0 / 0.5)", text: "rgba(255,255,255,0.35)" },
+};
+
+function BreaksPanel({
+  rows,
+  nowMs,
+}: {
+  rows: { staff: Staff; kind: TimeAltasKind }[];
+  nowMs: number;
+}) {
   return (
-    <section className="h-full rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden flex flex-col">
+    <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           <UtensilsCrossed className="w-4 h-4 text-white/60" />
-          Café / Almoço / Janta
+          Time Altas
         </h2>
         <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">Ninguém em pausa agora.</div>
+          <div className="p-4 text-center text-white/40 text-sm">Ninguém do time logado agora.</div>
         ) : (
           <AutoScroll>
             <ul className="p-2 space-y-1.5">
-              {rows.map((s) => {
-                // NOTA: assume coluna `status_updated_at` na tabela staff — confirmar nome real.
+              {rows.map(({ staff: s, kind }) => {
                 const startIso = (s as any).status_updated_at as string | undefined;
                 const minutes = startIso ? elapsedMinutes(startIso, nowMs) : 0;
-                const over = startIso ? isBreakOverLimit(s.status as StaffStatus, minutes) : false;
+                const over =
+                  startIso && (kind === "cafe" || kind === "almoco" || kind === "jantar")
+                    ? isBreakOverLimit(s.status as StaffStatus, minutes)
+                    : false;
+                const style = TIME_ALTAS_STYLE[kind];
                 return (
                   <li
                     key={s.id}
                     className="flex items-center justify-between rounded-md px-3 py-2 border"
                     style={{
-                      background: over ? "oklch(0.4 0.13 55 / 0.3)" : "oklch(0.3 0.1 245 / 0.16)",
-                      borderColor: over ? "oklch(0.7 0.17 55 / 0.5)" : "oklch(0.5 0.12 245 / 0.35)",
+                      background: over ? "oklch(0.45 0.2 25 / 0.4)" : style.bg,
+                      borderColor: over ? "oklch(0.65 0.22 25 / 0.6)" : style.border,
                     }}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold truncate text-sm">{s.name}</div>
                       <div className="text-[11px] text-white/60 truncate uppercase tracking-widest">
-                        {STAFF_STATUS_LABELS[s.status as StaffStatus] ?? s.status}
+                        {TIME_ALTAS_LABELS[kind]}
                       </div>
                     </div>
                     {startIso && (
                       <span
                         className="font-mono tabular-nums text-xs ml-2"
-                        style={{ color: over ? "oklch(0.8 0.17 55)" : "rgba(255,255,255,0.7)" }}
+                        style={{ color: over ? "oklch(0.8 0.22 25)" : style.text }}
                       >
                         {formatElapsed(startIso, nowMs)}
                       </span>
