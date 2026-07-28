@@ -194,26 +194,41 @@ function TvPage() {
     const byId = new Map(staff.map((s) => [s.id, s]));
     const painelStaff = staff.filter((s) => (s.external_id || "").startsWith("painel:staff:"));
 
-    const nameSetFor = (pred: (d: Discharge) => boolean) =>
-      new Set(
-        filtered
-          .filter(pred)
-          .map((d) => (d.assigned_staff_id ? byId.get(d.assigned_staff_id)?.name : null))
-          .filter(Boolean)
-          .map((n) => (n as string).trim().toLowerCase()),
-      );
+    // Comparação flexível: o Listo às vezes tem nome completo ("Hema Batista de
+    // Oliveira") enquanto o healthcon mostra só "Hema Oliveira" — comparar só
+    // primeiro + último nome (ignorando "de/da/dos" no meio) resolve isso.
+    const normalizeName = (n: string) =>
+      n
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w && !["de", "da", "do", "dos", "das", "e"].includes(w));
 
-    const nomesEmAlta = nameSetFor((d) => isTerminal(d) && d.status === "in_progress");
-    const nomesACaminho = nameSetFor((d) => isTerminal(d) && d.status === "en_route");
-    const nomesDesmontando = nameSetFor((d) => isDesmont(d) && d.status === "in_progress");
+    const namesMatch = (a: string, b: string) => {
+      const ta = normalizeName(a);
+      const tb = normalizeName(b);
+      if (!ta.length || !tb.length) return false;
+      return ta[0] === tb[0] && ta[ta.length - 1] === tb[tb.length - 1];
+    };
+
+    const listaFor = (pred: (d: Discharge) => boolean) =>
+      filtered
+        .filter(pred)
+        .map((d) => (d.assigned_staff_id ? byId.get(d.assigned_staff_id)?.name : null))
+        .filter(Boolean) as string[];
+
+    const nomesEmAlta = listaFor((d) => isTerminal(d) && d.status === "in_progress");
+    const nomesACaminho = listaFor((d) => isTerminal(d) && d.status === "en_route");
+    const nomesDesmontando = listaFor((d) => isDesmont(d) && d.status === "in_progress");
 
     return painelStaff
       .map((s) => {
-        const nome = (s.name || "").trim().toLowerCase();
+        const nome = s.name || "";
         let kind: TimeAltasKind;
-        if (nomesEmAlta.has(nome)) kind = "em_alta";
-        else if (nomesACaminho.has(nome)) kind = "a_caminho";
-        else if (nomesDesmontando.has(nome)) kind = "desmontando";
+        if (nomesEmAlta.some((n) => namesMatch(n, nome))) kind = "em_alta";
+        else if (nomesACaminho.some((n) => namesMatch(n, nome))) kind = "a_caminho";
+        else if (nomesDesmontando.some((n) => namesMatch(n, nome))) kind = "desmontando";
         else {
           switch (s.status) {
             case "coffee_break": kind = "cafe"; break;
