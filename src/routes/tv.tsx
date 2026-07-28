@@ -285,9 +285,9 @@ function TvPage() {
           style={{
             gridTemplateRows:
               staffRows.length === 0 && timeAltasRows.length > 0
-                ? "0.5fr 1.5fr"
+                ? "0.2fr 1.8fr"
                 : timeAltasRows.length === 0 && staffRows.length > 0
-                  ? "1.5fr 0.5fr"
+                  ? "1.8fr 0.2fr"
                   : "1.3fr 1fr",
           }}
         >
