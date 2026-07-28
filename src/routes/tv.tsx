@@ -58,25 +58,34 @@ function TvPage() {
   const now = useNow(15000);
   const clock = useClock();
 
+  // Marca quando os dados mudaram pela última vez, pra mostrar "sincronizado há Xs"
+  const lastSyncRef = useRef<number>(Date.now());
+  useEffect(() => {
+    lastSyncRef.current = Date.now();
+  }, [discharges, staff]);
+
   // Detecta leitos cujo status mudou desde a última leitura, pra dar um flash
-  // rápido de destaque (chama atenção pra mudança, sem ficar animação demais).
+  // rápido de destaque. Usa uma "versão" por leito (não um timer) — cada mudança
+  // incrementa a versão, o que remonta a linha e dispara uma animação CSS de um
+  // disparo só. Isso não depende de nenhum timeout que possa ser cancelado por
+  // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
-  const [justChanged, setJustChanged] = useState<Set<string>>(new Set());
+  const flashVersionRef = useRef<Map<string, number>>(new Map());
+  const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
-    const changed = new Set<string>();
+    let mudou = false;
     for (const d of discharges) {
       const before = prev.get(d.external_id);
-      if (before !== undefined && before !== d.status) changed.add(d.external_id);
-    }
-    if (changed.size > 0) {
-      setJustChanged(changed);
-      const t = setTimeout(() => setJustChanged(new Set()), 2200);
-      prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
-      return () => clearTimeout(t);
+      if (before !== undefined && before !== d.status) {
+        flashVersionRef.current.set(d.external_id, (flashVersionRef.current.get(d.external_id) ?? 0) + 1);
+        mudou = true;
+      }
     }
     prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
+    if (mudou) forceFlashRerender((n) => n + 1);
   }, [discharges]);
+  const flashVersions = flashVersionRef.current;
 
   const filtered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
@@ -249,6 +258,9 @@ function TvPage() {
             </span>
             ao vivo
           </span>
+          <span className="text-[10px] text-white/35 font-mono">
+            sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
+          </span>
           <span className="text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
@@ -263,12 +275,22 @@ function TvPage() {
 
       <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
         <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
-          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." justChanged={justChanged} />
-          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." justChanged={justChanged} />
-          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." justChanged={justChanged} />
-          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." justChanged={justChanged} />
+          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." flashVersions={flashVersions} />
+          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." flashVersions={flashVersions} />
+          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." flashVersions={flashVersions} />
+          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." flashVersions={flashVersions} />
         </div>
-        <div className="col-span-4 min-h-0 grid grid-rows-[1.3fr_1fr] gap-3">
+        <div
+          className="col-span-4 min-h-0 grid gap-3"
+          style={{
+            gridTemplateRows:
+              staffRows.length === 0 && timeAltasRows.length > 0
+                ? "0.5fr 1.5fr"
+                : timeAltasRows.length === 0 && staffRows.length > 0
+                  ? "1.5fr 0.5fr"
+                  : "1.3fr 1fr",
+          }}
+        >
           <StaffPanel rows={staffRows} nowMs={now} />
           <BreaksPanel rows={timeAltasRows} nowMs={now} />
         </div>
@@ -311,8 +333,8 @@ function KpiCard({ label, value, accent }: { label: string; value: number; accen
 type Tone = "green" | "amber" | "red" | "blue";
 const toneBg: Record<Tone, string> = {
   green: "oklch(0.32 0.13 155 / 0.2)",
-  amber: "oklch(0.45 0.18 60 / 0.26)",
-  red: "oklch(0.42 0.19 25 / 0.26)",
+  amber: "oklch(0.48 0.19 85 / 0.3)",
+  red: "oklch(0.4 0.2 20 / 0.28)",
   blue: "oklch(0.37 0.15 230 / 0.24)",
 };
 
@@ -325,7 +347,7 @@ function BedsPanel({
   tone,
   showReason,
   empty,
-  justChanged,
+  flashVersions,
 }: {
   title: string;
   icon?: React.ReactNode;
@@ -335,7 +357,7 @@ function BedsPanel({
   tone: Tone;
   showReason?: boolean;
   empty: string;
-  justChanged?: Set<string>;
+  flashVersions?: Map<string, number>;
 }) {
   return (
     <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-0">
@@ -368,27 +390,23 @@ function BedsPanel({
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-                  const flashed = justChanged?.has(d.external_id);
+                  const version = flashVersions?.get(d.external_id) ?? 0;
                   return (
                     <tr
-                      key={d.id}
-                      className="border-t border-white/5 transition-colors duration-[1800ms]"
+                      key={`${d.id}-v${version}`}
+                      className={version > 0 ? "flash-row" : undefined}
                       style={{
-                        background: flashed
-                          ? "oklch(0.6 0.15 245 / 0.55)"
-                          : overtime && tone === "green"
-                            ? "oklch(0.4 0.13 55 / 0.3)"
-                            : toneBg[tone],
+                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                       }}
                     >
-                      <td className="px-4 py-1.5 font-bold text-base">{d.bed_number}</td>
-                      <td className="px-3 py-1.5 text-white/80 text-xs">{d.unit}</td>
+                      <td className="px-4 py-1.5 font-bold text-base border-t border-white/5">{d.bed_number}</td>
+                      <td className="px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
                       {showReason ? (
-                        <td className="px-3 py-1.5 text-white/90 text-xs">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                        <td className="px-3 py-1.5 text-white/90 text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
                       ) : (
-                        <td className="px-3 py-1.5 font-mono tabular-nums text-sm">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                        <td className="px-3 py-1.5 font-mono tabular-nums text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
                       )}
-                      <td className="px-4 py-1.5 text-xs">{name || "—"}</td>
+                      <td className="px-4 py-1.5 text-xs border-t border-white/5">{name || "—"}</td>
                     </tr>
                   );
                 })}
@@ -410,12 +428,15 @@ function StaffPanel({
 }) {
   return (
     <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
-      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold flex items-center gap-2">
-          <UsersRound className="w-4 h-4 text-white/60" />
-          Colaboradores
-        </h2>
-        <span className="text-[11px] text-white/50">{rows.length}</span>
+      <div className="flex-none px-4 py-2 border-b border-white/10">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <UsersRound className="w-4 h-4 text-white/60" />
+            Colaboradores
+          </h2>
+          <span className="text-[11px] text-white/50">{rows.length}</span>
+        </div>
+        <div className="text-[10px] text-white/35 mt-0.5">Desmontagem e higienização terminal (Listo)</div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -498,12 +519,15 @@ function BreaksPanel({
 }) {
   return (
     <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
-      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold flex items-center gap-2">
-          <UtensilsCrossed className="w-4 h-4 text-white/60" />
-          Time Altas
-        </h2>
-        <span className="text-[11px] text-white/50">{rows.length}</span>
+      <div className="flex-none px-4 py-2 border-b border-white/10">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <UtensilsCrossed className="w-4 h-4 text-white/60" />
+            Time Altas
+          </h2>
+          <span className="text-[11px] text-white/50">{rows.length}</span>
+        </div>
+        <div className="text-[10px] text-white/35 mt-0.5">Login e pausas do time de campo (healthcon)</div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
