@@ -253,67 +253,45 @@ function TvPage() {
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative">
-      <div
-        className="absolute top-0 left-0 right-0 h-px"
-        style={{
-          background: "linear-gradient(90deg, transparent 0%, oklch(0.6 0.15 245 / 0.7) 25%, oklch(0.65 0.18 155 / 0.6) 50%, oklch(0.65 0.19 60 / 0.6) 75%, transparent 100%)",
-          boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
-        }}
-      />
-      <header className="flex-none flex items-center justify-between px-6 py-2 border-b border-white/15">
-        <h1 className="text-xl xl:text-2xl font-bold tracking-tight">
-          Painel de Higienização Terminal
-        </h1>
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-white/50">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
-            </span>
-            ao vivo
+  <div className="min-h-screen lg:h-screen w-screen lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans">
+    <header className="flex-none flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 border-b border-white/10">
+      <h1 className="text-base sm:text-xl xl:text-2xl font-bold tracking-tight leading-tight">
+        Painel de Higienização Terminal
+      </h1>
+      <div className="flex items-center gap-3 sm:gap-4">
+        <span className="hidden sm:flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-white/50">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
           </span>
-          <span className="text-[10px] text-white/35 font-mono">
-            sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
-          </span>
-          <span className="text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
-        </div>
-      </header>
-
-      <div className="flex-none grid grid-cols-5 gap-3 px-6 py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
+          ao vivo
+        </span>
+        <span className="text-lg sm:text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
       </div>
+    </header>
 
-      <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
-        <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
-          <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." flashVersions={flashVersions} />
-          <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." flashVersions={flashVersions} />
-          <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." flashVersions={flashVersions} />
-          <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." flashVersions={flashVersions} />
-        </div>
-        <div
-          className="col-span-4 min-h-0 grid gap-3"
-          style={{
-            gridTemplateRows:
-              staffRows.length === 0 && timeAltasRows.length > 0
-                ? "0.2fr 1.8fr"
-                : timeAltasRows.length === 0 && staffRows.length > 0
-                  ? "1.8fr 0.2fr"
-                  : "1.3fr 1fr",
-          }}
-        >
-          <StaffPanel rows={staffRows} nowMs={now} />
-          <BreaksPanel rows={timeAltasRows} nowMs={now} />
-        </div>
+    <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 sm:px-6 py-3">
+      <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" />
+      <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" />
+      <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" />
+      <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" />
+      <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
+    </div>
+
+    <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 px-4 sm:px-6 pb-4">
+      <div className="lg:col-span-8 flex flex-col lg:grid lg:grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 lg:min-h-0">
+        <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." />
+        <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." />
+        <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." />
+        <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." />
+      </div>
+      <div className="lg:col-span-4 flex flex-col lg:grid lg:grid-rows-[1.3fr_1fr] gap-3 lg:min-h-0">
+        <StaffPanel rows={staffRows} nowMs={now} />
+        <BreaksPanel rows={timeAltasRows} nowMs={now} />
       </div>
     </div>
-  );
-}
-
+  </div>
+);
 function useClock() {
   const [t, setT] = useState<string>("");
   useEffect(() => {
@@ -327,20 +305,15 @@ function useClock() {
 function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="rounded-xl px-4 py-2 border flex items-center justify-between"
+      className="rounded-xl px-3 lg:px-4 py-2 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0.5 sm:gap-2"
       style={{
         background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
         borderColor: accent.replace(")", " / 0.45)"),
         boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="text-[11px] uppercase tracking-widest text-white/70 font-medium">{label}</div>
-      <div
-        className="text-4xl tabular-nums leading-none"
-        style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
-      >
-        {value}
-      </div>
+      <div className="text-[9px] sm:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">{label}</div>
+      <div className="text-xl sm:text-3xl font-bold tabular-nums" style={{ color: accent }}>{value}</div>
     </div>
   );
 }
@@ -362,7 +335,6 @@ function BedsPanel({
   tone,
   showReason,
   empty,
-  flashVersions,
 }: {
   title: string;
   icon?: React.ReactNode;
@@ -372,23 +344,22 @@ function BedsPanel({
   tone: Tone;
   showReason?: boolean;
   empty: string;
-  flashVersions?: Map<string, number>;
 }) {
   return (
-    <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-0">
+    <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-[180px] max-h-[45vh] lg:max-h-none lg:min-h-0">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold flex items-center gap-2">
+        <h2 className="text-sm sm:text-base font-bold flex items-center gap-2">
           {icon}
           {title}
         </h2>
         <span className="text-[11px] text-white/50">{rows.length}</span>
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden lg:overflow-hidden">
         {rows.length === 0 ? (
           <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
         ) : (
           <AutoScroll>
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[520px] text-xs sm:text-sm">
               <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-[oklch(0.16_0.02_265)]">
                 <tr>
                   <th className="text-left px-4 py-1.5">Leito</th>
@@ -405,23 +376,16 @@ function BedsPanel({
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-                  const version = flashVersions?.get(d.external_id) ?? 0;
                   return (
-                    <tr
-                      key={`${d.id}-v${version}`}
-                      className={version > 0 ? "flash-row" : undefined}
-                      style={{
-                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
-                      }}
-                    >
-                      <td className="px-4 py-1.5 font-bold text-base border-t border-white/5">{d.bed_number}</td>
-                      <td className="px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
+                    <tr key={d.id} className="border-t border-white/5" style={{ background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone] }}>
+                      <td className="px-4 py-1.5 font-bold text-sm sm:text-base whitespace-nowrap">{d.bed_number}</td>
+                      <td className="px-3 py-1.5 text-white/80 text-xs whitespace-nowrap">{d.unit}</td>
                       {showReason ? (
-                        <td className="px-3 py-1.5 text-white/90 text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                        <td className="px-3 py-1.5 text-white/90 text-xs max-w-[160px] truncate">{d.pause_reason || <span className="text-white/40">—</span>}</td>
                       ) : (
-                        <td className="px-3 py-1.5 font-mono tabular-nums text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                        <td className="px-3 py-1.5 font-mono tabular-nums text-xs sm:text-sm whitespace-nowrap">{formatElapsed(d.status_updated_at, nowMs)}</td>
                       )}
-                      <td className="px-4 py-1.5 text-xs border-t border-white/5">{name || "—"}</td>
+                      <td className="px-4 py-1.5 text-xs whitespace-nowrap">{name || "—"}</td>
                     </tr>
                   );
                 })}
