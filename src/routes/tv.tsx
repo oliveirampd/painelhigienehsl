@@ -194,18 +194,6 @@ function TvPage() {
     const byId = new Map(staff.map((s) => [s.id, s]));
     const painelStaff = staff.filter((s) => (s.external_id || "").startsWith("painel:staff:"));
 
-    const nameSetFor = (pred: (d: Discharge) => boolean) =>
-      new Set(
-        filtered
-          .filter(pred)
-          .map((d) => (d.assigned_staff_id ? byId.get(d.assigned_staff_id)?.name : null))
-          .filter(Boolean)
-          .map((n) => (n as string).trim().toLowerCase()),
-      );
-
-    const nomesEmAlta = nameSetFor((d) => isTerminal(d) && d.status === "in_progress");
-    const nomesACaminho = nameSetFor((d) => isTerminal(d) && d.status === "en_route");
-    const nomesDesmontando = nameSetFor((d) => isDesmont(d) && d.status === "in_progress");
     // Comparação flexível: o Listo às vezes tem nome completo ("Hema Batista de
     // Oliveira") enquanto o healthcon mostra só "Hema Oliveira" — comparar só
     // primeiro + último nome (ignorando "de/da/dos" no meio) resolve isso.
@@ -236,12 +224,8 @@ function TvPage() {
 
     return painelStaff
       .map((s) => {
-        const nome = (s.name || "").trim().toLowerCase();
         const nome = s.name || "";
         let kind: TimeAltasKind;
-        if (nomesEmAlta.has(nome)) kind = "em_alta";
-        else if (nomesACaminho.has(nome)) kind = "a_caminho";
-        else if (nomesDesmontando.has(nome)) kind = "desmontando";
         if (nomesEmAlta.some((n) => namesMatch(n, nome))) kind = "em_alta";
         else if (nomesACaminho.some((n) => namesMatch(n, nome))) kind = "a_caminho";
         else if (nomesDesmontando.some((n) => namesMatch(n, nome))) kind = "desmontando";
@@ -269,7 +253,7 @@ function TvPage() {
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative">
+    <div className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative">
       <div
         className="absolute top-0 left-0 right-0 h-px"
         style={{
@@ -277,26 +261,26 @@ function TvPage() {
           boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
         }}
       />
-      <header className="flex-none flex items-center justify-between px-6 py-2 border-b border-white/15">
-        <h1 className="text-xl xl:text-2xl font-bold tracking-tight">
+      <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-white/15">
+        <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
         </h1>
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-white/50">
+        <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
+          <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
             </span>
             ao vivo
           </span>
-          <span className="text-[10px] text-white/35 font-mono">
+          <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
-          <span className="text-2xl xl:text-3xl font-mono tabular-nums">{clock}</span>
+          <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
 
-      <div className="flex-none grid grid-cols-5 gap-3 px-6 py-3">
+      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" />
         <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" />
         <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" />
@@ -304,15 +288,15 @@ function TvPage() {
         <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-12 gap-3 px-6 pb-4">
-        <div className="col-span-8 grid grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 min-h-0">
+      <div className="flex-1 lg:min-h-0 flex flex-col lg:grid lg:grid-cols-12 gap-3 px-4 lg:px-6 pb-4">
+        <div className="flex flex-col gap-3 lg:col-span-8 lg:grid lg:grid-rows-[1fr_0.8fr_1fr_1fr] lg:min-h-0">
           <BedsPanel title="Leitos em Limpeza Terminal" icon={<BrushCleaning className="w-4 h-4 text-white/60" />} rows={inFlight} nowMs={now} staffMap={staffMap} tone="green" empty="Nenhum leito em higienização terminal." flashVersions={flashVersions} />
           <BedsPanel title="A Caminho" icon={<Footprints className="w-4 h-4 text-white/60" />} rows={enRoute} nowMs={now} staffMap={staffMap} tone="blue" empty="Nenhum leito a caminho." flashVersions={flashVersions} />
           <BedsPanel title="Altas Paradas" icon={<OctagonX className="w-4 h-4 text-white/60" />} rows={paused} nowMs={now} staffMap={staffMap} tone="amber" empty="Nenhuma alta parada." flashVersions={flashVersions} />
           <BedsPanel title="Leitos Pausados" icon={<CirclePause className="w-4 h-4 text-white/60" />} rows={completedIssues} nowMs={now} staffMap={staffMap} tone="red" showReason empty="Nenhum leito pausado hoje." flashVersions={flashVersions} />
         </div>
         <div
-          className="col-span-4 min-h-0 grid gap-3"
+          className="flex flex-col gap-3 lg:col-span-4 lg:min-h-0 lg:grid"
           style={{
             gridTemplateRows:
               staffRows.length === 0 && timeAltasRows.length > 0
@@ -343,16 +327,16 @@ function useClock() {
 function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
     <div
-      className="rounded-xl px-4 py-2 border flex items-center justify-between"
+      className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
       style={{
         background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
         borderColor: accent.replace(")", " / 0.45)"),
         boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="text-[11px] uppercase tracking-widest text-white/70 font-medium">{label}</div>
+      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">{label}</div>
       <div
-        className="text-4xl tabular-nums leading-none"
+        className="text-2xl lg:text-4xl tabular-nums leading-none"
         style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
       >
         {value}
@@ -391,7 +375,7 @@ function BedsPanel({
   flashVersions?: Map<string, number>;
 }) {
   return (
-    <section className="rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col min-h-0">
+    <section className="h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0">
       <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
         <h2 className="text-base font-bold flex items-center gap-2">
           {icon}
@@ -404,17 +388,17 @@ function BedsPanel({
           <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
         ) : (
           <AutoScroll>
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-[oklch(0.16_0.02_265)]">
                 <tr>
-                  <th className="text-left px-4 py-1.5">Leito</th>
-                  <th className="text-left px-3 py-1.5">Unidade</th>
+                  <th className="text-left px-2.5 lg:px-4 py-1.5 w-[22%] lg:w-auto">Leito</th>
+                  <th className="hidden lg:table-cell text-left px-3 py-1.5">Unidade</th>
                   {showReason ? (
-                    <th className="text-left px-3 py-1.5">Motivo</th>
+                    <th className="text-left px-2.5 lg:px-3 py-1.5 w-[36%] lg:w-auto">Motivo</th>
                   ) : (
-                    <th className="text-left px-3 py-1.5">Tempo</th>
+                    <th className="text-left px-2.5 lg:px-3 py-1.5 w-[26%] lg:w-auto">Tempo</th>
                   )}
-                  <th className="text-left px-4 py-1.5">Colaborador</th>
+                  <th className="text-left px-2.5 lg:px-4 py-1.5">Colaborador</th>
                 </tr>
               </thead>
               <tbody>
@@ -430,14 +414,14 @@ function BedsPanel({
                         background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                       }}
                     >
-                      <td className="px-4 py-1.5 font-bold text-base border-t border-white/5">{d.bed_number}</td>
-                      <td className="px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
+                      <td className="px-2.5 lg:px-4 py-1.5 font-bold text-sm lg:text-base border-t border-white/5 truncate">{d.bed_number}</td>
+                      <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
                       {showReason ? (
-                        <td className="px-3 py-1.5 text-white/90 text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                        <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
                       ) : (
-                        <td className="px-3 py-1.5 font-mono tabular-nums text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                        <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
                       )}
-                      <td className="px-4 py-1.5 text-xs border-t border-white/5">{name || "—"}</td>
+                      <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-white/5 truncate">{name || "—"}</td>
                     </tr>
                   );
                 })}
@@ -458,7 +442,7 @@ function StaffPanel({
   nowMs: number;
 }) {
   return (
-    <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
+    <section className="h-[340px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
@@ -549,7 +533,7 @@ function BreaksPanel({
   nowMs: number;
 }) {
   return (
-    <section className="h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
+    <section className="h-[280px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col">
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
