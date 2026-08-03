@@ -602,43 +602,58 @@ function KpiCard({
 }) {
   const showTrend = trend != null && trend !== 0;
   const trendUp = (trend ?? 0) > 0;
-  const trendColor = !showTrend
-    ? undefined
-    : higherIsBad === undefined
-      ? "rgba(255,255,255,0.45)"
-      : (higherIsBad ? trendUp : !trendUp)
-        ? "oklch(0.7 0.2 25)"
-        : "oklch(0.72 0.19 155)";
+  // "worse" = indicador ruim que subiu (ou bom que caiu)
+  const worse = showTrend && higherIsBad !== undefined && (higherIsBad ? trendUp : !trendUp);
+  const better = showTrend && higherIsBad !== undefined && !worse;
+  const trendBg = worse
+    ? "oklch(0.5 0.2 25 / 0.85)"
+    : better
+      ? "oklch(0.48 0.17 155 / 0.8)"
+      : "oklch(0.35 0.02 265 / 0.8)";
+  const trendFg = worse
+    ? "oklch(0.95 0.06 25)"
+    : better
+      ? "oklch(0.95 0.06 155)"
+      : "rgba(255,255,255,0.75)";
 
   return (
     <div
-      className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
+      className={`relative rounded-xl px-3 lg:px-4 py-2 lg:py-2.5 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-2 ${worse ? "kpi-alert" : ""}`}
       style={{
         background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
         borderColor: accent.replace(")", " / 0.45)"),
-        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
+        boxShadow: worse
+          ? undefined
+          : `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="flex items-center gap-1.5">
-        <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
+      <div className="min-w-0">
+        <div className="text-[10px] lg:text-xs uppercase tracking-widest text-white/80 font-semibold leading-tight">
           {label}
         </div>
         {showTrend && (
+          <div className="text-[8px] lg:text-[9px] uppercase tracking-widest text-white/35 leading-tight mt-0.5">
+            vs 1h atrás
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {showTrend && (
           <span
-            className="inline-flex items-center text-[9px] lg:text-[10px] font-mono tabular-nums font-semibold shrink-0"
-            style={{ color: trendColor }}
+            className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-sm lg:text-lg font-bold tabular-nums leading-none"
+            style={{ background: trendBg, color: trendFg }}
             title="Variação em relação a 1h atrás"
           >
-            {trendUp ? "↑" : "↓"}
+            <span className="text-[11px] lg:text-sm">{trendUp ? "▲" : "▼"}</span>
             {Math.abs(trend!)}
           </span>
         )}
-      </div>
-      <div
-        className="text-2xl lg:text-4xl tabular-nums leading-none"
-        style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
-      >
-        {value}
+        <div
+          className="text-3xl lg:text-5xl tabular-nums leading-none"
+          style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
+        >
+          {value}
+        </div>
       </div>
     </div>
   );
