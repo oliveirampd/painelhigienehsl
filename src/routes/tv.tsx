@@ -46,6 +46,81 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 
+// --- Histórico de KPIs (pra setinha de tendência) ---------------------------
+// Guarda amostras no localStorage pra sobreviver a reload da TV. Cada amostra
+// tem hora + valor de cada KPI. A tendência compara o valor atual com a
+// amostra mais próxima de "1h atrás".
+type KpiKey = "inFlight" | "enRoute" | "paused" | "completedIssues" | "activeCount";
+type KpiSnapshot = { t: number } & Record<KpiKey, number>;
+const KPI_HISTORY_KEY = "tv-kpi-history-v1";
+const KPI_HISTORY_MAX_AGE_MS = 4 * 60 * 60 * 1000; // guarda até 4h, só usamos 1h
+
+function loadKpiHistory(): KpiSnapshot[] {
+  try {
+    const raw = localStorage.getItem(KPI_HISTORY_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as KpiSnapshot[];
+    const cutoff = Date.now() - KPI_HISTORY_MAX_AGE_MS;
+    return Array.isArray(arr) ? arr.filter((s) => s && s.t >= cutoff) : [];
+  } catch {
+    return [];
+  }
+}
+function saveKpiHistory(list: KpiSnapshot[]) {
+  try {
+    localStorage.setItem(KPI_HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    // localStorage indisponível (modo privado etc.) — degrada pra "sem tendência"
+  }
+}
+// Retorna current - valor_de_1h_atras, ou null se não tem histórico suficiente ainda.
+function kpiTrend(history: KpiSnapshot[], key: KpiKey, current: number): number | null {
+  if (history.length === 0) return null;
+  const oldestT = history[0].t;
+  if (Date.now() - oldestT < 20 * 60 * 1000) return null; // menos de 20min de dado: não mostra ainda
+  const targetT = Date.now() - 60 * 60 * 1000;
+  let closest = history[0];
+  let bestDiff = Math.abs(closest.t - targetT);
+  for (const s of history) {
+    const diff = Math.abs(s.t - targetT);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      closest = s;
+    }
+  }
+  return current - closest[key];
+}
+
+// --- Resumo do dia (altas concluídas + tempo médio) -------------------------
+type DaySummary = { dateKey: string; count: number; totalMin: number; sampled: number };
+const DAY_SUMMARY_KEY = "tv-day-summary-v1";
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function loadDaySummary(): DaySummary {
+  const key = todayKey();
+  try {
+    const raw = localStorage.getItem(DAY_SUMMARY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as DaySummary;
+      if (parsed && parsed.dateKey === key) return parsed;
+    }
+  } catch {
+    // ignora e recomeça do zero
+  }
+  return { dateKey: key, count: 0, totalMin: 0, sampled: 0 };
+}
+function saveDaySummary(s: DaySummary) {
+  try {
+    localStorage.setItem(DAY_SUMMARY_KEY, JSON.stringify(s));
+  } catch {
+    // ignora
+  }
+}
+
+type ActivityItem = { bed: string; at: number };
+const FINAL_STATUSES = new Set(["completed", "completed_with_issues"]);
+
 type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
 // NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
@@ -72,20 +147,68 @@ function TvPage() {
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
   const [, forceFlashRerender] = useState(0);
+
+  // Quando um leito entra em "in_progress", guarda o instante — usado depois
+  // pra calcular a duração da higienização quando ele for concluído.
+  const cleaningStartRef = useRef<Map<string, number>>(new Map());
+
+  // Feed de atividade recente (últimas conclusões) e resumo do dia.
+  const recentActivityRef = useRef<ActivityItem[]>([]);
+  const [, forceActivityRerender] = useState(0);
+  const daySummaryRef = useRef<DaySummary>(loadDaySummary());
+  const [daySummary, setDaySummary] = useState<DaySummary>(daySummaryRef.current);
+
   useEffect(() => {
     const prev = prevStatusRef.current;
     let mudou = false;
+    let atividadeMudou = false;
+
     for (const d of discharges) {
       const before = prev.get(d.external_id);
+
+      if (d.status === "in_progress" && !cleaningStartRef.current.has(d.external_id)) {
+        cleaningStartRef.current.set(d.external_id, new Date(d.status_updated_at).getTime());
+      }
+
       if (before !== undefined && before !== d.status) {
         flashVersionRef.current.set(d.external_id, (flashVersionRef.current.get(d.external_id) ?? 0) + 1);
         mudou = true;
+
+        if (FINAL_STATUSES.has(d.status) && !FINAL_STATUSES.has(before)) {
+          recentActivityRef.current = [{ bed: d.bed_number, at: Date.now() }, ...recentActivityRef.current].slice(0, 12);
+          atividadeMudou = true;
+
+          const startedAt = cleaningStartRef.current.get(d.external_id);
+          const durationMin = startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 60000)) : null;
+          const cur = daySummaryRef.current;
+          const next: DaySummary = {
+            dateKey: cur.dateKey,
+            count: cur.count + 1,
+            totalMin: cur.totalMin + (durationMin ?? 0),
+            sampled: cur.sampled + (durationMin != null ? 1 : 0),
+          };
+          daySummaryRef.current = next;
+          saveDaySummary(next);
+          setDaySummary(next);
+        }
       }
     }
     prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
     if (mudou) forceFlashRerender((n) => n + 1);
+    if (atividadeMudou) forceActivityRerender((n) => n + 1);
   }, [discharges]);
   const flashVersions = flashVersionRef.current;
+
+  // Vira o dia? Reseta o resumo (o resto do estado não precisa resetar).
+  useEffect(() => {
+    const key = todayKey();
+    if (daySummaryRef.current.dateKey !== key) {
+      const fresh: DaySummary = { dateKey: key, count: 0, totalMin: 0, sampled: 0 };
+      daySummaryRef.current = fresh;
+      saveDaySummary(fresh);
+      setDaySummary(fresh);
+    }
+  }, [now]);
 
   const filtered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
@@ -252,8 +375,57 @@ function TvPage() {
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
+  // Pior caso: o leito esperando há mais tempo em qualquer categoria "ativa"
+  // (não inclui Leitos Pausados, que já é uma pendência tratada à parte).
+  // Só destaca se já passou de 30min, pra não marcar coisa que ainda é normal.
+  const worstCase = useMemo(() => {
+    const all = [...inFlight, ...enRoute, ...paused];
+    if (all.length === 0) return null;
+    const oldest = all.reduce((acc, d) =>
+      new Date(d.status_updated_at).getTime() < new Date(acc.status_updated_at).getTime() ? d : acc,
+    );
+    return elapsedMinutes(oldest.status_updated_at, now) >= 30 ? oldest : null;
+  }, [inFlight, enRoute, paused, now]);
+  const worstId = worstCase?.external_id ?? null;
+
+  // Amostra o histórico de KPIs (no máximo 1x por render relevante — o efeito
+  // só dispara quando algum desses valores muda de verdade).
+  const kpiHistoryRef = useRef<KpiSnapshot[]>(loadKpiHistory());
+  useEffect(() => {
+    const snap: KpiSnapshot = {
+      t: Date.now(),
+      inFlight: inFlight.length,
+      enRoute: enRoute.length,
+      paused: paused.length,
+      completedIssues: completedIssues.length,
+      activeCount,
+    };
+    const cutoff = Date.now() - KPI_HISTORY_MAX_AGE_MS;
+    const list = [...kpiHistoryRef.current, snap].filter((s) => s.t >= cutoff);
+    kpiHistoryRef.current = list;
+    saveKpiHistory(list);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFlight.length, enRoute.length, paused.length, completedIssues.length, activeCount]);
+
+  const trendInFlight = kpiTrend(kpiHistoryRef.current, "inFlight", inFlight.length);
+  const trendEnRoute = kpiTrend(kpiHistoryRef.current, "enRoute", enRoute.length);
+  const trendPaused = kpiTrend(kpiHistoryRef.current, "paused", paused.length);
+  const trendCompletedIssues = kpiTrend(kpiHistoryRef.current, "completedIssues", completedIssues.length);
+  const trendActiveCount = kpiTrend(kpiHistoryRef.current, "activeCount", activeCount);
+
+  // Modo noturno: escurece um pouco a tela entre 22h e 6h (horário de menor
+  // movimento), pra cansar menos a vista e poupar um pouco a TV de madrugada.
+  const hourNow = new Date(now).getHours();
+  const isNight = hourNow >= 22 || hourNow < 6;
+
+  const avgCompletionMin = daySummary.sampled > 0 ? Math.round(daySummary.totalMin / daySummary.sampled) : null;
+  const recentActivity = recentActivityRef.current.filter((it) => now - it.at <= 30 * 60 * 1000);
+
   return (
-    <div className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative">
+    <div
+      className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative"
+      style={{ filter: isNight ? "brightness(0.72)" : undefined, transition: "filter 3s ease" }}
+    >
       <div
         className="absolute top-0 left-0 right-0 h-px"
         style={{
@@ -280,12 +452,14 @@ function TvPage() {
         </div>
       </header>
 
+      <ActivityFeed items={recentActivity} nowMs={now} />
+
       <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
+        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendInFlight} />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendEnRoute} />
+        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendPaused} higherIsBad />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendCompletedIssues} higherIsBad />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" trend={trendActiveCount} />
       </div>
 
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 px-4 lg:px-6 pb-4">
@@ -298,6 +472,7 @@ function TvPage() {
           tone="green"
           empty="Nenhum leito em higienização terminal."
           flashVersions={flashVersions}
+          worstId={worstId}
           className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
         />
         <BedsPanel
@@ -309,6 +484,9 @@ function TvPage() {
           tone="blue"
           empty="Nenhum leito a caminho."
           flashVersions={flashVersions}
+          worstId={worstId}
+          caption="meta: até 15min"
+          captionWarn={enRoute.some((d) => elapsedMinutes(d.status_updated_at, now) > 15)}
           className="order-3 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
         />
         <BedsPanel
@@ -320,6 +498,9 @@ function TvPage() {
           tone="amber"
           empty="Nenhuma alta parada."
           flashVersions={flashVersions}
+          worstId={worstId}
+          caption="meta: até 30min"
+          captionWarn={paused.some((d) => elapsedMinutes(d.status_updated_at, now) > 30)}
           className="order-4 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
         <BedsPanel
@@ -357,6 +538,8 @@ function TvPage() {
           }`}
         />
       </div>
+
+      <DaySummaryFooter count={daySummary.count} avgMin={avgCompletionMin} />
     </div>
   );
 }
@@ -371,7 +554,31 @@ function useClock() {
   return t;
 }
 
-function KpiCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function KpiCard({
+  label,
+  value,
+  accent,
+  trend,
+  higherIsBad,
+}: {
+  label: string;
+  value: number;
+  accent: string;
+  /** current - valor de ~1h atrás. null/undefined = sem dado suficiente ainda. */
+  trend?: number | null;
+  /** true: subir é ruim (vermelho). false: subir é bom (verde). undefined: neutro (cinza, só informativo). */
+  higherIsBad?: boolean;
+}) {
+  const showTrend = trend != null && trend !== 0;
+  const trendUp = (trend ?? 0) > 0;
+  const trendColor = !showTrend
+    ? undefined
+    : higherIsBad === undefined
+      ? "rgba(255,255,255,0.45)"
+      : (higherIsBad ? trendUp : !trendUp)
+        ? "oklch(0.7 0.2 25)"
+        : "oklch(0.72 0.19 155)";
+
   return (
     <div
       className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
@@ -381,7 +588,21 @@ function KpiCard({ label, value, accent }: { label: string; value: number; accen
         boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">{label}</div>
+      <div className="flex items-center gap-1.5">
+        <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
+          {label}
+        </div>
+        {showTrend && (
+          <span
+            className="hidden lg:inline-flex items-center text-[10px] font-mono tabular-nums font-semibold"
+            style={{ color: trendColor }}
+            title="Variação em relação a 1h atrás"
+          >
+            {trendUp ? "↑" : "↓"}
+            {Math.abs(trend!)}
+          </span>
+        )}
+      </div>
       <div
         className="text-2xl lg:text-4xl tabular-nums leading-none"
         style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
@@ -411,6 +632,9 @@ function BedsPanel({
   empty,
   flashVersions,
   className,
+  caption,
+  captionWarn,
+  worstId,
 }: {
   title: string;
   icon?: React.ReactNode;
@@ -422,15 +646,31 @@ function BedsPanel({
   empty: string;
   flashVersions?: Map<string, number>;
   className?: string;
+  /** Legenda opcional (ex: "meta: até 15min"), exibida abaixo do título. */
+  caption?: string;
+  /** Se true, pinta a legenda de alerta (algo já passou da meta). */
+  captionWarn?: boolean;
+  /** external_id do leito com destaque de "atenção máxima" (pior caso geral). */
+  worstId?: string | null;
 }) {
   return (
     <section className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
-      <div className="flex-none px-4 py-2 border-b border-white/10 flex items-baseline justify-between">
-        <h2 className="text-base font-bold flex items-center gap-2">
-          {icon}
-          {title}
-        </h2>
-        <span className="text-[11px] text-white/50">{rows.length}</span>
+      <div className="flex-none px-4 py-2 border-b border-white/10">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            {icon}
+            {title}
+          </h2>
+          <span className="text-[11px] text-white/50">{rows.length}</span>
+        </div>
+        {caption && (
+          <div
+            className="hidden lg:block text-[10px] mt-0.5"
+            style={{ color: captionWarn ? "oklch(0.75 0.2 25)" : "rgba(255,255,255,0.35)" }}
+          >
+            {caption}
+          </div>
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -455,15 +695,29 @@ function BedsPanel({
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
                   const version = flashVersions?.get(d.external_id) ?? 0;
+                  const isWorst = !!worstId && d.external_id === worstId;
+                  const rowClass = [version > 0 ? "flash-row" : "", isWorst ? "pulse-critical" : ""]
+                    .filter(Boolean)
+                    .join(" ");
                   return (
                     <tr
                       key={`${d.id}-v${version}`}
-                      className={version > 0 ? "flash-row" : undefined}
+                      className={rowClass || undefined}
                       style={{
                         background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                       }}
                     >
-                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">{d.bed_number}</td>
+                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
+                        {d.bed_number}
+                        {isWorst && (
+                          <span
+                            className="hidden lg:inline ml-2 text-[9px] font-semibold uppercase tracking-widest align-middle"
+                            style={{ color: "oklch(0.75 0.22 25)" }}
+                          >
+                            ⚠ atenção máxima
+                          </span>
+                        )}
+                      </td>
                       <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
                       {showReason ? (
                         <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
@@ -657,6 +911,39 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
     <span className="uppercase tracking-widest text-[10px] font-semibold" style={{ color }}>
       {label}
     </span>
+  );
+}
+
+// Faixa discreta com as últimas conclusões, logo abaixo do cabeçalho (só desktop).
+function ActivityFeed({ items, nowMs }: { items: ActivityItem[]; nowMs: number }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="hidden lg:flex flex-none items-center gap-4 px-6 py-1 border-b border-white/5 text-[11px] text-white/40 overflow-hidden whitespace-nowrap">
+      <span className="flex-none uppercase tracking-widest text-white/25 text-[9px]">Atividade recente</span>
+      {items.slice(0, 6).map((it, i) => (
+        <span key={`${it.bed}-${it.at}-${i}`} className="flex-none">
+          Leito {it.bed} concluído há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Faixa no rodapé com o resumo do dia (só desktop).
+function DaySummaryFooter({ count, avgMin }: { count: number; avgMin: number | null }) {
+  return (
+    <div className="hidden lg:flex flex-none items-center justify-center gap-1 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/45">
+      <span>Hoje:</span>
+      <span className="font-semibold text-white/70">{count}</span>
+      <span>altas concluídas</span>
+      {avgMin != null && (
+        <>
+          <span className="mx-1 text-white/20">·</span>
+          <span>tempo médio</span>
+          <span className="font-semibold text-white/70">{avgMin}min</span>
+        </>
+      )}
+    </div>
   );
 }
 
