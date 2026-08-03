@@ -399,7 +399,12 @@ function TvPage() {
 
   // Amostra o histórico de KPIs (no máximo 1x por render relevante — o efeito
   // só dispara quando algum desses valores muda de verdade).
-  const kpiHistoryRef = useRef<KpiSnapshot[]>(loadKpiHistory());
+  const kpiHistoryRef = useRef<KpiSnapshot[]>([]);
+  const [kpiHydrated, setKpiHydrated] = useState(false);
+  useEffect(() => {
+    kpiHistoryRef.current = [...loadKpiHistory(), ...kpiHistoryRef.current];
+    setKpiHydrated(true);
+  }, []);
   useEffect(() => {
     const snap: KpiSnapshot = {
       t: Date.now(),
