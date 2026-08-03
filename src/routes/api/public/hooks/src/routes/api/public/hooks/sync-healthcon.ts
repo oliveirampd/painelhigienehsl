@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 const HEALTHCON =
   "http://healthconprd/service/painelhigienizacao/pesquisar/1";
 
-export const Route = createFileRoute("/api/public/hooks/sync-healthcon")({
+export const Route = createFileRoute("/api/public/hooks/src/routes/api/public/hooks/sync-healthcon")({
   server: {
     handlers: {
       GET: async () => {
