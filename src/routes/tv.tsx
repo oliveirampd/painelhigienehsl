@@ -438,7 +438,10 @@ function TvPage() {
   return (
     <div
       className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative"
-      style={{ filter: isNight ? "brightness(0.72)" : undefined, transition: "filter 3s ease" }}
+      style={{
+        filter: isNight ? "brightness(0.8) saturate(0.9)" : undefined,
+        transition: "filter 3s ease",
+      }}
     >
       <div
         className="absolute top-0 left-0 right-0 h-px"
