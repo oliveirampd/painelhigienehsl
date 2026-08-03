@@ -399,7 +399,7 @@ async function handle(request: Request) {
   } catch (err) {
     console.error("[sync-listo360]", err);
     return Response.json(
-      { ok: false, error: (err as Error).message },
+      { ok: false, error: "Sync failed" },
       { status: 500 },
     );
   }
