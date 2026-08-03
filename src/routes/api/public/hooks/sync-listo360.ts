@@ -121,14 +121,33 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
   server: {
     handlers: {
-      GET: () => handle(),
-      POST: () => handle(),
+      GET: ({ request }) => handle(request),
+      POST: ({ request }) => handle(request),
     },
   },
 });
 
-async function handle() {
+// Só o job agendado (que envia o segredo compartilhado) pode disparar o sync.
+function isAuthorized(request: Request): boolean {
+  const expected = process.env.SYNC_SECRET;
+  if (!expected) return false;
+  const provided =
+    request.headers.get("x-sync-secret") ??
+    (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!provided || provided.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+async function handle(request: Request) {
+  if (!isAuthorized(request)) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
+
     const supabase = createClient<Database>(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
