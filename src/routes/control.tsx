@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  createDischarge,
+  createStaff,
+  updateDischarge as updateDischargeFn,
+  updateStaffStatus,
+} from "@/lib/hospital.functions";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -108,20 +113,23 @@ function DischargeForm({ staff }: { staff: Staff[] }) {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from("discharges").insert({
-      bed_number: bed.trim(),
-      unit: unit.trim(),
-      status,
-      priority,
-      pause_reason: showReason ? pauseReason.trim() || null : null,
-      assigned_staff_id: assigned || null,
-      status_updated_at: new Date().toISOString(),
-    });
-    setSaving(false);
-    if (error) {
-      toast.error("Erro ao salvar: " + error.message);
+    try {
+      await createDischarge({
+        data: {
+          bed_number: bed.trim(),
+          unit: unit.trim(),
+          status,
+          priority,
+          pause_reason: showReason ? pauseReason.trim() || null : null,
+          assigned_staff_id: assigned || null,
+        },
+      });
+    } catch {
+      setSaving(false);
+      toast.error("Erro ao salvar a alta.");
       return;
     }
+    setSaving(false);
     toast.success("Alta registrada.");
     setBed("");
     setUnit("");
@@ -232,12 +240,19 @@ function DischargeForm({ staff }: { staff: Staff[] }) {
 
 /* -------------------- Active discharges list -------------------- */
 
-async function updateDischarge(id: string, patch: Partial<Discharge>) {
-  const { error } = await supabase
-    .from("discharges")
-    .update({ ...patch, status_updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) toast.error("Erro: " + error.message);
+type DischargePatch = {
+  status?: DischargeStatus;
+  priority?: boolean;
+  pause_reason?: string | null;
+  assigned_staff_id?: string | null;
+};
+
+async function updateDischarge(id: string, patch: DischargePatch) {
+  try {
+    await updateDischargeFn({ data: { id, patch } });
+  } catch {
+    toast.error("Erro ao atualizar o leito.");
+  }
 }
 
 function ActiveDischarges({
@@ -347,20 +362,21 @@ function StaffPanel({ staff, nowMs }: { staff: Staff[]; nowMs: number }) {
 
   async function setStaffStatus(id: string, status: StaffStatus) {
     setOpenId(null);
-    const { error } = await supabase
-      .from("staff")
-      .update({ status, status_updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) toast.error("Erro: " + error.message);
+    try {
+      await updateStaffStatus({ data: { id, status } });
+    } catch {
+      toast.error("Erro ao atualizar o colaborador.");
+    }
   }
 
   async function addStaff() {
     if (!newName.trim()) return;
-    const { error } = await supabase.from("staff").insert({ name: newName.trim() });
-    if (error) toast.error("Erro: " + error.message);
-    else {
+    try {
+      await createStaff({ data: { name: newName.trim() } });
       toast.success("Colaborador adicionado.");
       setNewName("");
+    } catch {
+      toast.error("Erro ao adicionar colaborador.");
     }
   }
 
