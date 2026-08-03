@@ -1,59 +1,70 @@
-## O que está errado
+# Melhorias propostas — Painel de Higienização Terminal
 
-1. **Tempo sempre "3h"** — o Listo devolve `startTime`/`endTime` em horário local de Brasília (UTC−3) sem timezone (`"2026-07-15T09:00:00"`). Nosso código passa isso direto para `new Date(...)`, que interpreta como UTC. Resultado: todo horário fica 3h "no passado". Precisa normalizar como BRT (append `-03:00` quando não tiver timezone).
+## O que está bom hoje
+- Sincronização em tempo real via Supabase Realtime funciona.
+- TV já tem KPIs, auto-scroll, modo noturno, flash de status e resumo do dia.
+- Integração Listo360 está ativa e mapeia leitos/unidades corretamente.
+- Segurança básica foi aplicada (secret no sync, RLS restrito, server functions no control).
 
-2. **Swap Altas Paradas ↔ Concluídas c/ Pendência** — a regra correta é a mesma origem (`statusAnswer` "Pendente" no Listo), separado por `endTime`:
-   - `endTime IS NULL` → **Altas Paradas** (aparece na aba Rotinas Pendentes, ainda aberta)
-   - `endTime NOT NULL` → **Concluídas c/ Pendência** (foi encerrada com pendência)
+## Onde podemos ir além
 
-   Hoje o `mapStatus` faz `id=7 && hasEnd → "completed"` (genérico), então itens que deveriam ser "concluída com pendência" caem em "completed" e somem do painel. E `id=4` está sendo tratado como o único caminho para `completed_with_issues`, o que provavelmente não bate com o id real do Listo para "Pendente".
+### 1. Layout da TV (visibilidade a distância)
+Problema: a TV usa muitas seções pequenas, fontes finas e tabelas densas. De longe (corredor de hospital) fica difícil de ler.
 
-3. **Auto-scroll parado** — o `AutoScroll` mede a altura do conteúdo no mount, mas quando a tabela cresce depois (dados chegam via realtime), o `ResizeObserver` observa apenas os filhos diretos existentes no momento; o `<table>` interno cresce sem disparar. Além disso, `scrollTop += 0.4` é arredondado para 0 pelo browser quando o container tem `overflow-hidden` estrito em alguns casos.
+Ideias:
+- **Layout "Quadro de Operações"**: cabeçalho gigante com apenas 4 blocos (Em Limpeza, A Caminho, Altas Paradas, Leitos Pausados). Cada bloco vira um card de grade com número do leito em fonte grande, colaborador e tempo abaixo. Nada de tabelas — só cards quadrados.
+- **Layout "Trilha de Leitos"**: uma única coluna horizontal (estilo linha do tempo) mostrando cada leito como um card de status. Ótimo para TVs acima do corredor.
+- **Layout "Números Grandes"**: oculta listas e mostra só KPIs em tamanho enorme (tipo painel de fábrica), com um alerta piscando para o leito mais crítico.
+- Adicionar **pictogramas de status** (ícones grandes de "limpo", "alerta", "pausa") ao lado de cada leito.
+- Usar **cores mais saturadas** para status críticos e garantir contraste WCAG AAA para leitura à distância.
+- Separar visualmente "Colaboradores" e "Time Altas" em abas ou mini-painéis menos dominantes.
 
-4. **`status_updated_at` reescrito pelo trigger** — a trigger `touch_status_updated_at` sobrescreve o valor que mandamos no upsert quando o status muda, então o "tempo" no painel vira "quando o sync rodou", não "quando a rotina começou/terminou no Listo". Para o painel refletir tempo real do Listo, precisamos usar o `startTime`/`endTime` do Listo direto — guardar num campo próprio ou ignorar a trigger para linhas do Listo.
+### 2. Controle operador (usabilidade)
+Problema: o formulário mistura criação e atualização, o que confunde. A lista de altas ativas cresce sem filtros.
 
-## Plano
+Ideias:
+- Dividir a tela em **"Nova Alta"** e **"Altas Ativas"** com ações contextuais por leito.
+- Adicionar busca/filtro por leito, unidade ou colaborador.
+- Botão de **"Atribuir a mim"** com login rápido do colaborador (QR code ou seleção).
+- Campos de leito e unidade com **autocomplete** baseado nos últimos valores usados.
+- Confirmação antes de concluir uma alta (evita clique acidental).
+- Painel de **últimas ações** (log de quem alterou o quê e quando).
 
-### 1. `sync-listo360.ts` — parsing de data e mapeamento de status
+### 3. Alertas e notificações
+- Som de alerta quando um leito passa de 30 min ou 60 min.
+- Notificação visual/flutuante no Control quando um novo leito entra em alta.
+- Badge no browser/tab com número de leitos críticos.
+- Email/alerta para supervisor quando muitas altas ficam paradas (configurável).
 
-- Adicionar helper `parseBRT(s)`: se a string não tem `Z` nem `±HH:MM`, concatenar `-03:00` antes do `new Date`.
-- Reescrever `mapStatus(a)` para tratar "Pendente" como a chave e separar por `endTime`:
-  ```
-  id 7 (Pendente):        endTime? "completed_with_issues" : "paused"
-  id 4 (também pendente): mesmo tratamento (fallback)
-  id 2 (Em Andamento):    endTime? "completed" : "in_progress"
-  id 1:                   "waiting_cleaning"
-  id 5:                   "maintenance"
-  id 3, 6, default:       endTime? "completed" : "waiting_cleaning"
-  ```
-- `status_updated_at` = `parseBRT(endTime ?? startTime ?? date).toISOString()`.
+### 4. Dados e histórico
+- Gráfico de tempo médio por turno (manhã/tarde/noite) na TV.
+- Ranking de colaboradores por tempo médio de conclusão.
+- Histórico de conclusões do dia (não só contagem e média).
+- Exportar CSV do dia para gestão.
+- Filtro de "minhas altas" para cada colaborador logado.
 
-### 2. Migration — desativar o trigger para linhas do Listo
+### 5. Robustez e integração
+- Tratar fusos horários de forma explícita (BRT/UTC) na integração Listo360.
+- Página de status da integração (último sync, erros, quantidade de registros).
+- Fallback quando o sync falhar: mostrar aviso "dados desatualizados" na TV.
+- Validação de duplicatas (evitar duas altas ativas para o mesmo leito).
 
-Duas opções, vou pela mais simples: alterar `touch_status_updated_at` para **não** mexer quando `NEW.external_id LIKE 'listo:%'` (o sync já manda o timestamp certo). Assim linhas manuais (do `/control`) continuam com o comportamento atual.
+### 6. Login e acesso
+- Tela de login simples para operadores (não expor o Control anonimamente).
+- Perfis: operador, supervisor, TV (somente leitura).
+- Log de auditoria de alterações no banco.
 
-Também vou fazer um `UPDATE` pontual para recomputar `status_updated_at` das linhas Listo existentes com base no que estiver no banco (não temos os timestamps originais, mas o próximo sync corrige — o UPDATE só zera o "3h fixo" atual pondo `now()` como placeholder, opcional).
+### 7. Acessibilidade e performance
+- Aumentar contraste geral na TV.
+- Reduzir re-renderizações desnecessárias (memoização do grid).
+- Testar em viewport de TV 1920x1080 e 4K.
+- Suporte a modo retrato para monitores verticais.
 
-### 3. `/tv` — auto-scroll robusto
+## Próximo passo sugerido
+Recomendo começar pelo **redesign do layout da TV**, pois é o que todo mundo olha o dia todo. Podemos propor 3 direções visuais diferentes para você escolher.
 
-- Trocar a heurística por `MutationObserver` na subtree (observa qualquer mudança de conteúdo, inclusive linhas novas dentro do `<table>`).
-- Trocar `scrollTop += 0.4` por acumulador em `ref` (float) e aplicar `Math.floor` — evita perda de sub-pixel.
-- Recalcular `needsScroll` sempre que o conteúdo mudar; se voltar a caber, parar a animação.
-
-### 4. Verificação
-
-- Após deploy, rodar 1 ciclo do sync (ou chamar o endpoint manualmente) e checar no banco:
-  ```sql
-  select external_id, bed_number, status, status_updated_at, pause_reason
-  from discharges
-  where external_id like 'listo:answer:%'
-    and status in ('paused','completed_with_issues')
-  order by status_updated_at desc;
-  ```
-- No `/tv`: **Altas Paradas** só com rotinas terminais sem `endTime`; **Concluídas c/ Pendência** com as que têm `endTime` nas últimas 24h; tempos batendo com o horário de Brasília; scroll rolando quando a lista passa da altura visível.
-
-## Arquivos alterados
-
-- `src/routes/api/public/hooks/sync-listo360.ts` — `parseBRT`, novo `mapStatus`, `status_updated_at` a partir do horário do Listo.
-- `supabase/migrations/<novo>.sql` — atualiza `touch_status_updated_at` para ignorar `external_id LIKE 'listo:%'`.
-- `src/routes/tv.tsx` — `AutoScroll` com `MutationObserver` + acumulador float.
+## Decisões pendentes
+1. Qual layout de TV você prefere testar primeiro? (Quadro de Operações, Trilha de Leitos, Números Grandes ou manter/refinar o atual?)
+2. Quer adicionar sons de alerta na TV e/ou no Control?
+3. Quer login de operadores agora ou depois?
+4. Quer incluir ranking de colaboradores e gráficos de desempenho na TV?
