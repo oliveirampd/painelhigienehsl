@@ -678,8 +678,7 @@ function BedsPanel({
   empty,
   flashVersions,
   className,
-  caption,
-  captionWarn,
+  goalMinutes,
   worstId,
 }: {
   title: string;
@@ -692,31 +691,43 @@ function BedsPanel({
   empty: string;
   flashVersions?: Map<string, number>;
   className?: string;
-  /** Legenda opcional (ex: "meta: até 15min"), exibida abaixo do título. */
-  caption?: string;
-  /** Se true, pinta a legenda de alerta (algo já passou da meta). */
-  captionWarn?: boolean;
+  /** Meta em minutos (ex: 15). Vira uma pílula "META 15MIN" ao lado do título. */
+  goalMinutes?: number;
   /** external_id do leito com destaque de "atenção máxima" (pior caso geral). */
   worstId?: string | null;
 }) {
+  const overGoal =
+    goalMinutes != null
+      ? rows.filter((d) => elapsedMinutes(d.status_updated_at, nowMs) > goalMinutes).length
+      : 0;
+  const goalWarn = overGoal > 0;
+
   return (
     <section className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-bold flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-base lg:text-lg font-bold flex items-center gap-2 min-w-0">
             {icon}
-            {title}
+            <span className="truncate">{title}</span>
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
-        </div>
-        {caption && (
-          <div
-            className="text-[9px] lg:text-[10px] mt-0.5"
-            style={{ color: captionWarn ? "oklch(0.75 0.2 25)" : "rgba(255,255,255,0.35)" }}
-          >
-            {caption}
+          <div className="flex items-center gap-2 shrink-0">
+            {goalMinutes != null && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] lg:text-xs font-bold uppercase tracking-widest whitespace-nowrap ${goalWarn ? "goal-warn" : ""}`}
+                style={{
+                  background: goalWarn ? "oklch(0.5 0.2 25 / 0.85)" : "oklch(0.42 0.15 155 / 0.7)",
+                  color: goalWarn ? "oklch(0.96 0.06 25)" : "oklch(0.94 0.08 155)",
+                }}
+                title={`Meta: até ${goalMinutes} minutos`}
+              >
+                {goalWarn ? `${overGoal} fora da meta ${goalMinutes}min` : `Meta ${goalMinutes}min`}
+              </span>
+            )}
+            <span className="rounded-full bg-white/12 px-2.5 py-0.5 text-xs lg:text-sm font-bold tabular-nums text-white/90">
+              {rows.length}
+            </span>
           </div>
-        )}
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -750,17 +761,26 @@ function BedsPanel({
                       key={`${d.id}-v${version}`}
                       className={rowClass || undefined}
                       style={{
-                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
+                        background: isWorst
+                          ? "oklch(0.42 0.21 25 / 0.55)"
+                          : overtime && tone === "green"
+                            ? "oklch(0.4 0.13 55 / 0.3)"
+                            : toneBg[tone],
+                        borderLeft: isWorst ? "6px solid oklch(0.68 0.24 25)" : undefined,
                       }}
                     >
-                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
+                      <td
+                        className={`px-1.5 lg:px-4 py-1.5 font-bold border-t border-white/5 ${
+                          isWorst ? "text-base lg:text-xl" : "text-[13px] lg:text-base truncate"
+                        }`}
+                      >
                         {d.bed_number}
                         {isWorst && (
                           <span
-                            className="ml-1 lg:ml-2 text-[9px] font-semibold uppercase tracking-widest align-middle"
-                            style={{ color: "oklch(0.75 0.22 25)" }}
+                            className="ml-1.5 lg:ml-2 inline-block rounded px-1.5 py-0.5 text-[9px] lg:text-[11px] font-extrabold uppercase tracking-widest align-middle whitespace-nowrap"
+                            style={{ background: "oklch(0.6 0.24 25)", color: "oklch(0.99 0 0)" }}
                           >
-                            ⚠<span className="hidden lg:inline"> atenção máxima</span>
+                            ⚠ Atenção máxima
                           </span>
                         )}
                       </td>
