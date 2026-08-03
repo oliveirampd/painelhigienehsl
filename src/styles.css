@@ -178,4 +178,4 @@
   0%   { opacity: 0; transform: translateX(-10px) scale(0.94); }
   100% { opacity: 1; transform: translateX(0) scale(1); }
 }
-.activity-chip-in { animation: activity-chip-in 0.5s ease-out; }
+.activity-chip { animation: activity-chip-in 0.5s ease-out; }
