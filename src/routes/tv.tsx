@@ -504,6 +504,7 @@ function TvPage() {
           empty="Nenhum leito em higienização terminal."
           flashVersions={flashVersions}
           worstId={worstId}
+          goalMinutes={60}
           className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
         />
         <BedsPanel
@@ -516,8 +517,7 @@ function TvPage() {
           empty="Nenhum leito a caminho."
           flashVersions={flashVersions}
           worstId={worstId}
-          caption="meta: até 15min"
-          captionWarn={enRoute.some((d) => elapsedMinutes(d.status_updated_at, now) > 15)}
+          goalMinutes={15}
           className="order-3 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
         />
         <BedsPanel
@@ -530,10 +530,10 @@ function TvPage() {
           empty="Nenhuma alta parada."
           flashVersions={flashVersions}
           worstId={worstId}
-          caption="meta: até 30min"
-          captionWarn={paused.some((d) => elapsedMinutes(d.status_updated_at, now) > 30)}
+          goalMinutes={30}
           className="order-4 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
+
         <BedsPanel
           title="Leitos Pausados"
           icon={<CirclePause className="w-4 h-4 text-white/60" />}
