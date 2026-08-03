@@ -158,3 +158,24 @@
 .flash-row {
   animation: flash-row-once 1.6s ease-out;
 }
+
+/* KPI em alerta — anel pulsando quando um indicador ruim piorou na ultima hora */
+@keyframes kpi-alert-ring {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.68 0.23 25 / 0.55), inset 0 0 0 1px oklch(0.68 0.23 25 / 0.7); }
+  50%      { box-shadow: 0 0 0 6px oklch(0.68 0.23 25 / 0), inset 0 0 0 2px oklch(0.72 0.23 25 / 0.95); }
+}
+.kpi-alert { animation: kpi-alert-ring 1.6s ease-in-out infinite; }
+
+/* Meta estourada — pilula de meta pulsando */
+@keyframes goal-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+.goal-warn { animation: goal-pulse 1.4s ease-in-out infinite; }
+
+/* Chip de atividade recente entrando */
+@keyframes activity-chip-in {
+  0%   { opacity: 0; transform: translateX(-10px) scale(0.94); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.activity-chip-in { animation: activity-chip-in 0.5s ease-out; }
