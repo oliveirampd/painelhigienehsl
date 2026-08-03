@@ -980,33 +980,78 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
   );
 }
 
-// Faixa discreta com as últimas conclusões, logo abaixo do cabeçalho (só desktop).
+// Faixa de atividade recente — chips verdes bem visíveis.
 function ActivityFeed({ items, nowMs }: { items: ActivityItem[]; nowMs: number }) {
   if (items.length === 0) return null;
   return (
-    <div className="flex flex-none items-center gap-3 lg:gap-4 px-3 lg:px-6 py-1 border-b border-white/5 text-[10px] lg:text-[11px] text-white/40 overflow-x-auto whitespace-nowrap">
-      <span className="flex-none uppercase tracking-widest text-white/25 text-[8px] lg:text-[9px]">Atividade recente</span>
+    <div
+      className="flex flex-none items-center gap-2 lg:gap-3 px-3 lg:px-6 py-1.5 lg:py-2 border-b overflow-x-auto whitespace-nowrap"
+      style={{
+        background: "linear-gradient(90deg, oklch(0.34 0.13 155 / 0.45) 0%, oklch(0.2 0.04 265 / 0.3) 100%)",
+        borderColor: "oklch(0.55 0.16 155 / 0.35)",
+      }}
+    >
+      <span
+        className="flex-none inline-flex items-center gap-1.5 uppercase tracking-widest text-[9px] lg:text-[11px] font-bold"
+        style={{ color: "oklch(0.85 0.16 155)" }}
+      >
+        <CircleCheckBig className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+        Concluídos agora
+      </span>
       {items.slice(0, 6).map((it, i) => (
-        <span key={`${it.bed}-${it.at}-${i}`} className="flex-none">
-          Leito {it.bed} concluído há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
+        <span
+          key={`${it.bed}-${it.at}-${i}`}
+          className="activity-chip flex-none inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] lg:text-sm font-semibold"
+          style={{
+            background: "oklch(0.45 0.16 155 / 0.75)",
+            color: "oklch(0.97 0.05 155)",
+            boxShadow: "inset 0 0 0 1px oklch(0.7 0.18 155 / 0.5)",
+          }}
+        >
+          <span className="font-bold">Leito {it.bed}</span>
+          <span className="opacity-70 tabular-nums">
+            há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
+          </span>
         </span>
       ))}
     </div>
   );
 }
 
-// Faixa no rodapé com o resumo do dia (só desktop).
+// Rodapé "scoreboard" com o resumo do dia.
 function DaySummaryFooter({ count, avgMin }: { count: number; avgMin: number | null }) {
   return (
-    <div className="flex flex-none flex-wrap items-center justify-center gap-1 px-3 lg:px-6 py-1.5 border-t border-white/10 text-[10px] lg:text-[11px] text-white/45 text-center">
-      <span>Hoje:</span>
-      <span className="font-semibold text-white/70">{count}</span>
-      <span>altas concluídas</span>
+    <div
+      className="flex flex-none items-center justify-center gap-5 lg:gap-12 px-3 lg:px-6 py-2 lg:py-2.5 border-t border-white/15"
+      style={{ background: "oklch(0.15 0.02 265)" }}
+    >
+      <span className="uppercase tracking-[0.25em] text-[9px] lg:text-[11px] text-white/40 font-bold">Hoje</span>
+      <div className="flex items-baseline gap-2">
+        <span
+          className="text-3xl lg:text-5xl leading-none tabular-nums"
+          style={{ color: "oklch(0.8 0.19 155)", fontFamily: "'Bebas Neue', sans-serif" }}
+        >
+          {count}
+        </span>
+        <span className="uppercase tracking-widest text-[9px] lg:text-xs text-white/55 font-semibold">
+          altas concluídas
+        </span>
+      </div>
       {avgMin != null && (
         <>
-          <span className="mx-1 text-white/20">·</span>
-          <span>tempo médio</span>
-          <span className="font-semibold text-white/70">{avgMin}min</span>
+          <span className="text-white/15 text-2xl">·</span>
+          <div className="flex items-baseline gap-2">
+            <span
+              className="text-3xl lg:text-5xl leading-none tabular-nums"
+              style={{ color: "oklch(0.82 0.16 230)", fontFamily: "'Bebas Neue', sans-serif" }}
+            >
+              {avgMin}
+              <span className="text-base lg:text-2xl">min</span>
+            </span>
+            <span className="uppercase tracking-widest text-[9px] lg:text-xs text-white/55 font-semibold">
+              tempo médio
+            </span>
+          </div>
         </>
       )}
     </div>
