@@ -1,53 +1,38 @@
-# Unificar "Colaboradores" e "Time Altas" na TV
+# Separar claramente "Colaboradores" (Listo) e "Time Altas" (healthcon)
 
-Você está certo: hoje as duas tabelas mostram praticamente a mesma coisa.
+Entendido: são **dois times diferentes** com fontes diferentes. A sobreposição não é a mesma pessoa duplicada — é o mesmo *rótulo de status* aparecendo nos dois painéis, o que dá a impressão de tabelas iguais.
 
-## O que está duplicado (confirmado no código)
+## O que muda
 
-- **Colaboradores** (`StaffPanel`): pessoas vindas do Listo (`listo:user:*`), mostradas **só quando estão ativas** — status `DESMONTANDO` ou `EM ALTA`, com leito e tempo.
-- **Time Altas** (`BreaksPanel`): pessoas vindas do healthcon (`painel:staff:*`), mostradas **sempre**, e o status derivado já inclui `EM ALTA`, `A CAMINHO`, `DESMONTANDO` — exatamente os mesmos estados do painel de cima — mais `CAFÉ / ALMOÇO / JANTAR / SEM ALTA / DESLOGOU`.
+Mantemos os dois painéis, mas com papéis bem definidos:
 
-Ou seja: quem está trabalhando aparece **nas duas listas ao mesmo tempo**, com o mesmo rótulo. A diferença real é só a origem do dado (Listo x healthcon) e a comparação de nomes por primeiro+último nome, que já existe para casar as duas fontes.
+**Colaboradores (Listo)** — quem executa a limpeza terminal e a desmontagem
+- Mostra apenas quem está **ativo agora**: `EM ALTA`, `A CAMINHO`, `DESMONTANDO`, com leito e tempo.
+- **Nunca** mostra `DESLOGOU`, `CAFÉ`, `ALMOÇO`, `JANTAR` — esses estados não vêm do Listo.
+- Subtítulo: "Higienização terminal e desmontagem — Listo".
 
-Isso também explica ruído: nomes escritos diferente nas duas fontes podem gerar a mesma pessoa duas vezes na tela, e o KPI "Colaboradores Ativos" conta só a lista do Listo.
+**Time Altas (healthcon)** — o time de campo das altas
+- Mostra o time inteiro logado, incluindo `DESLOGOU`, `CAFÉ`, `ALMOÇO`, `JANTAR`, `SEM ALTA`.
+- Continua priorizando o que o Listo mostra (`EM ALTA` / `A CAMINHO` / `DESMONTANDO`) quando a pessoa está de fato trabalhando, para não virar "deslogou" por engano.
+- `DESLOGOU` é **exclusivo deste painel**.
+- Subtítulo: "Login e pausas do time de altas — healthcon".
 
-## Proposta: um único painel "Equipe"
+## Diferenciação visual (para não parecerem a mesma tabela)
 
-Um painel só, ocupando toda a coluna da direita, com a lista completa do time e o status real de cada um — sem repetição.
+- Cada painel ganha uma **cor de borda/etiqueta de origem** distinta e um badge pequeno no cabeçalho: `LISTO` e `HEALTHCON`.
+- Colaboradores usa layout com **leito em destaque** (número grande à esquerda); Time Altas usa layout de **nome + estado**, sem coluna de leito.
+- Os rótulos compartilhados (`EM ALTA`, `A CAMINHO`, `DESMONTANDO`) usam a mesma cor nos dois painéis, mantendo a leitura consistente.
 
-```text
-EQUIPE                                    12
---------------------------------------------
-EM CAMPO (5)
-  Hema Oliveira      EM ALTA · 305    12m
-  Ana Souza          A CAMINHO · 812   4m
-  Carlos Lima        DESMONTANDO · 5A  8m
-PAUSAS (2)
-  Joao Pedro         ALMOÇO           47m
-  Marcia Silva       CAFÉ         24m (!)
-DISPONÍVEIS / SEM ALTA (3)
-  ...
-FORA DE TURNO (2)
-  ...
-```
+## Se depois você quiser juntar em um painel só
 
-Regras:
-- Uma pessoa aparece **uma única vez**. A união é feita por `external_id` quando existir e, se não, pela comparação de nome já usada hoje (primeiro + último nome, sem "de/da/dos").
-- Prioridade do status: o que o Listo mostra (em alta / a caminho / desmontando) vence o status do healthcon — mesma regra que já existe.
-- Quem está em campo mostra **leito + tempo**; quem está em pausa mostra tempo com alerta quando passa do limite; fora de turno fica esmaecido no fim.
-- Cabeçalhos de grupo com contagem, para leitura rápida de longe.
-- KPI "Colaboradores Ativos" passa a contar em campo a partir dessa lista unificada (número deixa de divergir da tela).
-
-## Alternativa, se preferir manter separado
-
-Manter dois painéis, mas eliminar a sobreposição: "Em Campo" mostra só quem está trabalhando, e "Pausas & Fora de Turno" mostra **apenas** café/almoço/jantar/sem alta/deslogou — nunca quem já aparece em cima.
+Fica registrado o critério: painel único "Equipe" com duas seções internas rotuladas por origem — bloco **Listo (execução)** em cima e bloco **Time Altas (healthcon)** embaixo, e `DESLOGOU` só pode aparecer no bloco do Time Altas. Não fazemos isso agora.
 
 ## Detalhes técnicos
 
-- `src/routes/tv.tsx`: substituir `staffRows` + `timeAltasRows` por um único `teamRows` (união deduplicada + status priorizado + grupo), e trocar `StaffPanel` + `BreaksPanel` por um `TeamPanel` com seções agrupadas e `AutoScroll`.
-- Grid da direita passa a ter um único bloco `lg:col-start-9 lg:col-span-4 lg:row-span-4`, removendo a lógica condicional de rows que hoje existe para os dois painéis.
-- Nenhuma mudança de banco, de sync do Listo ou de segurança.
-
-## Decisão necessária
-
-Prefere o **painel único "Equipe"** (recomendado) ou manter **dois painéis sem sobreposição**?
+- `src/routes/tv.tsx`:
+  - `staffRows` (Listo) permanece filtrando apenas `desmontando` / `em_alta`; adicionar `a_caminho` para ficar completo.
+  - `timeAltasRows` (healthcon) permanece como está, incluindo `deslogou`.
+  - Garantir por tipo que `StaffPanel` não aceite os estados de pausa/deslogou (tipo `StaffActivity` restrito), e que `deslogou` só exista em `TimeAltasKind`.
+  - Adicionar badge de origem e ajustar o layout de linha de cada painel.
+- KPI "Colaboradores Ativos" continua contando a lista do Listo (execução real).
+- Nenhuma mudança de banco, de sync ou de segurança.
