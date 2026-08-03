@@ -421,11 +421,11 @@ function TvPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inFlight.length, enRoute.length, paused.length, completedIssues.length, activeCount]);
 
-  const trendInFlight = kpiTrend(kpiHistoryRef.current, "inFlight", inFlight.length);
-  const trendEnRoute = kpiTrend(kpiHistoryRef.current, "enRoute", enRoute.length);
-  const trendPaused = kpiTrend(kpiHistoryRef.current, "paused", paused.length);
-  const trendCompletedIssues = kpiTrend(kpiHistoryRef.current, "completedIssues", completedIssues.length);
-  const trendActiveCount = kpiTrend(kpiHistoryRef.current, "activeCount", activeCount);
+  const trendInFlight = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "inFlight", inFlight.length) : null;
+  const trendEnRoute = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "enRoute", enRoute.length) : null;
+  const trendPaused = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "paused", paused.length) : null;
+  const trendCompletedIssues = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "completedIssues", completedIssues.length) : null;
+  const trendActiveCount = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "activeCount", activeCount) : null;
 
   // Modo noturno: escurece um pouco a tela entre 22h e 6h (horário de menor
   // movimento), pra cansar menos a vista e poupar um pouco a TV de madrugada.
