@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           external_id: string | null
           id: string
+          last_answer_id: number | null
           pause_reason: string | null
           priority: boolean
           status: Database["public"]["Enums"]["discharge_status"]
@@ -33,6 +34,7 @@ export type Database = {
           created_at?: string
           external_id?: string | null
           id?: string
+          last_answer_id?: number | null
           pause_reason?: string | null
           priority?: boolean
           status?: Database["public"]["Enums"]["discharge_status"]
@@ -45,6 +47,7 @@ export type Database = {
           created_at?: string
           external_id?: string | null
           id?: string
+          last_answer_id?: number | null
           pause_reason?: string | null
           priority?: boolean
           status?: Database["public"]["Enums"]["discharge_status"]
