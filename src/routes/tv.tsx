@@ -164,21 +164,22 @@ function TvPage() {
     let atividadeMudou = false;
 
     for (const d of discharges) {
-      const before = prev.get(d.external_id);
+      const key = d.external_id ?? d.id;
+      const before = prev.get(key);
 
-      if (d.status === "in_progress" && !cleaningStartRef.current.has(d.external_id)) {
-        cleaningStartRef.current.set(d.external_id, new Date(d.status_updated_at).getTime());
+      if (d.status === "in_progress" && !cleaningStartRef.current.has(key)) {
+        cleaningStartRef.current.set(key, new Date(d.status_updated_at).getTime());
       }
 
       if (before !== undefined && before !== d.status) {
-        flashVersionRef.current.set(d.external_id, (flashVersionRef.current.get(d.external_id) ?? 0) + 1);
+        flashVersionRef.current.set(key, (flashVersionRef.current.get(key) ?? 0) + 1);
         mudou = true;
 
         if (FINAL_STATUSES.has(d.status) && !FINAL_STATUSES.has(before)) {
           recentActivityRef.current = [{ bed: d.bed_number, at: Date.now() }, ...recentActivityRef.current].slice(0, 12);
           atividadeMudou = true;
 
-          const startedAt = cleaningStartRef.current.get(d.external_id);
+          const startedAt = cleaningStartRef.current.get(key);
           const durationMin = startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 60000)) : null;
           const cur = daySummaryRef.current;
           const next: DaySummary = {
@@ -193,7 +194,7 @@ function TvPage() {
         }
       }
     }
-    prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
+    prevStatusRef.current = new Map<string, string>(discharges.map((d) => [d.external_id ?? d.id, d.status as string]));
     if (mudou) forceFlashRerender((n) => n + 1);
     if (atividadeMudou) forceActivityRerender((n) => n + 1);
   }, [discharges]);
@@ -694,7 +695,7 @@ function BedsPanel({
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-                  const version = flashVersions?.get(d.external_id) ?? 0;
+                  const version = flashVersions?.get(d.external_id ?? d.id) ?? 0;
                   const isWorst = !!worstId && d.external_id === worstId;
                   const rowClass = [version > 0 ? "flash-row" : "", isWorst ? "pulse-critical" : ""]
                     .filter(Boolean)
