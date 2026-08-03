@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Moon, CircleCheckBig } from "lucide-react";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -155,8 +155,16 @@ function TvPage() {
   // Feed de atividade recente (últimas conclusões) e resumo do dia.
   const recentActivityRef = useRef<ActivityItem[]>([]);
   const [, forceActivityRerender] = useState(0);
-  const daySummaryRef = useRef<DaySummary>(loadDaySummary());
+  // Inicia vazio pra o HTML do servidor bater com o do cliente; o valor real do
+  // localStorage entra depois da hidratação (efeito abaixo).
+  const daySummaryRef = useRef<DaySummary>({ dateKey: todayKey(), count: 0, totalMin: 0, sampled: 0 });
   const [daySummary, setDaySummary] = useState<DaySummary>(daySummaryRef.current);
+
+  useEffect(() => {
+    const stored = loadDaySummary();
+    daySummaryRef.current = stored;
+    setDaySummary(stored);
+  }, []);
 
   useEffect(() => {
     const prev = prevStatusRef.current;
@@ -391,7 +399,12 @@ function TvPage() {
 
   // Amostra o histórico de KPIs (no máximo 1x por render relevante — o efeito
   // só dispara quando algum desses valores muda de verdade).
-  const kpiHistoryRef = useRef<KpiSnapshot[]>(loadKpiHistory());
+  const kpiHistoryRef = useRef<KpiSnapshot[]>([]);
+  const [kpiHydrated, setKpiHydrated] = useState(false);
+  useEffect(() => {
+    kpiHistoryRef.current = [...loadKpiHistory(), ...kpiHistoryRef.current];
+    setKpiHydrated(true);
+  }, []);
   useEffect(() => {
     const snap: KpiSnapshot = {
       t: Date.now(),
@@ -408,11 +421,11 @@ function TvPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inFlight.length, enRoute.length, paused.length, completedIssues.length, activeCount]);
 
-  const trendInFlight = kpiTrend(kpiHistoryRef.current, "inFlight", inFlight.length);
-  const trendEnRoute = kpiTrend(kpiHistoryRef.current, "enRoute", enRoute.length);
-  const trendPaused = kpiTrend(kpiHistoryRef.current, "paused", paused.length);
-  const trendCompletedIssues = kpiTrend(kpiHistoryRef.current, "completedIssues", completedIssues.length);
-  const trendActiveCount = kpiTrend(kpiHistoryRef.current, "activeCount", activeCount);
+  const trendInFlight = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "inFlight", inFlight.length) : null;
+  const trendEnRoute = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "enRoute", enRoute.length) : null;
+  const trendPaused = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "paused", paused.length) : null;
+  const trendCompletedIssues = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "completedIssues", completedIssues.length) : null;
+  const trendActiveCount = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "activeCount", activeCount) : null;
 
   // Modo noturno: escurece um pouco a tela entre 22h e 6h (horário de menor
   // movimento), pra cansar menos a vista e poupar um pouco a TV de madrugada.
@@ -425,7 +438,10 @@ function TvPage() {
   return (
     <div
       className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative"
-      style={{ filter: isNight ? "brightness(0.72)" : undefined, transition: "filter 3s ease" }}
+      style={{
+        filter: isNight ? "brightness(0.8) saturate(0.9)" : undefined,
+        transition: "filter 3s ease",
+      }}
     >
       <div
         className="absolute top-0 left-0 right-0 h-px"
@@ -438,7 +454,21 @@ function TvPage() {
         <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
         </h1>
-        <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
+        <div className="flex items-center justify-between lg:justify-end gap-2.5 lg:gap-3.5">
+          {isNight && (
+            <span
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] lg:text-xs font-bold uppercase tracking-widest"
+              style={{
+                background: "oklch(0.4 0.13 275 / 0.55)",
+                color: "oklch(0.88 0.09 275)",
+                boxShadow: "inset 0 0 0 1px oklch(0.7 0.14 275 / 0.6)",
+              }}
+              title="Brilho reduzido automaticamente entre 22h e 6h"
+            >
+              <Moon className="w-3.5 h-3.5" />
+              Modo noturno
+            </span>
+          )}
           <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
@@ -474,6 +504,7 @@ function TvPage() {
           empty="Nenhum leito em higienização terminal."
           flashVersions={flashVersions}
           worstId={worstId}
+          goalMinutes={60}
           className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
         />
         <BedsPanel
@@ -486,8 +517,7 @@ function TvPage() {
           empty="Nenhum leito a caminho."
           flashVersions={flashVersions}
           worstId={worstId}
-          caption="meta: até 15min"
-          captionWarn={enRoute.some((d) => elapsedMinutes(d.status_updated_at, now) > 15)}
+          goalMinutes={15}
           className="order-3 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
         />
         <BedsPanel
@@ -500,10 +530,10 @@ function TvPage() {
           empty="Nenhuma alta parada."
           flashVersions={flashVersions}
           worstId={worstId}
-          caption="meta: até 30min"
-          captionWarn={paused.some((d) => elapsedMinutes(d.status_updated_at, now) > 30)}
+          goalMinutes={30}
           className="order-4 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
+
         <BedsPanel
           title="Leitos Pausados"
           icon={<CirclePause className="w-4 h-4 text-white/60" />}
@@ -572,43 +602,58 @@ function KpiCard({
 }) {
   const showTrend = trend != null && trend !== 0;
   const trendUp = (trend ?? 0) > 0;
-  const trendColor = !showTrend
-    ? undefined
-    : higherIsBad === undefined
-      ? "rgba(255,255,255,0.45)"
-      : (higherIsBad ? trendUp : !trendUp)
-        ? "oklch(0.7 0.2 25)"
-        : "oklch(0.72 0.19 155)";
+  // "worse" = indicador ruim que subiu (ou bom que caiu)
+  const worse = showTrend && higherIsBad !== undefined && (higherIsBad ? trendUp : !trendUp);
+  const better = showTrend && higherIsBad !== undefined && !worse;
+  const trendBg = worse
+    ? "oklch(0.5 0.2 25 / 0.85)"
+    : better
+      ? "oklch(0.48 0.17 155 / 0.8)"
+      : "oklch(0.35 0.02 265 / 0.8)";
+  const trendFg = worse
+    ? "oklch(0.95 0.06 25)"
+    : better
+      ? "oklch(0.95 0.06 155)"
+      : "rgba(255,255,255,0.75)";
 
   return (
     <div
-      className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
+      className={`relative rounded-xl px-3 lg:px-4 py-2 lg:py-2.5 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-2 ${worse ? "kpi-alert" : ""}`}
       style={{
         background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
         borderColor: accent.replace(")", " / 0.45)"),
-        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
+        boxShadow: worse
+          ? undefined
+          : `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="flex items-center gap-1.5">
-        <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
+      <div className="min-w-0">
+        <div className="text-[10px] lg:text-xs uppercase tracking-widest text-white/80 font-semibold leading-tight">
           {label}
         </div>
         {showTrend && (
+          <div className="text-[8px] lg:text-[9px] uppercase tracking-widest text-white/35 leading-tight mt-0.5">
+            vs 1h atrás
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {showTrend && (
           <span
-            className="inline-flex items-center text-[9px] lg:text-[10px] font-mono tabular-nums font-semibold shrink-0"
-            style={{ color: trendColor }}
+            className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-sm lg:text-lg font-bold tabular-nums leading-none"
+            style={{ background: trendBg, color: trendFg }}
             title="Variação em relação a 1h atrás"
           >
-            {trendUp ? "↑" : "↓"}
+            <span className="text-[11px] lg:text-sm">{trendUp ? "▲" : "▼"}</span>
             {Math.abs(trend!)}
           </span>
         )}
-      </div>
-      <div
-        className="text-2xl lg:text-4xl tabular-nums leading-none"
-        style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
-      >
-        {value}
+        <div
+          className="text-3xl lg:text-5xl tabular-nums leading-none"
+          style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
+        >
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -633,8 +678,7 @@ function BedsPanel({
   empty,
   flashVersions,
   className,
-  caption,
-  captionWarn,
+  goalMinutes,
   worstId,
 }: {
   title: string;
@@ -647,31 +691,43 @@ function BedsPanel({
   empty: string;
   flashVersions?: Map<string, number>;
   className?: string;
-  /** Legenda opcional (ex: "meta: até 15min"), exibida abaixo do título. */
-  caption?: string;
-  /** Se true, pinta a legenda de alerta (algo já passou da meta). */
-  captionWarn?: boolean;
+  /** Meta em minutos (ex: 15). Vira uma pílula "META 15MIN" ao lado do título. */
+  goalMinutes?: number;
   /** external_id do leito com destaque de "atenção máxima" (pior caso geral). */
   worstId?: string | null;
 }) {
+  const overGoal =
+    goalMinutes != null
+      ? rows.filter((d) => elapsedMinutes(d.status_updated_at, nowMs) > goalMinutes).length
+      : 0;
+  const goalWarn = overGoal > 0;
+
   return (
     <section className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-bold flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-base lg:text-lg font-bold flex items-center gap-2 min-w-0">
             {icon}
-            {title}
+            <span className="truncate">{title}</span>
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
-        </div>
-        {caption && (
-          <div
-            className="text-[9px] lg:text-[10px] mt-0.5"
-            style={{ color: captionWarn ? "oklch(0.75 0.2 25)" : "rgba(255,255,255,0.35)" }}
-          >
-            {caption}
+          <div className="flex items-center gap-2 shrink-0">
+            {goalMinutes != null && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] lg:text-xs font-bold uppercase tracking-widest whitespace-nowrap ${goalWarn ? "goal-warn" : ""}`}
+                style={{
+                  background: goalWarn ? "oklch(0.5 0.2 25 / 0.85)" : "oklch(0.42 0.15 155 / 0.7)",
+                  color: goalWarn ? "oklch(0.96 0.06 25)" : "oklch(0.94 0.08 155)",
+                }}
+                title={`Meta: até ${goalMinutes} minutos`}
+              >
+                {goalWarn ? `${overGoal} fora da meta ${goalMinutes}min` : `Meta ${goalMinutes}min`}
+              </span>
+            )}
+            <span className="rounded-full bg-white/12 px-2.5 py-0.5 text-xs lg:text-sm font-bold tabular-nums text-white/90">
+              {rows.length}
+            </span>
           </div>
-        )}
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -705,17 +761,26 @@ function BedsPanel({
                       key={`${d.id}-v${version}`}
                       className={rowClass || undefined}
                       style={{
-                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
+                        background: isWorst
+                          ? "oklch(0.42 0.21 25 / 0.55)"
+                          : overtime && tone === "green"
+                            ? "oklch(0.4 0.13 55 / 0.3)"
+                            : toneBg[tone],
+                        borderLeft: isWorst ? "6px solid oklch(0.68 0.24 25)" : undefined,
                       }}
                     >
-                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
+                      <td
+                        className={`px-1.5 lg:px-4 py-1.5 font-bold border-t border-white/5 ${
+                          isWorst ? "text-base lg:text-xl" : "text-[13px] lg:text-base truncate"
+                        }`}
+                      >
                         {d.bed_number}
                         {isWorst && (
                           <span
-                            className="ml-1 lg:ml-2 text-[9px] font-semibold uppercase tracking-widest align-middle"
-                            style={{ color: "oklch(0.75 0.22 25)" }}
+                            className="ml-1.5 lg:ml-2 inline-block rounded px-1.5 py-0.5 text-[9px] lg:text-[11px] font-extrabold uppercase tracking-widest align-middle whitespace-nowrap"
+                            style={{ background: "oklch(0.6 0.24 25)", color: "oklch(0.99 0 0)" }}
                           >
-                            ⚠<span className="hidden lg:inline"> atenção máxima</span>
+                            ⚠ Atenção máxima
                           </span>
                         )}
                       </td>
@@ -915,33 +980,78 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
   );
 }
 
-// Faixa discreta com as últimas conclusões, logo abaixo do cabeçalho (só desktop).
+// Faixa de atividade recente — chips verdes bem visíveis.
 function ActivityFeed({ items, nowMs }: { items: ActivityItem[]; nowMs: number }) {
   if (items.length === 0) return null;
   return (
-    <div className="flex flex-none items-center gap-3 lg:gap-4 px-3 lg:px-6 py-1 border-b border-white/5 text-[10px] lg:text-[11px] text-white/40 overflow-x-auto whitespace-nowrap">
-      <span className="flex-none uppercase tracking-widest text-white/25 text-[8px] lg:text-[9px]">Atividade recente</span>
+    <div
+      className="flex flex-none items-center gap-2 lg:gap-3 px-3 lg:px-6 py-1.5 lg:py-2 border-b overflow-x-auto whitespace-nowrap"
+      style={{
+        background: "linear-gradient(90deg, oklch(0.34 0.13 155 / 0.45) 0%, oklch(0.2 0.04 265 / 0.3) 100%)",
+        borderColor: "oklch(0.55 0.16 155 / 0.35)",
+      }}
+    >
+      <span
+        className="flex-none inline-flex items-center gap-1.5 uppercase tracking-widest text-[9px] lg:text-[11px] font-bold"
+        style={{ color: "oklch(0.85 0.16 155)" }}
+      >
+        <CircleCheckBig className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
+        Concluídos agora
+      </span>
       {items.slice(0, 6).map((it, i) => (
-        <span key={`${it.bed}-${it.at}-${i}`} className="flex-none">
-          Leito {it.bed} concluído há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
+        <span
+          key={`${it.bed}-${it.at}-${i}`}
+          className="activity-chip flex-none inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] lg:text-sm font-semibold"
+          style={{
+            background: "oklch(0.45 0.16 155 / 0.75)",
+            color: "oklch(0.97 0.05 155)",
+            boxShadow: "inset 0 0 0 1px oklch(0.7 0.18 155 / 0.5)",
+          }}
+        >
+          <span className="font-bold">Leito {it.bed}</span>
+          <span className="opacity-70 tabular-nums">
+            há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
+          </span>
         </span>
       ))}
     </div>
   );
 }
 
-// Faixa no rodapé com o resumo do dia (só desktop).
+// Rodapé "scoreboard" com o resumo do dia.
 function DaySummaryFooter({ count, avgMin }: { count: number; avgMin: number | null }) {
   return (
-    <div className="flex flex-none flex-wrap items-center justify-center gap-1 px-3 lg:px-6 py-1.5 border-t border-white/10 text-[10px] lg:text-[11px] text-white/45 text-center">
-      <span>Hoje:</span>
-      <span className="font-semibold text-white/70">{count}</span>
-      <span>altas concluídas</span>
+    <div
+      className="flex flex-none items-center justify-center gap-5 lg:gap-12 px-3 lg:px-6 py-2 lg:py-2.5 border-t border-white/15"
+      style={{ background: "oklch(0.15 0.02 265)" }}
+    >
+      <span className="uppercase tracking-[0.25em] text-[9px] lg:text-[11px] text-white/40 font-bold">Hoje</span>
+      <div className="flex items-baseline gap-2">
+        <span
+          className="text-3xl lg:text-5xl leading-none tabular-nums"
+          style={{ color: "oklch(0.8 0.19 155)", fontFamily: "'Bebas Neue', sans-serif" }}
+        >
+          {count}
+        </span>
+        <span className="uppercase tracking-widest text-[9px] lg:text-xs text-white/55 font-semibold">
+          altas concluídas
+        </span>
+      </div>
       {avgMin != null && (
         <>
-          <span className="mx-1 text-white/20">·</span>
-          <span>tempo médio</span>
-          <span className="font-semibold text-white/70">{avgMin}min</span>
+          <span className="text-white/15 text-2xl">·</span>
+          <div className="flex items-baseline gap-2">
+            <span
+              className="text-3xl lg:text-5xl leading-none tabular-nums"
+              style={{ color: "oklch(0.82 0.16 230)", fontFamily: "'Bebas Neue', sans-serif" }}
+            >
+              {avgMin}
+              <span className="text-base lg:text-2xl">min</span>
+            </span>
+            <span className="uppercase tracking-widest text-[9px] lg:text-xs text-white/55 font-semibold">
+              tempo médio
+            </span>
+          </div>
         </>
       )}
     </div>
