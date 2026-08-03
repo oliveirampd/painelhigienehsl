@@ -594,7 +594,7 @@ function KpiCard({
         </div>
         {showTrend && (
           <span
-            className="hidden lg:inline-flex items-center text-[10px] font-mono tabular-nums font-semibold"
+            className="inline-flex items-center text-[9px] lg:text-[10px] font-mono tabular-nums font-semibold shrink-0"
             style={{ color: trendColor }}
             title="Variação em relação a 1h atrás"
           >
@@ -665,7 +665,7 @@ function BedsPanel({
         </div>
         {caption && (
           <div
-            className="hidden lg:block text-[10px] mt-0.5"
+            className="text-[9px] lg:text-[10px] mt-0.5"
             style={{ color: captionWarn ? "oklch(0.75 0.2 25)" : "rgba(255,255,255,0.35)" }}
           >
             {caption}
@@ -711,10 +711,10 @@ function BedsPanel({
                         {d.bed_number}
                         {isWorst && (
                           <span
-                            className="hidden lg:inline ml-2 text-[9px] font-semibold uppercase tracking-widest align-middle"
+                            className="ml-1 lg:ml-2 text-[9px] font-semibold uppercase tracking-widest align-middle"
                             style={{ color: "oklch(0.75 0.22 25)" }}
                           >
-                            ⚠ atenção máxima
+                            ⚠<span className="hidden lg:inline"> atenção máxima</span>
                           </span>
                         )}
                       </td>
@@ -918,8 +918,8 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
 function ActivityFeed({ items, nowMs }: { items: ActivityItem[]; nowMs: number }) {
   if (items.length === 0) return null;
   return (
-    <div className="hidden lg:flex flex-none items-center gap-4 px-6 py-1 border-b border-white/5 text-[11px] text-white/40 overflow-hidden whitespace-nowrap">
-      <span className="flex-none uppercase tracking-widest text-white/25 text-[9px]">Atividade recente</span>
+    <div className="flex flex-none items-center gap-3 lg:gap-4 px-3 lg:px-6 py-1 border-b border-white/5 text-[10px] lg:text-[11px] text-white/40 overflow-x-auto whitespace-nowrap">
+      <span className="flex-none uppercase tracking-widest text-white/25 text-[8px] lg:text-[9px]">Atividade recente</span>
       {items.slice(0, 6).map((it, i) => (
         <span key={`${it.bed}-${it.at}-${i}`} className="flex-none">
           Leito {it.bed} concluído há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
@@ -932,7 +932,7 @@ function ActivityFeed({ items, nowMs }: { items: ActivityItem[]; nowMs: number }
 // Faixa no rodapé com o resumo do dia (só desktop).
 function DaySummaryFooter({ count, avgMin }: { count: number; avgMin: number | null }) {
   return (
-    <div className="hidden lg:flex flex-none items-center justify-center gap-1 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/45">
+    <div className="flex flex-none flex-wrap items-center justify-center gap-1 px-3 lg:px-6 py-1.5 border-t border-white/10 text-[10px] lg:text-[11px] text-white/45 text-center">
       <span>Hoje:</span>
       <span className="font-semibold text-white/70">{count}</span>
       <span>altas concluídas</span>
