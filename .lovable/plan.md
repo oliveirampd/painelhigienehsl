@@ -1,70 +1,53 @@
-# Melhorias propostas — Painel de Higienização Terminal
+# Unificar "Colaboradores" e "Time Altas" na TV
 
-## O que está bom hoje
-- Sincronização em tempo real via Supabase Realtime funciona.
-- TV já tem KPIs, auto-scroll, modo noturno, flash de status e resumo do dia.
-- Integração Listo360 está ativa e mapeia leitos/unidades corretamente.
-- Segurança básica foi aplicada (secret no sync, RLS restrito, server functions no control).
+Você está certo: hoje as duas tabelas mostram praticamente a mesma coisa.
 
-## Onde podemos ir além
+## O que está duplicado (confirmado no código)
 
-### 1. Layout da TV (visibilidade a distância)
-Problema: a TV usa muitas seções pequenas, fontes finas e tabelas densas. De longe (corredor de hospital) fica difícil de ler.
+- **Colaboradores** (`StaffPanel`): pessoas vindas do Listo (`listo:user:*`), mostradas **só quando estão ativas** — status `DESMONTANDO` ou `EM ALTA`, com leito e tempo.
+- **Time Altas** (`BreaksPanel`): pessoas vindas do healthcon (`painel:staff:*`), mostradas **sempre**, e o status derivado já inclui `EM ALTA`, `A CAMINHO`, `DESMONTANDO` — exatamente os mesmos estados do painel de cima — mais `CAFÉ / ALMOÇO / JANTAR / SEM ALTA / DESLOGOU`.
 
-Ideias:
-- **Layout "Quadro de Operações"**: cabeçalho gigante com apenas 4 blocos (Em Limpeza, A Caminho, Altas Paradas, Leitos Pausados). Cada bloco vira um card de grade com número do leito em fonte grande, colaborador e tempo abaixo. Nada de tabelas — só cards quadrados.
-- **Layout "Trilha de Leitos"**: uma única coluna horizontal (estilo linha do tempo) mostrando cada leito como um card de status. Ótimo para TVs acima do corredor.
-- **Layout "Números Grandes"**: oculta listas e mostra só KPIs em tamanho enorme (tipo painel de fábrica), com um alerta piscando para o leito mais crítico.
-- Adicionar **pictogramas de status** (ícones grandes de "limpo", "alerta", "pausa") ao lado de cada leito.
-- Usar **cores mais saturadas** para status críticos e garantir contraste WCAG AAA para leitura à distância.
-- Separar visualmente "Colaboradores" e "Time Altas" em abas ou mini-painéis menos dominantes.
+Ou seja: quem está trabalhando aparece **nas duas listas ao mesmo tempo**, com o mesmo rótulo. A diferença real é só a origem do dado (Listo x healthcon) e a comparação de nomes por primeiro+último nome, que já existe para casar as duas fontes.
 
-### 2. Controle operador (usabilidade)
-Problema: o formulário mistura criação e atualização, o que confunde. A lista de altas ativas cresce sem filtros.
+Isso também explica ruído: nomes escritos diferente nas duas fontes podem gerar a mesma pessoa duas vezes na tela, e o KPI "Colaboradores Ativos" conta só a lista do Listo.
 
-Ideias:
-- Dividir a tela em **"Nova Alta"** e **"Altas Ativas"** com ações contextuais por leito.
-- Adicionar busca/filtro por leito, unidade ou colaborador.
-- Botão de **"Atribuir a mim"** com login rápido do colaborador (QR code ou seleção).
-- Campos de leito e unidade com **autocomplete** baseado nos últimos valores usados.
-- Confirmação antes de concluir uma alta (evita clique acidental).
-- Painel de **últimas ações** (log de quem alterou o quê e quando).
+## Proposta: um único painel "Equipe"
 
-### 3. Alertas e notificações
-- Som de alerta quando um leito passa de 30 min ou 60 min.
-- Notificação visual/flutuante no Control quando um novo leito entra em alta.
-- Badge no browser/tab com número de leitos críticos.
-- Email/alerta para supervisor quando muitas altas ficam paradas (configurável).
+Um painel só, ocupando toda a coluna da direita, com a lista completa do time e o status real de cada um — sem repetição.
 
-### 4. Dados e histórico
-- Gráfico de tempo médio por turno (manhã/tarde/noite) na TV.
-- Ranking de colaboradores por tempo médio de conclusão.
-- Histórico de conclusões do dia (não só contagem e média).
-- Exportar CSV do dia para gestão.
-- Filtro de "minhas altas" para cada colaborador logado.
+```text
+EQUIPE                                    12
+--------------------------------------------
+EM CAMPO (5)
+  Hema Oliveira      EM ALTA · 305    12m
+  Ana Souza          A CAMINHO · 812   4m
+  Carlos Lima        DESMONTANDO · 5A  8m
+PAUSAS (2)
+  Joao Pedro         ALMOÇO           47m
+  Marcia Silva       CAFÉ         24m (!)
+DISPONÍVEIS / SEM ALTA (3)
+  ...
+FORA DE TURNO (2)
+  ...
+```
 
-### 5. Robustez e integração
-- Tratar fusos horários de forma explícita (BRT/UTC) na integração Listo360.
-- Página de status da integração (último sync, erros, quantidade de registros).
-- Fallback quando o sync falhar: mostrar aviso "dados desatualizados" na TV.
-- Validação de duplicatas (evitar duas altas ativas para o mesmo leito).
+Regras:
+- Uma pessoa aparece **uma única vez**. A união é feita por `external_id` quando existir e, se não, pela comparação de nome já usada hoje (primeiro + último nome, sem "de/da/dos").
+- Prioridade do status: o que o Listo mostra (em alta / a caminho / desmontando) vence o status do healthcon — mesma regra que já existe.
+- Quem está em campo mostra **leito + tempo**; quem está em pausa mostra tempo com alerta quando passa do limite; fora de turno fica esmaecido no fim.
+- Cabeçalhos de grupo com contagem, para leitura rápida de longe.
+- KPI "Colaboradores Ativos" passa a contar em campo a partir dessa lista unificada (número deixa de divergir da tela).
 
-### 6. Login e acesso
-- Tela de login simples para operadores (não expor o Control anonimamente).
-- Perfis: operador, supervisor, TV (somente leitura).
-- Log de auditoria de alterações no banco.
+## Alternativa, se preferir manter separado
 
-### 7. Acessibilidade e performance
-- Aumentar contraste geral na TV.
-- Reduzir re-renderizações desnecessárias (memoização do grid).
-- Testar em viewport de TV 1920x1080 e 4K.
-- Suporte a modo retrato para monitores verticais.
+Manter dois painéis, mas eliminar a sobreposição: "Em Campo" mostra só quem está trabalhando, e "Pausas & Fora de Turno" mostra **apenas** café/almoço/jantar/sem alta/deslogou — nunca quem já aparece em cima.
 
-## Próximo passo sugerido
-Recomendo começar pelo **redesign do layout da TV**, pois é o que todo mundo olha o dia todo. Podemos propor 3 direções visuais diferentes para você escolher.
+## Detalhes técnicos
 
-## Decisões pendentes
-1. Qual layout de TV você prefere testar primeiro? (Quadro de Operações, Trilha de Leitos, Números Grandes ou manter/refinar o atual?)
-2. Quer adicionar sons de alerta na TV e/ou no Control?
-3. Quer login de operadores agora ou depois?
-4. Quer incluir ranking de colaboradores e gráficos de desempenho na TV?
+- `src/routes/tv.tsx`: substituir `staffRows` + `timeAltasRows` por um único `teamRows` (união deduplicada + status priorizado + grupo), e trocar `StaffPanel` + `BreaksPanel` por um `TeamPanel` com seções agrupadas e `AutoScroll`.
+- Grid da direita passa a ter um único bloco `lg:col-start-9 lg:col-span-4 lg:row-span-4`, removendo a lógica condicional de rows que hoje existe para os dois painéis.
+- Nenhuma mudança de banco, de sync do Listo ou de segurança.
+
+## Decisão necessária
+
+Prefere o **painel único "Equipe"** (recomendado) ou manter **dois painéis sem sobreposição**?
