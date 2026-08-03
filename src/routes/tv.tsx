@@ -155,8 +155,16 @@ function TvPage() {
   // Feed de atividade recente (últimas conclusões) e resumo do dia.
   const recentActivityRef = useRef<ActivityItem[]>([]);
   const [, forceActivityRerender] = useState(0);
-  const daySummaryRef = useRef<DaySummary>(loadDaySummary());
+  // Inicia vazio pra o HTML do servidor bater com o do cliente; o valor real do
+  // localStorage entra depois da hidratação (efeito abaixo).
+  const daySummaryRef = useRef<DaySummary>({ dateKey: todayKey(), count: 0, totalMin: 0, sampled: 0 });
   const [daySummary, setDaySummary] = useState<DaySummary>(daySummaryRef.current);
+
+  useEffect(() => {
+    const stored = loadDaySummary();
+    daySummaryRef.current = stored;
+    setDaySummary(stored);
+  }, []);
 
   useEffect(() => {
     const prev = prevStatusRef.current;
