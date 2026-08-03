@@ -454,7 +454,21 @@ function TvPage() {
         <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
         </h1>
-        <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
+        <div className="flex items-center justify-between lg:justify-end gap-2.5 lg:gap-3.5">
+          {isNight && (
+            <span
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] lg:text-xs font-bold uppercase tracking-widest"
+              style={{
+                background: "oklch(0.4 0.13 275 / 0.55)",
+                color: "oklch(0.88 0.09 275)",
+                boxShadow: "inset 0 0 0 1px oklch(0.7 0.14 275 / 0.6)",
+              }}
+              title="Brilho reduzido automaticamente entre 22h e 6h"
+            >
+              <Moon className="w-3.5 h-3.5" />
+              Modo noturno
+            </span>
+          )}
           <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
