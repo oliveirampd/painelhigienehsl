@@ -274,6 +274,7 @@ async function handle() {
             pause_reason: extractComment(a.answerComment),
             assigned_staff_id: assigned,
             status_updated_at: prevRow.status_updated_at,
+            completed_at: prevRow.completed_at,
             _debug: "mantido concluido (Leitos Pausados sem novidade real do Listo)",
           };
         }
