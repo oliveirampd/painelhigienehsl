@@ -179,3 +179,11 @@
   100% { opacity: 1; transform: translateX(0) scale(1); }
 }
 .activity-chip { animation: activity-chip-in 0.5s ease-out; }
+
+/* Faixa "Recentes" rolando para o lado */
+@keyframes marquee-x {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee { animation: marquee-x 30s linear infinite; }
+.animate-marquee:hover { animation-play-state: paused; }
