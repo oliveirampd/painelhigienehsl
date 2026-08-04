@@ -301,6 +301,13 @@ async function handle() {
       const limit = STALE_LIMIT_MIN[rawStatus];
       const status: DischargeStatus =
         limit !== undefined && ageMin >= limit ? "completed" : rawStatus;
+
+      // Horário real da conclusão: usa endTime do Listo quando disponível.
+      const completedAt: string | null =
+        status === "completed"
+          ? (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()).toISOString()
+          : null;
+
       if (status === "completed" && status !== rawStatus) {
         debugInfo = `auto-concluido (travado ha ${Math.round(ageMin / 60)}h, limite era ${Math.round((limit ?? 0) / 60)}h)`;
       }
