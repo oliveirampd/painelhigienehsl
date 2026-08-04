@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           assigned_staff_id: string | null
           bed_number: string
+          completed_at: string | null
           created_at: string
           external_id: string | null
           id: string
@@ -31,6 +32,7 @@ export type Database = {
         Insert: {
           assigned_staff_id?: string | null
           bed_number: string
+          completed_at?: string | null
           created_at?: string
           external_id?: string | null
           id?: string
@@ -44,6 +46,7 @@ export type Database = {
         Update: {
           assigned_staff_id?: string | null
           bed_number?: string
+          completed_at?: string | null
           created_at?: string
           external_id?: string | null
           id?: string
