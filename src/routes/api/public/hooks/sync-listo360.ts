@@ -210,11 +210,11 @@ async function handle() {
     async function fetchAllDischarges() {
       const pageSize = 1000;
       let from = 0;
-      const all: { external_id: string; status: string; status_updated_at: string; last_answer_id: number | null }[] = [];
+      const all: { external_id: string; status: string; status_updated_at: string; last_answer_id: number | null; completed_at: string | null }[] = [];
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
-          .select("external_id, status, status_updated_at, last_answer_id")
+          .select("external_id, status, status_updated_at, last_answer_id, completed_at")
           .like("external_id", "listo:%")
           .range(from, from + pageSize - 1);
         if (error) throw error;
