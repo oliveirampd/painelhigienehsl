@@ -362,20 +362,20 @@ function TvPage() {
         <div className="flex-none w-full overflow-hidden border-y border-[oklch(0.55_0.15_150_/_0.35)] bg-[oklch(0.22_0.06_155_/_0.22)] py-1.5">
           <div className="animate-marquee flex items-center gap-6 whitespace-nowrap px-6">
             {recentCompletionsRef.current.map((c, i) => (
-              <span key={c.at} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
+              <span key={c.id} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
                 <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[oklch(0.55_0.16_150_/_0.55)] text-[oklch(0.95_0.02_155)] text-[9px] font-bold">✓</span>
                 <span className="uppercase tracking-wider text-[oklch(0.68_0.08_155)]">{i === 0 ? "RECENTE" : "RECENTES"}</span>
                 <span className="font-semibold text-white/90">{c.bed}</span>
-                <span className="text-white/50">concluído há {formatElapsed(new Date(c.at).toISOString(), now)}</span>
+                <span className="text-white/50">concluído às {formatTime(c.completedAt)} · há {formatElapsed(c.completedAt, now)}</span>
               </span>
             ))}
             {/* Repete para rolagem contínua sem quebra visual */}
             {recentCompletionsRef.current.map((c, i) => (
-              <span key={`dup-${c.at}`} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
+              <span key={`dup-${c.id}`} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
                 <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[oklch(0.55_0.16_150_/_0.55)] text-[oklch(0.95_0.02_155)] text-[9px] font-bold">✓</span>
                 <span className="uppercase tracking-wider text-[oklch(0.68_0.08_155)]">{i === 0 ? "RECENTE" : "RECENTES"}</span>
                 <span className="font-semibold text-white/90">{c.bed}</span>
-                <span className="text-white/50">concluído há {formatElapsed(new Date(c.at).toISOString(), now)}</span>
+                <span className="text-white/50">concluído às {formatTime(c.completedAt)} · há {formatElapsed(c.completedAt, now)}</span>
               </span>
             ))}
           </div>
