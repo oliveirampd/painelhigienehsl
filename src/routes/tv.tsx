@@ -75,10 +75,11 @@ function TvPage() {
   // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
-  const recentCompletionsRef = useRef<Array<{ bed: string; at: number }>>([]);
+  const recentCompletionsRef = useRef<Array<{ bed: string; completedAt: string; id: string }>>([]);
   const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
+    const isFirstRun = prev.size === 0;
     let mudou = false;
     for (const d of discharges) {
       const before = prev.get(d.external_id ?? "");
@@ -86,13 +87,25 @@ function TvPage() {
         flashVersionRef.current.set(d.external_id ?? "", (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1);
         mudou = true;
         if (before !== "completed" && d.status === "completed") {
-          recentCompletionsRef.current.unshift({ bed: d.bed_number ?? "", at: Date.now() });
+          recentCompletionsRef.current.unshift({
+            bed: d.bed_number ?? "",
+            completedAt: d.completed_at ?? new Date().toISOString(),
+            id: d.id,
+          });
           if (recentCompletionsRef.current.length > 8) recentCompletionsRef.current.pop();
         }
       }
     }
+    if (isFirstRun) {
+      const recent = discharges
+        .filter((d) => !isExcluded(d) && isBed(d) && isTerminal(d) && d.status === "completed" && d.completed_at)
+        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+        .slice(0, 8)
+        .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
+      recentCompletionsRef.current = recent;
+    }
     prevStatusRef.current = new Map(discharges.map((d) => [d.external_id ?? "", d.status]));
-    if (mudou) forceFlashRerender((n) => n + 1);
+    if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
   const flashVersions = flashVersionRef.current;
 
