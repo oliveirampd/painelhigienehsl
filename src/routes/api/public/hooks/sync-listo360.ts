@@ -210,11 +210,11 @@ async function handle() {
     async function fetchAllDischarges() {
       const pageSize = 1000;
       let from = 0;
-      const all: { external_id: string; status: string; status_updated_at: string; last_answer_id: number | null }[] = [];
+      const all: { external_id: string; status: string; status_updated_at: string; last_answer_id: number | null; completed_at: string | null }[] = [];
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
-          .select("external_id, status, status_updated_at, last_answer_id")
+          .select("external_id, status, status_updated_at, last_answer_id, completed_at")
           .like("external_id", "listo:%")
           .range(from, from + pageSize - 1);
         if (error) throw error;
@@ -274,6 +274,7 @@ async function handle() {
             pause_reason: extractComment(a.answerComment),
             assigned_staff_id: assigned,
             status_updated_at: prevRow.status_updated_at,
+            completed_at: prevRow.completed_at,
             _debug: "mantido concluido (Leitos Pausados sem novidade real do Listo)",
           };
         }
@@ -300,6 +301,13 @@ async function handle() {
       const limit = STALE_LIMIT_MIN[rawStatus];
       const status: DischargeStatus =
         limit !== undefined && ageMin >= limit ? "completed" : rawStatus;
+
+      // Horário real da conclusão: usa endTime do Listo quando disponível.
+      const completedAt: string | null =
+        status === "completed"
+          ? (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()).toISOString()
+          : null;
+
       if (status === "completed" && status !== rawStatus) {
         debugInfo = `auto-concluido (travado ha ${Math.round(ageMin / 60)}h, limite era ${Math.round((limit ?? 0) / 60)}h)`;
       }
@@ -313,6 +321,7 @@ async function handle() {
         pause_reason: extractComment(a.answerComment),
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
+        completed_at: completedAt,
         last_answer_id: a.id,
         _debug: debugInfo,
       };

@@ -46,6 +46,10 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
 // NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
@@ -71,10 +75,11 @@ function TvPage() {
   // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
-  const recentCompletionsRef = useRef<Array<{ bed: string; at: number }>>([]);
+  const recentCompletionsRef = useRef<Array<{ bed: string; completedAt: string; id: string }>>([]);
   const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
+    const isFirstRun = prev.size === 0;
     let mudou = false;
     for (const d of discharges) {
       const before = prev.get(d.external_id ?? "");
@@ -82,13 +87,25 @@ function TvPage() {
         flashVersionRef.current.set(d.external_id ?? "", (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1);
         mudou = true;
         if (before !== "completed" && d.status === "completed") {
-          recentCompletionsRef.current.unshift({ bed: d.bed_number ?? "", at: Date.now() });
+          recentCompletionsRef.current.unshift({
+            bed: d.bed_number ?? "",
+            completedAt: d.completed_at ?? new Date().toISOString(),
+            id: d.id,
+          });
           if (recentCompletionsRef.current.length > 8) recentCompletionsRef.current.pop();
         }
       }
     }
+    if (isFirstRun) {
+      const recent = discharges
+        .filter((d) => !isExcluded(d) && isBed(d) && isTerminal(d) && d.status === "completed" && d.completed_at)
+        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+        .slice(0, 8)
+        .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
+      recentCompletionsRef.current = recent;
+    }
     prevStatusRef.current = new Map(discharges.map((d) => [d.external_id ?? "", d.status]));
-    if (mudou) forceFlashRerender((n) => n + 1);
+    if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
   const flashVersions = flashVersionRef.current;
 
@@ -345,20 +362,20 @@ function TvPage() {
         <div className="flex-none w-full overflow-hidden border-y border-[oklch(0.55_0.15_150_/_0.35)] bg-[oklch(0.22_0.06_155_/_0.22)] py-1.5">
           <div className="animate-marquee flex items-center gap-6 whitespace-nowrap px-6">
             {recentCompletionsRef.current.map((c, i) => (
-              <span key={c.at} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
+              <span key={c.id} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
                 <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[oklch(0.55_0.16_150_/_0.55)] text-[oklch(0.95_0.02_155)] text-[9px] font-bold">✓</span>
                 <span className="uppercase tracking-wider text-[oklch(0.68_0.08_155)]">{i === 0 ? "RECENTE" : "RECENTES"}</span>
                 <span className="font-semibold text-white/90">{c.bed}</span>
-                <span className="text-white/50">concluído há {formatElapsed(new Date(c.at).toISOString(), now)}</span>
+                <span className="text-white/50">concluído às {formatTime(c.completedAt)} · há {formatElapsed(c.completedAt, now)}</span>
               </span>
             ))}
             {/* Repete para rolagem contínua sem quebra visual */}
             {recentCompletionsRef.current.map((c, i) => (
-              <span key={`dup-${c.at}`} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
+              <span key={`dup-${c.id}`} className="flex items-center gap-2 text-[11px] lg:text-[12px] text-[oklch(0.82_0.12_155)]">
                 <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[oklch(0.55_0.16_150_/_0.55)] text-[oklch(0.95_0.02_155)] text-[9px] font-bold">✓</span>
                 <span className="uppercase tracking-wider text-[oklch(0.68_0.08_155)]">{i === 0 ? "RECENTE" : "RECENTES"}</span>
                 <span className="font-semibold text-white/90">{c.bed}</span>
-                <span className="text-white/50">concluído há {formatElapsed(new Date(c.at).toISOString(), now)}</span>
+                <span className="text-white/50">concluído às {formatTime(c.completedAt)} · há {formatElapsed(c.completedAt, now)}</span>
               </span>
             ))}
           </div>
