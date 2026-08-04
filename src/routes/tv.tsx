@@ -46,6 +46,10 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
 // NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
