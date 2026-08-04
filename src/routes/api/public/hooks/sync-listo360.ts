@@ -321,6 +321,7 @@ async function handle() {
         pause_reason: extractComment(a.answerComment),
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
+        completed_at: completedAt,
         last_answer_id: a.id,
         _debug: debugInfo,
       };
