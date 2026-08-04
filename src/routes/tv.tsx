@@ -77,17 +77,17 @@ function TvPage() {
     const prev = prevStatusRef.current;
     let mudou = false;
     for (const d of discharges) {
-      const before = prev.get(d.external_id);
+      const before = prev.get(d.external_id ?? "");
       if (before !== undefined && before !== d.status) {
-        flashVersionRef.current.set(d.external_id, (flashVersionRef.current.get(d.external_id) ?? 0) + 1);
+        flashVersionRef.current.set(d.external_id ?? "", (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1);
         mudou = true;
         if (before !== "completed" && d.status === "completed") {
-          recentCompletionsRef.current.unshift({ bed: d.bed_number, at: Date.now() });
+          recentCompletionsRef.current.unshift({ bed: d.bed_number ?? "", at: Date.now() });
           if (recentCompletionsRef.current.length > 8) recentCompletionsRef.current.pop();
         }
       }
     }
-    prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
+    prevStatusRef.current = new Map(discharges.map((d) => [d.external_id ?? "", d.status]));
     if (mudou) forceFlashRerender((n) => n + 1);
   }, [discharges]);
   const flashVersions = flashVersionRef.current;
@@ -583,7 +583,7 @@ function BedsPanel({
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-                  const version = flashVersions?.get(d.external_id) ?? 0;
+                  const version = flashVersions?.get(d.external_id ?? "") ?? 0;
                   const isWorst = worstId && d.id === worstId;
                   return (
                     <tr
