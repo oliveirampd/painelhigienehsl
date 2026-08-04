@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Moon, CircleCheckBig } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound } from "lucide-react";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -46,81 +46,6 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 
-// --- Histórico de KPIs (pra setinha de tendência) ---------------------------
-// Guarda amostras no localStorage pra sobreviver a reload da TV. Cada amostra
-// tem hora + valor de cada KPI. A tendência compara o valor atual com a
-// amostra mais próxima de "1h atrás".
-type KpiKey = "inFlight" | "enRoute" | "paused" | "completedIssues" | "activeCount";
-type KpiSnapshot = { t: number } & Record<KpiKey, number>;
-const KPI_HISTORY_KEY = "tv-kpi-history-v1";
-const KPI_HISTORY_MAX_AGE_MS = 4 * 60 * 60 * 1000; // guarda até 4h, só usamos 1h
-
-function loadKpiHistory(): KpiSnapshot[] {
-  try {
-    const raw = localStorage.getItem(KPI_HISTORY_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw) as KpiSnapshot[];
-    const cutoff = Date.now() - KPI_HISTORY_MAX_AGE_MS;
-    return Array.isArray(arr) ? arr.filter((s) => s && s.t >= cutoff) : [];
-  } catch {
-    return [];
-  }
-}
-function saveKpiHistory(list: KpiSnapshot[]) {
-  try {
-    localStorage.setItem(KPI_HISTORY_KEY, JSON.stringify(list));
-  } catch {
-    // localStorage indisponível (modo privado etc.) — degrada pra "sem tendência"
-  }
-}
-// Retorna current - valor_de_1h_atras, ou null se não tem histórico suficiente ainda.
-function kpiTrend(history: KpiSnapshot[], key: KpiKey, current: number): number | null {
-  if (history.length === 0) return null;
-  const oldestT = history[0].t;
-  if (Date.now() - oldestT < 20 * 60 * 1000) return null; // menos de 20min de dado: não mostra ainda
-  const targetT = Date.now() - 60 * 60 * 1000;
-  let closest = history[0];
-  let bestDiff = Math.abs(closest.t - targetT);
-  for (const s of history) {
-    const diff = Math.abs(s.t - targetT);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      closest = s;
-    }
-  }
-  return current - closest[key];
-}
-
-// --- Resumo do dia (altas concluídas + tempo médio) -------------------------
-type DaySummary = { dateKey: string; count: number; totalMin: number; sampled: number };
-const DAY_SUMMARY_KEY = "tv-day-summary-v1";
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-function loadDaySummary(): DaySummary {
-  const key = todayKey();
-  try {
-    const raw = localStorage.getItem(DAY_SUMMARY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as DaySummary;
-      if (parsed && parsed.dateKey === key) return parsed;
-    }
-  } catch {
-    // ignora e recomeça do zero
-  }
-  return { dateKey: key, count: 0, totalMin: 0, sampled: 0 };
-}
-function saveDaySummary(s: DaySummary) {
-  try {
-    localStorage.setItem(DAY_SUMMARY_KEY, JSON.stringify(s));
-  } catch {
-    // ignora
-  }
-}
-
-type ActivityItem = { bed: string; at: number };
-const FINAL_STATUSES = new Set(["completed", "completed_with_issues"]);
-
 type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
 // NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
@@ -146,78 +71,26 @@ function TvPage() {
   // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
+  const recentCompletionsRef = useRef<Array<{ bed: string; at: number }>>([]);
   const [, forceFlashRerender] = useState(0);
-
-  // Quando um leito entra em "in_progress", guarda o instante — usado depois
-  // pra calcular a duração da higienização quando ele for concluído.
-  const cleaningStartRef = useRef<Map<string, number>>(new Map());
-
-  // Feed de atividade recente (últimas conclusões) e resumo do dia.
-  const recentActivityRef = useRef<ActivityItem[]>([]);
-  const [, forceActivityRerender] = useState(0);
-  // Inicia vazio pra o HTML do servidor bater com o do cliente; o valor real do
-  // localStorage entra depois da hidratação (efeito abaixo).
-  const daySummaryRef = useRef<DaySummary>({ dateKey: todayKey(), count: 0, totalMin: 0, sampled: 0 });
-  const [daySummary, setDaySummary] = useState<DaySummary>(daySummaryRef.current);
-
-  useEffect(() => {
-    const stored = loadDaySummary();
-    daySummaryRef.current = stored;
-    setDaySummary(stored);
-  }, []);
-
   useEffect(() => {
     const prev = prevStatusRef.current;
     let mudou = false;
-    let atividadeMudou = false;
-
     for (const d of discharges) {
-      const key = d.external_id ?? d.id;
-      const before = prev.get(key);
-
-      if (d.status === "in_progress" && !cleaningStartRef.current.has(key)) {
-        cleaningStartRef.current.set(key, new Date(d.status_updated_at).getTime());
-      }
-
+      const before = prev.get(d.external_id);
       if (before !== undefined && before !== d.status) {
-        flashVersionRef.current.set(key, (flashVersionRef.current.get(key) ?? 0) + 1);
+        flashVersionRef.current.set(d.external_id, (flashVersionRef.current.get(d.external_id) ?? 0) + 1);
         mudou = true;
-
-        if (FINAL_STATUSES.has(d.status) && !FINAL_STATUSES.has(before)) {
-          recentActivityRef.current = [{ bed: d.bed_number, at: Date.now() }, ...recentActivityRef.current].slice(0, 12);
-          atividadeMudou = true;
-
-          const startedAt = cleaningStartRef.current.get(key);
-          const durationMin = startedAt ? Math.max(0, Math.round((Date.now() - startedAt) / 60000)) : null;
-          const cur = daySummaryRef.current;
-          const next: DaySummary = {
-            dateKey: cur.dateKey,
-            count: cur.count + 1,
-            totalMin: cur.totalMin + (durationMin ?? 0),
-            sampled: cur.sampled + (durationMin != null ? 1 : 0),
-          };
-          daySummaryRef.current = next;
-          saveDaySummary(next);
-          setDaySummary(next);
+        if (before !== "completed" && d.status === "completed") {
+          recentCompletionsRef.current.unshift({ bed: d.bed_number, at: Date.now() });
+          if (recentCompletionsRef.current.length > 8) recentCompletionsRef.current.pop();
         }
       }
     }
-    prevStatusRef.current = new Map<string, string>(discharges.map((d) => [d.external_id ?? d.id, d.status as string]));
+    prevStatusRef.current = new Map(discharges.map((d) => [d.external_id, d.status]));
     if (mudou) forceFlashRerender((n) => n + 1);
-    if (atividadeMudou) forceActivityRerender((n) => n + 1);
   }, [discharges]);
   const flashVersions = flashVersionRef.current;
-
-  // Vira o dia? Reseta o resumo (o resto do estado não precisa resetar).
-  useEffect(() => {
-    const key = todayKey();
-    if (daySummaryRef.current.dateKey !== key) {
-      const fresh: DaySummary = { dateKey: key, count: 0, totalMin: 0, sampled: 0 };
-      daySummaryRef.current = fresh;
-      saveDaySummary(fresh);
-      setDaySummary(fresh);
-    }
-  }, [now]);
 
   const filtered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
@@ -384,64 +257,63 @@ function TvPage() {
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
-  // Pior caso: o leito esperando há mais tempo em qualquer categoria "ativa"
-  // (não inclui Leitos Pausados, que já é uma pendência tratada à parte).
-  // Só destaca se já passou de 30min, pra não marcar coisa que ainda é normal.
+  // --- Extras (desktop/TV) ---
+
+  // 1) Tendência: guarda um retrato dos números a cada ~5min, pra comparar com
+  // "há 1 hora" e mostrar seta de subida/descida nos KPIs.
+  type Snapshot = { t: number; inFlight: number; enRoute: number; paused: number; completedIssues: number };
+  const historyRef = useRef<Snapshot[]>([]);
+  useEffect(() => {
+    const t = Date.now();
+    const last = historyRef.current[historyRef.current.length - 1];
+    if (!last || t - last.t > 5 * 60 * 1000) {
+      historyRef.current.push({ t, inFlight: inFlight.length, enRoute: enRoute.length, paused: paused.length, completedIssues: completedIssues.length });
+      if (historyRef.current.length > 30) historyRef.current.shift();
+    }
+  }, [inFlight.length, enRoute.length, paused.length, completedIssues.length]);
+
+  function trendFor(key: keyof Omit<Snapshot, "t">, currentValue: number): number | null {
+    const hist = historyRef.current;
+    if (hist.length === 0) return null;
+    const target = Date.now() - 60 * 60 * 1000;
+    let closest = hist[0];
+    for (const s of hist) {
+      if (Math.abs(s.t - target) < Math.abs(closest.t - target)) closest = s;
+    }
+    if (Math.abs(closest.t - target) > 20 * 60 * 1000) return null; // sem ponto de comparação confiável ainda
+    return currentValue - closest[key];
+  }
+
+  // 2) Pior caso: o leito esperando há mais tempo, em qualquer categoria ativa —
+  // recebe um destaque visual extra pra chamar atenção pro caso mais crítico.
   const worstCase = useMemo(() => {
-    const all = [...inFlight, ...enRoute, ...paused];
-    if (all.length === 0) return null;
-    const oldest = all.reduce((acc, d) =>
-      new Date(d.status_updated_at).getTime() < new Date(acc.status_updated_at).getTime() ? d : acc,
+    const all = [...inFlight, ...enRoute, ...paused, ...completedIssues];
+    if (!all.length) return null;
+    return all.reduce((oldest, d) =>
+      new Date(d.status_updated_at).getTime() < new Date(oldest.status_updated_at).getTime() ? d : oldest,
     );
-    return elapsedMinutes(oldest.status_updated_at, now) >= 30 ? oldest : null;
-  }, [inFlight, enRoute, paused, now]);
-  const worstId = worstCase?.external_id ?? null;
+  }, [inFlight, enRoute, paused, completedIssues]);
 
-  // Amostra o histórico de KPIs (no máximo 1x por render relevante — o efeito
-  // só dispara quando algum desses valores muda de verdade).
-  const kpiHistoryRef = useRef<KpiSnapshot[]>([]);
-  const [kpiHydrated, setKpiHydrated] = useState(false);
-  useEffect(() => {
-    kpiHistoryRef.current = [...loadKpiHistory(), ...kpiHistoryRef.current];
-    setKpiHydrated(true);
-  }, []);
-  useEffect(() => {
-    const snap: KpiSnapshot = {
-      t: Date.now(),
-      inFlight: inFlight.length,
-      enRoute: enRoute.length,
-      paused: paused.length,
-      completedIssues: completedIssues.length,
-      activeCount,
-    };
-    const cutoff = Date.now() - KPI_HISTORY_MAX_AGE_MS;
-    const list = [...kpiHistoryRef.current, snap].filter((s) => s.t >= cutoff);
-    kpiHistoryRef.current = list;
-    saveKpiHistory(list);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inFlight.length, enRoute.length, paused.length, completedIssues.length, activeCount]);
+  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT).
+  const concluidasHoje = useMemo(() => {
+    const agora = new Date();
+    const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+    inicioDiaBRT.setUTCHours(0, 0, 0, 0);
+    const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
+    return discharges.filter(
+      (d) => isTerminal(d) && d.status === "completed" && new Date(d.status_updated_at).getTime() >= cutoff,
+    ).length;
+  }, [discharges]);
 
-  const trendInFlight = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "inFlight", inFlight.length) : null;
-  const trendEnRoute = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "enRoute", enRoute.length) : null;
-  const trendPaused = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "paused", paused.length) : null;
-  const trendCompletedIssues = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "completedIssues", completedIssues.length) : null;
-  const trendActiveCount = kpiHydrated ? kpiTrend(kpiHistoryRef.current, "activeCount", activeCount) : null;
-
-  // Modo noturno: escurece um pouco a tela entre 22h e 6h (horário de menor
-  // movimento), pra cansar menos a vista e poupar um pouco a TV de madrugada.
-  const hourNow = new Date(now).getHours();
-  const isNight = hourNow >= 22 || hourNow < 6;
-
-  const avgCompletionMin = daySummary.sampled > 0 ? Math.round(daySummary.totalMin / daySummary.sampled) : null;
-  const recentActivity = recentActivityRef.current.filter((it) => now - it.at <= 30 * 60 * 1000);
+  // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
+  // menos a vista/o painel de madrugada.
+  const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
+  const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
   return (
     <div
-      className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative"
-      style={{
-        filter: isNight ? "brightness(0.8) saturate(0.9)" : undefined,
-        transition: "filter 3s ease",
-      }}
+      className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative transition-[filter] duration-1000"
+      style={isNoturno ? { filter: "brightness(0.82)" } : undefined}
     >
       <div
         className="absolute top-0 left-0 right-0 h-px"
@@ -454,21 +326,7 @@ function TvPage() {
         <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
         </h1>
-        <div className="flex items-center justify-between lg:justify-end gap-2.5 lg:gap-3.5">
-          {isNight && (
-            <span
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] lg:text-xs font-bold uppercase tracking-widest"
-              style={{
-                background: "oklch(0.4 0.13 275 / 0.55)",
-                color: "oklch(0.88 0.09 275)",
-                boxShadow: "inset 0 0 0 1px oklch(0.7 0.14 275 / 0.6)",
-              }}
-              title="Brilho reduzido automaticamente entre 22h e 6h"
-            >
-              <Moon className="w-3.5 h-3.5" />
-              Modo noturno
-            </span>
-          )}
+        <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
           <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
@@ -483,14 +341,24 @@ function TvPage() {
         </div>
       </header>
 
-      <ActivityFeed items={recentActivity} nowMs={now} />
+      {recentCompletionsRef.current.length > 0 && (
+        <div className="hidden lg:flex flex-none items-center gap-4 px-6 py-1 border-b border-white/10 bg-white/[0.015] text-[11px] text-white/40 overflow-hidden whitespace-nowrap">
+          <span className="text-white/25 uppercase tracking-widest text-[9px] flex-none">Recente</span>
+          {recentCompletionsRef.current.map((c, i) => (
+            <span key={c.at} className="flex-none">
+              {i > 0 && <span className="text-white/15 mr-4">•</span>}
+              {c.bed} concluído há {formatElapsed(new Date(c.at).toISOString(), now)}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendInFlight} />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendEnRoute} />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendPaused} higherIsBad />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendCompletedIssues} higherIsBad />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" trend={trendActiveCount} />
+        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendFor("inFlight", inFlight.length)} />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendFor("enRoute", enRoute.length)} />
+        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendFor("paused", paused.length)} higherIsBad />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendFor("completedIssues", completedIssues.length)} higherIsBad />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
       </div>
 
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 px-4 lg:px-6 pb-4">
@@ -503,8 +371,8 @@ function TvPage() {
           tone="green"
           empty="Nenhum leito em higienização terminal."
           flashVersions={flashVersions}
-          worstId={worstId}
-          goalMinutes={60}
+          worstId={worstCase?.id}
+          caption="meta: até 90min"
           className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
         />
         <BedsPanel
@@ -516,8 +384,8 @@ function TvPage() {
           tone="blue"
           empty="Nenhum leito a caminho."
           flashVersions={flashVersions}
-          worstId={worstId}
-          goalMinutes={15}
+          worstId={worstCase?.id}
+          caption="meta: até 15min"
           className="order-3 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
         />
         <BedsPanel
@@ -529,11 +397,10 @@ function TvPage() {
           tone="amber"
           empty="Nenhuma alta parada."
           flashVersions={flashVersions}
-          worstId={worstId}
-          goalMinutes={30}
+          worstId={worstCase?.id}
+          caption="meta: intervir em até 30min"
           className="order-4 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
-
         <BedsPanel
           title="Leitos Pausados"
           icon={<CirclePause className="w-4 h-4 text-white/60" />}
@@ -544,6 +411,7 @@ function TvPage() {
           showReason
           empty="Nenhum leito pausado hoje."
           flashVersions={flashVersions}
+          worstId={worstCase?.id}
           className="order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-4"
         />
         <StaffPanel
@@ -570,7 +438,9 @@ function TvPage() {
         />
       </div>
 
-      <DaySummaryFooter count={daySummary.count} avgMin={avgCompletionMin} />
+      <div className="hidden lg:flex flex-none items-center justify-center gap-2 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
+        Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+      </div>
     </div>
   );
 }
@@ -595,65 +465,38 @@ function KpiCard({
   label: string;
   value: number;
   accent: string;
-  /** current - valor de ~1h atrás. null/undefined = sem dado suficiente ainda. */
   trend?: number | null;
-  /** true: subir é ruim (vermelho). false: subir é bom (verde). undefined: neutro (cinza, só informativo). */
   higherIsBad?: boolean;
 }) {
-  const showTrend = trend != null && trend !== 0;
-  const trendUp = (trend ?? 0) > 0;
-  // "worse" = indicador ruim que subiu (ou bom que caiu)
-  const worse = showTrend && higherIsBad !== undefined && (higherIsBad ? trendUp : !trendUp);
-  const better = showTrend && higherIsBad !== undefined && !worse;
-  const trendBg = worse
-    ? "oklch(0.5 0.2 25 / 0.85)"
-    : better
-      ? "oklch(0.48 0.17 155 / 0.8)"
-      : "oklch(0.35 0.02 265 / 0.8)";
-  const trendFg = worse
-    ? "oklch(0.95 0.06 25)"
-    : better
-      ? "oklch(0.95 0.06 155)"
-      : "rgba(255,255,255,0.75)";
-
+  const trendColor =
+    trend == null || trend === 0
+      ? "rgba(255,255,255,0.35)"
+      : (trend > 0) === !!higherIsBad
+        ? "oklch(0.7 0.19 25)" // piorou
+        : "oklch(0.72 0.17 155)"; // melhorou
   return (
     <div
-      className={`relative rounded-xl px-3 lg:px-4 py-2 lg:py-2.5 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-2 ${worse ? "kpi-alert" : ""}`}
+      className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
       style={{
         background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
         borderColor: accent.replace(")", " / 0.45)"),
-        boxShadow: worse
-          ? undefined
-          : `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
+        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="min-w-0">
-        <div className="text-[10px] lg:text-xs uppercase tracking-widest text-white/80 font-semibold leading-tight">
-          {label}
-        </div>
-        {showTrend && (
-          <div className="text-[8px] lg:text-[9px] uppercase tracking-widest text-white/35 leading-tight mt-0.5">
-            vs 1h atrás
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {showTrend && (
-          <span
-            className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-sm lg:text-lg font-bold tabular-nums leading-none"
-            style={{ background: trendBg, color: trendFg }}
-            title="Variação em relação a 1h atrás"
-          >
-            <span className="text-[11px] lg:text-sm">{trendUp ? "▲" : "▼"}</span>
-            {Math.abs(trend!)}
-          </span>
-        )}
+      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">{label}</div>
+      <div className="flex items-baseline gap-1.5">
         <div
-          className="text-3xl lg:text-5xl tabular-nums leading-none"
+          className="text-2xl lg:text-4xl tabular-nums leading-none"
           style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
         >
           {value}
         </div>
+        {trend != null && trend !== 0 && (
+          <span className="hidden lg:inline text-xs font-mono" style={{ color: trendColor }} title="Comparado a 1h atrás">
+            {trend > 0 ? "▲" : "▼"}
+            {Math.abs(trend)}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -678,8 +521,8 @@ function BedsPanel({
   empty,
   flashVersions,
   className,
-  goalMinutes,
   worstId,
+  caption,
 }: {
   title: string;
   icon?: React.ReactNode;
@@ -691,43 +534,20 @@ function BedsPanel({
   empty: string;
   flashVersions?: Map<string, number>;
   className?: string;
-  /** Meta em minutos (ex: 15). Vira uma pílula "META 15MIN" ao lado do título. */
-  goalMinutes?: number;
-  /** external_id do leito com destaque de "atenção máxima" (pior caso geral). */
-  worstId?: string | null;
+  worstId?: string;
+  caption?: string;
 }) {
-  const overGoal =
-    goalMinutes != null
-      ? rows.filter((d) => elapsedMinutes(d.status_updated_at, nowMs) > goalMinutes).length
-      : 0;
-  const goalWarn = overGoal > 0;
-
   return (
     <section className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base lg:text-lg font-bold flex items-center gap-2 min-w-0">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2">
             {icon}
-            <span className="truncate">{title}</span>
+            {title}
           </h2>
-          <div className="flex items-center gap-2 shrink-0">
-            {goalMinutes != null && (
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] lg:text-xs font-bold uppercase tracking-widest whitespace-nowrap ${goalWarn ? "goal-warn" : ""}`}
-                style={{
-                  background: goalWarn ? "oklch(0.5 0.2 25 / 0.85)" : "oklch(0.42 0.15 155 / 0.7)",
-                  color: goalWarn ? "oklch(0.96 0.06 25)" : "oklch(0.94 0.08 155)",
-                }}
-                title={`Meta: até ${goalMinutes} minutos`}
-              >
-                {goalWarn ? `${overGoal} fora da meta ${goalMinutes}min` : `Meta ${goalMinutes}min`}
-              </span>
-            )}
-            <span className="rounded-full bg-white/12 px-2.5 py-0.5 text-xs lg:text-sm font-bold tabular-nums text-white/90">
-              {rows.length}
-            </span>
-          </div>
+          <span className="text-[11px] text-white/50">{rows.length}</span>
         </div>
+        {caption && <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>}
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -751,38 +571,20 @@ function BedsPanel({
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
-                  const version = flashVersions?.get(d.external_id ?? d.id) ?? 0;
-                  const isWorst = !!worstId && d.external_id === worstId;
-                  const rowClass = [version > 0 ? "flash-row" : "", isWorst ? "pulse-critical" : ""]
-                    .filter(Boolean)
-                    .join(" ");
+                  const version = flashVersions?.get(d.external_id) ?? 0;
+                  const isWorst = worstId && d.id === worstId;
                   return (
                     <tr
                       key={`${d.id}-v${version}`}
-                      className={rowClass || undefined}
+                      className={version > 0 ? "flash-row" : undefined}
                       style={{
-                        background: isWorst
-                          ? "oklch(0.42 0.21 25 / 0.55)"
-                          : overtime && tone === "green"
-                            ? "oklch(0.4 0.13 55 / 0.3)"
-                            : toneBg[tone],
-                        borderLeft: isWorst ? "6px solid oklch(0.68 0.24 25)" : undefined,
+                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
+                        boxShadow: isWorst ? "inset 0 0 0 2px oklch(0.7 0.22 25 / 0.8)" : undefined,
                       }}
                     >
-                      <td
-                        className={`px-1.5 lg:px-4 py-1.5 font-bold border-t border-white/5 ${
-                          isWorst ? "text-base lg:text-xl" : "text-[13px] lg:text-base truncate"
-                        }`}
-                      >
+                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
+                        {isWorst && <span className="hidden lg:inline mr-1" title="Caso mais crítico do painel">⚠️</span>}
                         {d.bed_number}
-                        {isWorst && (
-                          <span
-                            className="ml-1.5 lg:ml-2 inline-block rounded px-1.5 py-0.5 text-[9px] lg:text-[11px] font-extrabold uppercase tracking-widest align-middle whitespace-nowrap"
-                            style={{ background: "oklch(0.6 0.24 25)", color: "oklch(0.99 0 0)" }}
-                          >
-                            ⚠ Atenção máxima
-                          </span>
-                        )}
                       </td>
                       <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
                       {showReason ? (
@@ -977,84 +779,6 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
     <span className="uppercase tracking-widest text-[10px] font-semibold" style={{ color }}>
       {label}
     </span>
-  );
-}
-
-// Faixa de atividade recente — chips verdes bem visíveis.
-function ActivityFeed({ items, nowMs }: { items: ActivityItem[]; nowMs: number }) {
-  if (items.length === 0) return null;
-  return (
-    <div
-      className="flex flex-none items-center gap-2 lg:gap-3 px-3 lg:px-6 py-1.5 lg:py-2 border-b overflow-x-auto whitespace-nowrap"
-      style={{
-        background: "linear-gradient(90deg, oklch(0.34 0.13 155 / 0.45) 0%, oklch(0.2 0.04 265 / 0.3) 100%)",
-        borderColor: "oklch(0.55 0.16 155 / 0.35)",
-      }}
-    >
-      <span
-        className="flex-none inline-flex items-center gap-1.5 uppercase tracking-widest text-[9px] lg:text-[11px] font-bold"
-        style={{ color: "oklch(0.85 0.16 155)" }}
-      >
-        <CircleCheckBig className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-        Concluídos agora
-      </span>
-      {items.slice(0, 6).map((it, i) => (
-        <span
-          key={`${it.bed}-${it.at}-${i}`}
-          className="activity-chip flex-none inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] lg:text-sm font-semibold"
-          style={{
-            background: "oklch(0.45 0.16 155 / 0.75)",
-            color: "oklch(0.97 0.05 155)",
-            boxShadow: "inset 0 0 0 1px oklch(0.7 0.18 155 / 0.5)",
-          }}
-        >
-          <span className="font-bold">Leito {it.bed}</span>
-          <span className="opacity-70 tabular-nums">
-            há {Math.max(0, Math.round((nowMs - it.at) / 60000))}min
-          </span>
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// Rodapé "scoreboard" com o resumo do dia.
-function DaySummaryFooter({ count, avgMin }: { count: number; avgMin: number | null }) {
-  return (
-    <div
-      className="flex flex-none items-center justify-center gap-5 lg:gap-12 px-3 lg:px-6 py-2 lg:py-2.5 border-t border-white/15"
-      style={{ background: "oklch(0.15 0.02 265)" }}
-    >
-      <span className="uppercase tracking-[0.25em] text-[9px] lg:text-[11px] text-white/40 font-bold">Hoje</span>
-      <div className="flex items-baseline gap-2">
-        <span
-          className="text-3xl lg:text-5xl leading-none tabular-nums"
-          style={{ color: "oklch(0.8 0.19 155)", fontFamily: "'Bebas Neue', sans-serif" }}
-        >
-          {count}
-        </span>
-        <span className="uppercase tracking-widest text-[9px] lg:text-xs text-white/55 font-semibold">
-          altas concluídas
-        </span>
-      </div>
-      {avgMin != null && (
-        <>
-          <span className="text-white/15 text-2xl">·</span>
-          <div className="flex items-baseline gap-2">
-            <span
-              className="text-3xl lg:text-5xl leading-none tabular-nums"
-              style={{ color: "oklch(0.82 0.16 230)", fontFamily: "'Bebas Neue', sans-serif" }}
-            >
-              {avgMin}
-              <span className="text-base lg:text-2xl">min</span>
-            </span>
-            <span className="uppercase tracking-widest text-[9px] lg:text-xs text-white/55 font-semibold">
-              tempo médio
-            </span>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 
