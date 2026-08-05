@@ -86,27 +86,32 @@ function TvPage() {
       if (before !== undefined && before !== d.status) {
         flashVersionRef.current.set(d.external_id ?? "", (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1);
         mudou = true;
-        if (before !== "completed" && d.status === "completed") {
-          recentCompletionsRef.current.unshift({
-            bed: d.bed_number ?? "",
-            completedAt: d.completed_at ?? new Date().toISOString(),
-            id: d.id,
-          });
-          if (recentCompletionsRef.current.length > 8) recentCompletionsRef.current.pop();
-        }
       }
-    }
-    if (isFirstRun) {
-      const recent = discharges
-        .filter((d) => !isExcluded(d) && isBed(d) && isTerminal(d) && d.status === "completed" && d.completed_at)
-        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
-        .slice(0, 8)
-        .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-      recentCompletionsRef.current = recent;
     }
     prevStatusRef.current = new Map(discharges.map((d) => [d.external_id ?? "", d.status]));
     if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
+
+  // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
+  // A janela é reavaliada a cada atualização de dados / tique do relógio,
+  // então leitos antigos saem da faixa automaticamente.
+  const recentCompletions = useMemo(() => {
+    const cutoff = now - 30 * 60 * 1000;
+    return discharges
+      .filter(
+        (d) =>
+          !isExcluded(d) &&
+          isBed(d) &&
+          isTerminal(d) &&
+          d.status === "completed" &&
+          d.completed_at &&
+          new Date(d.completed_at).getTime() >= cutoff,
+      )
+      .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+      .slice(0, 8)
+      .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
+  }, [discharges, now]);
+
   const flashVersions = flashVersionRef.current;
 
   const filtered = useMemo(
