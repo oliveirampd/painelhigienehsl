@@ -363,11 +363,11 @@ function TvPage() {
         </div>
       </header>
 
-      {recentCompletionsRef.current.length > 0 && (
+      {recentCompletions.length > 0 && (
         <div className="flex-none w-full overflow-hidden border-y border-[oklch(0.55_0.18_150_/_0.55)] bg-gradient-to-r from-[oklch(0.16_0.04_150)] via-[oklch(0.20_0.07_150)] to-[oklch(0.16_0.04_150)] py-2 shadow-[0_0_24px_0_oklch(0.55_0.18_150_/_0.25)]">
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(90deg,transparent_0%,oklch(0.65_0.20_150_/_0.12)_50%,transparent_100%)]" />
           <div className="animate-marquee flex items-center gap-4 lg:gap-6 whitespace-nowrap px-6">
-            {recentCompletionsRef.current.map((c, i) => (
+            {recentCompletions.map((c, i) => (
               <div
                 key={c.id}
                 className={[
@@ -396,7 +396,7 @@ function TvPage() {
               </div>
             ))}
             {/* Repete para rolagem contínua sem quebra visual */}
-            {recentCompletionsRef.current.map((c, i) => (
+            {recentCompletions.map((c, i) => (
               <div
                 key={`dup-${c.id}`}
                 className={[
