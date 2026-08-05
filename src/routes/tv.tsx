@@ -75,7 +75,6 @@ function TvPage() {
   // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
-  const recentCompletionsRef = useRef<Array<{ bed: string; completedAt: string; id: string }>>([]);
   const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
