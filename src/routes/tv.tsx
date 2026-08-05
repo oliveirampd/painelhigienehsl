@@ -75,7 +75,6 @@ function TvPage() {
   // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
-  const recentCompletionsRef = useRef<Array<{ bed: string; completedAt: string; id: string }>>([]);
   const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
@@ -86,27 +85,32 @@ function TvPage() {
       if (before !== undefined && before !== d.status) {
         flashVersionRef.current.set(d.external_id ?? "", (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1);
         mudou = true;
-        if (before !== "completed" && d.status === "completed") {
-          recentCompletionsRef.current.unshift({
-            bed: d.bed_number ?? "",
-            completedAt: d.completed_at ?? new Date().toISOString(),
-            id: d.id,
-          });
-          if (recentCompletionsRef.current.length > 8) recentCompletionsRef.current.pop();
-        }
       }
-    }
-    if (isFirstRun) {
-      const recent = discharges
-        .filter((d) => !isExcluded(d) && isBed(d) && isTerminal(d) && d.status === "completed" && d.completed_at)
-        .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
-        .slice(0, 8)
-        .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-      recentCompletionsRef.current = recent;
     }
     prevStatusRef.current = new Map(discharges.map((d) => [d.external_id ?? "", d.status]));
     if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
+
+  // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
+  // A janela é reavaliada a cada atualização de dados / tique do relógio,
+  // então leitos antigos saem da faixa automaticamente.
+  const recentCompletions = useMemo(() => {
+    const cutoff = now - 30 * 60 * 1000;
+    return discharges
+      .filter(
+        (d) =>
+          !isExcluded(d) &&
+          isBed(d) &&
+          isTerminal(d) &&
+          d.status === "completed" &&
+          d.completed_at &&
+          new Date(d.completed_at).getTime() >= cutoff,
+      )
+      .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
+      .slice(0, 8)
+      .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
+  }, [discharges, now]);
+
   const flashVersions = flashVersionRef.current;
 
   const filtered = useMemo(
@@ -358,11 +362,11 @@ function TvPage() {
         </div>
       </header>
 
-      {recentCompletionsRef.current.length > 0 && (
+      {recentCompletions.length > 0 && (
         <div className="flex-none w-full overflow-hidden border-y border-[oklch(0.55_0.18_150_/_0.55)] bg-gradient-to-r from-[oklch(0.16_0.04_150)] via-[oklch(0.20_0.07_150)] to-[oklch(0.16_0.04_150)] py-2 shadow-[0_0_24px_0_oklch(0.55_0.18_150_/_0.25)]">
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(90deg,transparent_0%,oklch(0.65_0.20_150_/_0.12)_50%,transparent_100%)]" />
           <div className="animate-marquee flex items-center gap-4 lg:gap-6 whitespace-nowrap px-6">
-            {recentCompletionsRef.current.map((c, i) => (
+            {recentCompletions.map((c, i) => (
               <div
                 key={c.id}
                 className={[
@@ -391,7 +395,7 @@ function TvPage() {
               </div>
             ))}
             {/* Repete para rolagem contínua sem quebra visual */}
-            {recentCompletionsRef.current.map((c, i) => (
+            {recentCompletions.map((c, i) => (
               <div
                 key={`dup-${c.id}`}
                 className={[
