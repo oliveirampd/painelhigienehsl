@@ -315,16 +315,28 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT).
-  const concluidasHoje = useMemo(() => {
+  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
+  // separadas por agrupamento de blocos (D/E e B/C).
+  const concluidasHojePorBloco = useMemo(() => {
     const agora = new Date();
     const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
     inicioDiaBRT.setUTCHours(0, 0, 0, 0);
     const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
-    return discharges.filter(
+    const done = discharges.filter(
       (d) => isTerminal(d) && d.status === "completed" && new Date(d.status_updated_at).getTime() >= cutoff,
-    ).length;
+    );
+    let de = 0;
+    let bc = 0;
+    for (const d of done) {
+      const m = (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/);
+      const block = m?.[1];
+      if (block === "D" || block === "E") de++;
+      else if (block === "B" || block === "C") bc++;
+    }
+    return { total: done.length, de, bc };
   }, [discharges]);
+  const concluidasHoje = concluidasHojePorBloco.total;
+
 
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
   // menos a vista/o painel de madrugada.
