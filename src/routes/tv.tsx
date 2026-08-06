@@ -523,9 +523,20 @@ function TvPage() {
         />
       </div>
 
-      <div className="hidden lg:flex flex-none items-center justify-center gap-2 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
-        Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+      <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
+        <span>
+          Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+        </span>
+        <span className="text-white/20">·</span>
+        <span>
+          Bloco D/E: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.de}</span>
+        </span>
+        <span className="text-white/20">·</span>
+        <span>
+          Bloco B/C: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.bc}</span>
+        </span>
       </div>
+
     </div>
   );
 }
