@@ -675,7 +675,7 @@ function StaffPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[340px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
+    <section className={`h-[340px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
@@ -768,7 +768,7 @@ function BreaksPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[280px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
+    <section className={`h-[280px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
