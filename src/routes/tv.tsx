@@ -311,7 +311,7 @@ function TvPage() {
   // 2) Pior caso: o leito esperando há mais tempo, em qualquer categoria ativa —
   // recebe um destaque visual extra pra chamar atenção pro caso mais crítico.
   const worstCase = useMemo(() => {
-    const all = [...inFlight, ...enRoute, ...paused, ...completedIssues];
+    const all = [...inFlight, ...enRoute, ...paused, ...completedIssues].filter(isCuidadoUnit);
     if (!all.length) return null;
     return all.reduce((oldest, d) =>
       new Date(d.status_updated_at).getTime() < new Date(oldest.status_updated_at).getTime() ? d : oldest,
@@ -326,8 +326,13 @@ function TvPage() {
     inicioDiaBRT.setUTCHours(0, 0, 0, 0);
     const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
     const done = discharges.filter(
-      (d) => isTerminal(d) && d.status === "completed" && new Date(d.status_updated_at).getTime() >= cutoff,
+      (d) =>
+        isTerminal(d) &&
+        d.status === "completed" &&
+        !!d.completed_at &&
+        new Date(d.completed_at).getTime() >= cutoff,
     );
+
     let de = 0;
     let bc = 0;
     for (const d of done) {
