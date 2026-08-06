@@ -45,6 +45,9 @@ const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:ans
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
+// Contorno de "caso crítico": só vale para os leitos do 8D/E e 7D/E.
+const isCuidadoUnit = (d: Discharge) => /BLOCO\s+[DE]\s+0?[78]/i.test(d.unit || "");
+
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -308,7 +311,7 @@ function TvPage() {
   // 2) Pior caso: o leito esperando há mais tempo, em qualquer categoria ativa —
   // recebe um destaque visual extra pra chamar atenção pro caso mais crítico.
   const worstCase = useMemo(() => {
-    const all = [...inFlight, ...enRoute, ...paused, ...completedIssues];
+    const all = [...inFlight, ...enRoute, ...paused, ...completedIssues].filter(isCuidadoUnit);
     if (!all.length) return null;
     return all.reduce((oldest, d) =>
       new Date(d.status_updated_at).getTime() < new Date(oldest.status_updated_at).getTime() ? d : oldest,
@@ -323,8 +326,13 @@ function TvPage() {
     inicioDiaBRT.setUTCHours(0, 0, 0, 0);
     const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
     const done = discharges.filter(
-      (d) => isTerminal(d) && d.status === "completed" && new Date(d.status_updated_at).getTime() >= cutoff,
+      (d) =>
+        isTerminal(d) &&
+        d.status === "completed" &&
+        !!d.completed_at &&
+        new Date(d.completed_at).getTime() >= cutoff,
     );
+
     let de = 0;
     let bc = 0;
     for (const d of done) {
@@ -667,7 +675,7 @@ function StaffPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[340px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
+    <section className={`h-[340px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
@@ -760,7 +768,7 @@ function BreaksPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[280px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
+    <section className={`h-[280px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
