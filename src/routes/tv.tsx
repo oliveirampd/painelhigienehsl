@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Sparkles, Check, Clock } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check } from "lucide-react";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -315,16 +315,28 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT).
-  const concluidasHoje = useMemo(() => {
+  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
+  // separadas por agrupamento de blocos (D/E e B/C).
+  const concluidasHojePorBloco = useMemo(() => {
     const agora = new Date();
     const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
     inicioDiaBRT.setUTCHours(0, 0, 0, 0);
     const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
-    return discharges.filter(
+    const done = discharges.filter(
       (d) => isTerminal(d) && d.status === "completed" && new Date(d.status_updated_at).getTime() >= cutoff,
-    ).length;
+    );
+    let de = 0;
+    let bc = 0;
+    for (const d of done) {
+      const m = (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/);
+      const block = m?.[1];
+      if (block === "D" || block === "E") de++;
+      else if (block === "B" || block === "C") bc++;
+    }
+    return { total: done.length, de, bc };
   }, [discharges]);
+  const concluidasHoje = concluidasHojePorBloco.total;
+
 
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
   // menos a vista/o painel de madrugada.
@@ -363,68 +375,24 @@ function TvPage() {
       </header>
 
       {recentCompletions.length > 0 && (
-        <div className="flex-none w-full overflow-hidden border-y border-[oklch(0.55_0.18_150_/_0.55)] bg-gradient-to-r from-[oklch(0.16_0.04_150)] via-[oklch(0.20_0.07_150)] to-[oklch(0.16_0.04_150)] py-2 shadow-[0_0_24px_0_oklch(0.55_0.18_150_/_0.25)]">
-          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(90deg,transparent_0%,oklch(0.65_0.20_150_/_0.12)_50%,transparent_100%)]" />
-          <div className="animate-marquee flex items-center gap-4 lg:gap-6 whitespace-nowrap px-6">
-            {recentCompletions.map((c, i) => (
+        <div className="flex-none w-full overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)] py-1.5">
+          <div className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6">
+            {[...recentCompletions, ...recentCompletions].map((c, i) => (
               <div
-                key={c.id}
-                className={[
-                  "activity-chip flex items-center gap-2.5 lg:gap-3 rounded-full border pl-1.5 pr-3 lg:pl-2 lg:pr-4 py-1 lg:py-1.5 shadow-lg",
-                  i === 0
-                    ? "border-[oklch(0.65_0.20_150_/_0.75)] bg-[oklch(0.18_0.06_150_/_0.85)] shadow-[oklch(0.55_0.18_150_/_0.35)]"
-                    : "border-[oklch(0.55_0.16_150_/_0.45)] bg-[oklch(0.18_0.05_150_/_0.65)]",
-                ].join(" ")}
-                style={{ animationDelay: `${i * 60}ms` }}
+                key={i < recentCompletions.length ? c.id : `dup-${c.id}`}
+                className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
               >
-                <span className="inline-flex h-5 w-5 lg:h-6 lg:w-6 shrink-0 items-center justify-center rounded-full bg-[oklch(0.55_0.18_150)] text-[oklch(0.15_0.02_150)] shadow-[0_0_10px_oklch(0.55_0.18_150_/_0.55)]">
-                  <Check className="h-3 w-3 lg:h-3.5 lg:w-3.5 stroke-[3]" />
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center rounded-full bg-[oklch(0.55_0.16_150_/_0.25)] px-1.5 py-0.5 text-[9px] lg:text-[10px] font-bold uppercase tracking-wider text-[oklch(0.75_0.12_150)]">
-                    {i === 0 ? "RECENTE" : "CONCLUÍDO"}
-                  </span>
-                  <span className="text-sm lg:text-base font-bold text-white tracking-tight">{c.bed}</span>
-                </span>
-                <span className="hidden sm:flex items-center gap-1 text-[10px] lg:text-[11px] text-[oklch(0.72_0.08_150)]">
-                  <Clock className="h-3 w-3" />
-                  <span className="font-medium">{formatTime(c.completedAt)}</span>
-                </span>
-                <span className="text-[10px] lg:text-[11px] text-[oklch(0.60_0.06_150)]">há {formatElapsed(c.completedAt, now)}</span>
-                {i === 0 && <Sparkles className="h-3.5 w-3.5 text-[oklch(0.70_0.14_150)] animate-pulse" />}
-              </div>
-            ))}
-            {/* Repete para rolagem contínua sem quebra visual */}
-            {recentCompletions.map((c, i) => (
-              <div
-                key={`dup-${c.id}`}
-                className={[
-                  "flex items-center gap-2.5 lg:gap-3 rounded-full border pl-1.5 pr-3 lg:pl-2 lg:pr-4 py-1 lg:py-1.5 shadow-lg",
-                  i === 0
-                    ? "border-[oklch(0.65_0.20_150_/_0.75)] bg-[oklch(0.18_0.06_150_/_0.85)] shadow-[oklch(0.55_0.18_150_/_0.35)]"
-                    : "border-[oklch(0.55_0.16_150_/_0.45)] bg-[oklch(0.18_0.05_150_/_0.65)]",
-                ].join(" ")}
-              >
-                <span className="inline-flex h-5 w-5 lg:h-6 lg:w-6 shrink-0 items-center justify-center rounded-full bg-[oklch(0.55_0.18_150)] text-[oklch(0.15_0.02_150)] shadow-[0_0_10px_oklch(0.55_0.18_150_/_0.55)]">
-                  <Check className="h-3 w-3 lg:h-3.5 lg:w-3.5 stroke-[3]" />
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-flex items-center rounded-full bg-[oklch(0.55_0.16_150_/_0.25)] px-1.5 py-0.5 text-[9px] lg:text-[10px] font-bold uppercase tracking-wider text-[oklch(0.75_0.12_150)]">
-                    {i === 0 ? "RECENTE" : "CONCLUÍDO"}
-                  </span>
-                  <span className="text-sm lg:text-base font-bold text-white tracking-tight">{c.bed}</span>
-                </span>
-                <span className="hidden sm:flex items-center gap-1 text-[10px] lg:text-[11px] text-[oklch(0.72_0.08_150)]">
-                  <Clock className="h-3 w-3" />
-                  <span className="font-medium">{formatTime(c.completedAt)}</span>
-                </span>
-                <span className="text-[10px] lg:text-[11px] text-[oklch(0.60_0.06_150)]">há {formatElapsed(c.completedAt, now)}</span>
-                {i === 0 && <Sparkles className="h-3.5 w-3.5 text-[oklch(0.70_0.14_150)] animate-pulse" />}
+                <Check className="h-3 w-3 lg:h-3.5 lg:w-3.5 shrink-0 stroke-[3] text-[oklch(0.72_0.16_150)]" />
+                <span className="font-semibold text-white/90">{c.bed}</span>
+                <span className="text-white/35">·</span>
+                <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
+                <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
               </div>
             ))}
           </div>
         </div>
       )}
+
 
       <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendFor("inFlight", inFlight.length)} />
@@ -511,9 +479,20 @@ function TvPage() {
         />
       </div>
 
-      <div className="hidden lg:flex flex-none items-center justify-center gap-2 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
-        Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+      <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
+        <span>
+          Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+        </span>
+        <span className="text-white/20">·</span>
+        <span>
+          Bloco D/E: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.de}</span>
+        </span>
+        <span className="text-white/20">·</span>
+        <span>
+          Bloco B/C: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.bc}</span>
+        </span>
       </div>
+
     </div>
   );
 }
