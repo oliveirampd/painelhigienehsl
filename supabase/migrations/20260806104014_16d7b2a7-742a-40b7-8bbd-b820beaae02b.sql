@@ -1,0 +1,1 @@
+update public.discharges set completed_at = null where completed_at is not null;
