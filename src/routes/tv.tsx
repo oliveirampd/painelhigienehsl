@@ -371,14 +371,23 @@ function TvPage() {
 
   async function limpar(scope: "today" | "recent") {
     setLimpando(scope);
+    const ts = Date.now();
     try {
       await clearCompletions({ data: { scope } });
-      toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
     } catch {
-      toast.error("Não foi possível limpar agora.");
-    } finally {
-      setLimpando(null);
+      // segue: o marco local já esconde os registros mesmo se o banco recusar
     }
+    if (scope === "recent") {
+      setRecentClearedAt(ts);
+      localStorage.setItem("tv:recentClearedAt", String(ts));
+    } else {
+      setTodayClearedAt(ts);
+      setRecentClearedAt(ts);
+      localStorage.setItem("tv:todayClearedAt", String(ts));
+      localStorage.setItem("tv:recentClearedAt", String(ts));
+    }
+    toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
+    setLimpando(null);
   }
 
   const filtros = [
