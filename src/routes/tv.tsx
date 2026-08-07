@@ -99,11 +99,20 @@ function TvPage() {
     if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
 
+  // Marcos de limpeza manual (persistidos no navegador da TV): conclusões
+  // anteriores a esses horários não aparecem mais, mesmo que o sync as reenvie.
+  const [recentClearedAt, setRecentClearedAt] = useState(0);
+  const [todayClearedAt, setTodayClearedAt] = useState(0);
+  useEffect(() => {
+    setRecentClearedAt(Number(localStorage.getItem("tv:recentClearedAt") ?? 0));
+    setTodayClearedAt(Number(localStorage.getItem("tv:todayClearedAt") ?? 0));
+  }, []);
+
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
   // A janela é reavaliada a cada atualização de dados / tique do relógio,
   // então leitos antigos saem da faixa automaticamente.
   const recentCompletions = useMemo(() => {
-    const cutoff = now - 30 * 60 * 1000;
+    const cutoff = Math.max(now - 30 * 60 * 1000, recentClearedAt);
     return discharges
       .filter(
         (d) =>
@@ -117,7 +126,8 @@ function TvPage() {
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
       .slice(0, 8)
       .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-  }, [discharges, now]);
+  }, [discharges, now, recentClearedAt]);
+
 
   const flashVersions = flashVersionRef.current;
 
@@ -329,7 +339,7 @@ function TvPage() {
     const agora = new Date();
     const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
     inicioDiaBRT.setUTCHours(0, 0, 0, 0);
-    const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
+    const cutoff = Math.max(inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
     const done = discharges.filter(
       (d) =>
         isTerminal(d) &&
@@ -347,7 +357,7 @@ function TvPage() {
       else if (block === "B" || block === "C") bc++;
     }
     return { total: done.length, de, bc };
-  }, [discharges]);
+  }, [discharges, todayClearedAt]);
   const concluidasHoje = concluidasHojePorBloco.total;
 
 
@@ -361,14 +371,23 @@ function TvPage() {
 
   async function limpar(scope: "today" | "recent") {
     setLimpando(scope);
+    const ts = Date.now();
     try {
       await clearCompletions({ data: { scope } });
-      toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
     } catch {
-      toast.error("Não foi possível limpar agora.");
-    } finally {
-      setLimpando(null);
+      // segue: o marco local já esconde os registros mesmo se o banco recusar
     }
+    if (scope === "recent") {
+      setRecentClearedAt(ts);
+      localStorage.setItem("tv:recentClearedAt", String(ts));
+    } else {
+      setTodayClearedAt(ts);
+      setRecentClearedAt(ts);
+      localStorage.setItem("tv:todayClearedAt", String(ts));
+      localStorage.setItem("tv:recentClearedAt", String(ts));
+    }
+    toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
+    setLimpando(null);
   }
 
   const filtros = [
@@ -692,12 +711,24 @@ function BedsPanel({
                       className={version > 0 ? "flash-row" : undefined}
                       style={{
                         background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
-                        boxShadow: isWorst ? "inset 0 0 0 2px oklch(0.7 0.22 25 / 0.8)" : undefined,
                       }}
                     >
                       <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
-                        {isWorst && <span className="hidden lg:inline mr-1" title="Caso mais crítico do painel">⚠️</span>}
-                        {d.bed_number}
+                        <span className="inline-flex items-center gap-1.5">
+                          {d.bed_number}
+                          {isWorst && (
+                            <span
+                              title="Andar crítico"
+                              className="shrink-0 rounded-[3px] border px-1 py-px text-[8px] lg:text-[9px] font-semibold uppercase tracking-wide"
+                              style={{
+                                borderColor: "oklch(0.7 0.2 25 / 0.5)",
+                                color: "oklch(0.78 0.19 25)",
+                              }}
+                            >
+                              andar crítico
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
                       {showReason ? (
