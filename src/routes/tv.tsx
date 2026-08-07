@@ -353,15 +353,29 @@ function TvPage() {
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
   const [isDark, setIsDark] = useState(true);
+  const [limpando, setLimpando] = useState<null | "today" | "recent">(null);
+
+  async function limpar(scope: "today" | "recent") {
+    setLimpando(scope);
+    try {
+      await clearCompletions({ data: { scope } });
+      toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
+    } catch {
+      toast.error("Não foi possível limpar agora.");
+    } finally {
+      setLimpando(null);
+    }
+  }
+
+  const filtros = [
+    !isDark ? "invert(1) hue-rotate(180deg)" : null,
+    isNoturno ? "brightness(0.82)" : null,
+  ].filter(Boolean).join(" ");
 
   return (
     <div
-      className={`min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter,background-color] duration-700 ${
-        isDark
-          ? "dark bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
-          : "bg-background text-foreground"
-      }`}
-      style={isNoturno ? { filter: "brightness(0.82)" } : undefined}
+      className="dark min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter] duration-700 bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
+      style={filtros ? { filter: filtros } : undefined}
     >
       <div
         className="absolute top-0 left-0 right-0 h-px"
