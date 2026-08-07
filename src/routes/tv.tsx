@@ -404,6 +404,22 @@ function TvPage() {
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
           <button
+            onClick={() => limpar("recent")}
+            disabled={limpando !== null}
+            title="Limpar leitos finalizados recentemente"
+            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+          >
+            <Eraser className="h-3 w-3" /> Recentes
+          </button>
+          <button
+            onClick={() => limpar("today")}
+            disabled={limpando !== null}
+            title="Limpar altas concluídas do dia"
+            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+          >
+            <Eraser className="h-3 w-3" /> Dia
+          </button>
+          <button
             onClick={() => setIsDark((v) => !v)}
             aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
             className="flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-white/10 active:scale-95"
