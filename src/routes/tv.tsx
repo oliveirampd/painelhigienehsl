@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check, Sun, Moon } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check, Sun, Moon, Eraser } from "lucide-react";
+import { toast } from "sonner";
+import { clearCompletions } from "@/lib/hospital.functions";
+
+
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -353,15 +357,29 @@ function TvPage() {
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
   const [isDark, setIsDark] = useState(true);
+  const [limpando, setLimpando] = useState<null | "today" | "recent">(null);
+
+  async function limpar(scope: "today" | "recent") {
+    setLimpando(scope);
+    try {
+      await clearCompletions({ data: { scope } });
+      toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
+    } catch {
+      toast.error("Não foi possível limpar agora.");
+    } finally {
+      setLimpando(null);
+    }
+  }
+
+  const filtros = [
+    !isDark ? "invert(1) hue-rotate(180deg)" : null,
+    isNoturno ? "brightness(0.82)" : null,
+  ].filter(Boolean).join(" ");
 
   return (
     <div
-      className={`min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter,background-color] duration-700 ${
-        isDark
-          ? "dark bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
-          : "bg-background text-foreground"
-      }`}
-      style={isNoturno ? { filter: "brightness(0.82)" } : undefined}
+      className="dark min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter] duration-700 bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
+      style={filtros ? { filter: filtros } : undefined}
     >
       <div
         className="absolute top-0 left-0 right-0 h-px"
@@ -385,6 +403,22 @@ function TvPage() {
           <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
+          <button
+            onClick={() => limpar("recent")}
+            disabled={limpando !== null}
+            title="Limpar leitos finalizados recentemente"
+            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+          >
+            <Eraser className="h-3 w-3" /> Recentes
+          </button>
+          <button
+            onClick={() => limpar("today")}
+            disabled={limpando !== null}
+            title="Limpar altas concluídas do dia"
+            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+          >
+            <Eraser className="h-3 w-3" /> Dia
+          </button>
           <button
             onClick={() => setIsDark((v) => !v)}
             aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
