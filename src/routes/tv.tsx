@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check, Sun, Moon } from "lucide-react";
+
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
 import {
@@ -351,9 +352,15 @@ function TvPage() {
   const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
+  const [isDark, setIsDark] = useState(true);
+
   return (
     <div
-      className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative transition-[filter] duration-1000"
+      className={`min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter,background-color] duration-700 ${
+        isDark
+          ? "dark bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
+          : "bg-background text-foreground"
+      }`}
       style={isNoturno ? { filter: "brightness(0.82)" } : undefined}
     >
       <div
@@ -378,6 +385,18 @@ function TvPage() {
           <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
+          <button
+            onClick={() => setIsDark((v) => !v)}
+            aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
+            className="flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-white/10 active:scale-95"
+            title={isDark ? "Tema claro" : "Tema escuro"}
+          >
+            {isDark ? (
+              <Sun className="h-4 w-4 lg:h-5 lg:w-5 text-[oklch(0.85_0.08_80)]" />
+            ) : (
+              <Moon className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
+            )}
+          </button>
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
