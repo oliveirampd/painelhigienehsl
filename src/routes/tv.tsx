@@ -394,7 +394,7 @@ function TvPage() {
             {isDark ? (
               <Sun className="h-4 w-4 lg:h-5 lg:w-5 text-[oklch(0.85_0.08_80)]" />
             ) : (
-              <Moon className="h-4 w-4 lg:h:h-5 lg:w-5 text-primary" />
+              <Moon className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
             )}
           </button>
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
