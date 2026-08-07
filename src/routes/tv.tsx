@@ -339,7 +339,7 @@ function TvPage() {
     const agora = new Date();
     const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
     inicioDiaBRT.setUTCHours(0, 0, 0, 0);
-    const cutoff = inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000;
+    const cutoff = Math.max(inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
     const done = discharges.filter(
       (d) =>
         isTerminal(d) &&
