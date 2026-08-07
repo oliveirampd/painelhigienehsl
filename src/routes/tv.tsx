@@ -711,12 +711,24 @@ function BedsPanel({
                       className={version > 0 ? "flash-row" : undefined}
                       style={{
                         background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
-                        boxShadow: isWorst ? "inset 0 0 0 2px oklch(0.7 0.22 25 / 0.8)" : undefined,
                       }}
                     >
                       <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
-                        {isWorst && <span className="hidden lg:inline mr-1" title="Caso mais crítico do painel">⚠️</span>}
-                        {d.bed_number}
+                        <span className="inline-flex items-center gap-1.5">
+                          {d.bed_number}
+                          {isWorst && (
+                            <span
+                              title="Andar crítico"
+                              className="shrink-0 rounded-[3px] border px-1 py-px text-[8px] lg:text-[9px] font-semibold uppercase tracking-wide"
+                              style={{
+                                borderColor: "oklch(0.7 0.2 25 / 0.5)",
+                                color: "oklch(0.78 0.19 25)",
+                              }}
+                            >
+                              andar crítico
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
                       {showReason ? (
