@@ -101,3 +101,33 @@ export const updateStaffStatus = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
+const clearCompletionsSchema = z.object({
+  scope: z.enum(["today", "recent"]),
+});
+
+/** Limpa o histórico de conclusões (zera `completed_at`) do dia ou dos últimos 30 min. */
+export const clearCompletions = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => clearCompletionsSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let since: string;
+    if (data.scope === "recent") {
+      since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    } else {
+      const brt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      since = new Date(
+        Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate(), 3, 0, 0),
+      ).toISOString();
+    }
+    const { error } = await supabaseAdmin
+      .from("discharges")
+      .update({ completed_at: null })
+      .not("completed_at", "is", null)
+      .gte("completed_at", since);
+    if (error) {
+      console.error("[clearCompletions]", error);
+      throw new Error("Não foi possível limpar as conclusões.");
+    }
+    return { ok: true as const };
+  });
