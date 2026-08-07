@@ -352,9 +352,15 @@ function TvPage() {
   const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
+  const [isDark, setIsDark] = useState(true);
+
   return (
     <div
-      className="min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] font-sans relative transition-[filter] duration-1000"
+      className={`min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter,background-color] duration-700 ${
+        isDark
+          ? "dark bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
+          : "bg-background text-foreground"
+      }`}
       style={isNoturno ? { filter: "brightness(0.82)" } : undefined}
     >
       <div
