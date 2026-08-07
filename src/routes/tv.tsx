@@ -99,11 +99,20 @@ function TvPage() {
     if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
 
+  // Marcos de limpeza manual (persistidos no navegador da TV): conclusões
+  // anteriores a esses horários não aparecem mais, mesmo que o sync as reenvie.
+  const [recentClearedAt, setRecentClearedAt] = useState(0);
+  const [todayClearedAt, setTodayClearedAt] = useState(0);
+  useEffect(() => {
+    setRecentClearedAt(Number(localStorage.getItem("tv:recentClearedAt") ?? 0));
+    setTodayClearedAt(Number(localStorage.getItem("tv:todayClearedAt") ?? 0));
+  }, []);
+
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
   // A janela é reavaliada a cada atualização de dados / tique do relógio,
   // então leitos antigos saem da faixa automaticamente.
   const recentCompletions = useMemo(() => {
-    const cutoff = now - 30 * 60 * 1000;
+    const cutoff = Math.max(now - 30 * 60 * 1000, recentClearedAt);
     return discharges
       .filter(
         (d) =>
@@ -117,7 +126,8 @@ function TvPage() {
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
       .slice(0, 8)
       .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-  }, [discharges, now]);
+  }, [discharges, now, recentClearedAt]);
+
 
   const flashVersions = flashVersionRef.current;
 
