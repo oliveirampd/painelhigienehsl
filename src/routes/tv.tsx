@@ -385,6 +385,18 @@ function TvPage() {
           <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
+          <button
+            onClick={() => setIsDark((v) => !v)}
+            aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
+            className="flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-white/10 active:scale-95"
+            title={isDark ? "Tema claro" : "Tema escuro"}
+          >
+            {isDark ? (
+              <Sun className="h-4 w-4 lg:h-5 lg:w-5 text-[oklch(0.85_0.08_80)]" />
+            ) : (
+              <Moon className="h-4 w-4 lg:h:h-5 lg:w-5 text-primary" />
+            )}
+          </button>
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
