@@ -357,7 +357,7 @@ function TvPage() {
       else if (block === "B" || block === "C") bc++;
     }
     return { total: done.length, de, bc };
-  }, [discharges]);
+  }, [discharges, todayClearedAt]);
   const concluidasHoje = concluidasHojePorBloco.total;
 
 
