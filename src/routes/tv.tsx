@@ -333,6 +333,22 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
+  // 3) Médias de tempo: espera para iniciar (aberto → agora, leitos ainda não iniciados)
+  // e execução em andamento (início da limpeza → agora).
+  const avgToStart = useMemo(() => {
+    const pend = [...enRoute, ...paused];
+    if (!pend.length) return null;
+    const sum = pend.reduce((acc, d) => acc + elapsedMinutes(d.created_at, now), 0);
+    return Math.round(sum / pend.length);
+  }, [enRoute, paused, now]);
+
+  const avgExecution = useMemo(() => {
+    if (!inFlight.length) return null;
+    const sum = inFlight.reduce((acc, d) => acc + elapsedMinutes(d.status_updated_at, now), 0);
+    return Math.round(sum / inFlight.length);
+  }, [inFlight, now]);
+
+
   // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
   // separadas por agrupamento de blocos (D/E e B/C).
   const concluidasHojePorBloco = useMemo(() => {
