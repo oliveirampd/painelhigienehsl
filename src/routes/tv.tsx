@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check, Sun, Moon, Eraser } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, CircleCheck, BadgeCheck, Sun, Moon, Eraser } from "lucide-react";
 import { toast } from "sonner";
 import { clearCompletions } from "@/lib/hospital.functions";
 
