@@ -654,7 +654,7 @@ function KpiCard({
           className="text-2xl lg:text-4xl tabular-nums leading-none"
           style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
         >
-          {value}
+          {display ?? value}
         </div>
         {trend != null && trend !== 0 && (
           <span className="hidden lg:inline text-xs font-mono" style={{ color: trendColor }} title="Comparado a 1h atrás">
