@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, Check, Sun, Moon, Eraser } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, CircleCheck, BadgeCheck, Sun, Moon, Eraser } from "lucide-react";
 import { toast } from "sonner";
 import { clearCompletions } from "@/lib/hospital.functions";
 
@@ -462,7 +462,7 @@ function TvPage() {
                 key={i < recentCompletions.length ? c.id : `dup-${c.id}`}
                 className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
               >
-                <Check className="h-3 w-3 lg:h-3.5 lg:w-3.5 shrink-0 stroke-[3] text-[oklch(0.72_0.16_150)]" />
+                <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[oklch(0.72_0.16_150)]" />
                 <span className="font-semibold text-white/90">{c.bed}</span>
                 <span className="text-white/35">·</span>
                 <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
@@ -560,7 +560,8 @@ function TvPage() {
       </div>
 
       <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
-        <span>
+<span className="inline-flex items-center gap-1.5">
+          <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
           Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
         </span>
         <span className="text-white/20">·</span>
