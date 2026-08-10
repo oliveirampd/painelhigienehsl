@@ -333,6 +333,22 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
+  // 3) Médias de tempo: espera para iniciar (aberto → agora, leitos ainda não iniciados)
+  // e execução em andamento (início da limpeza → agora).
+  const avgToStart = useMemo(() => {
+    const pend = [...enRoute, ...paused];
+    if (!pend.length) return null;
+    const sum = pend.reduce((acc, d) => acc + elapsedMinutes(d.created_at, now), 0);
+    return Math.round(sum / pend.length);
+  }, [enRoute, paused, now]);
+
+  const avgExecution = useMemo(() => {
+    if (!inFlight.length) return null;
+    const sum = inFlight.reduce((acc, d) => acc + elapsedMinutes(d.status_updated_at, now), 0);
+    return Math.round(sum / inFlight.length);
+  }, [inFlight, now]);
+
+
   // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
   // separadas por agrupamento de blocos (D/E e B/C).
   const concluidasHojePorBloco = useMemo(() => {
@@ -474,13 +490,26 @@ function TvPage() {
       )}
 
 
-      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
+      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendFor("inFlight", inFlight.length)} />
         <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendFor("enRoute", enRoute.length)} />
         <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendFor("paused", paused.length)} higherIsBad />
         <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendFor("completedIssues", completedIssues.length)} higherIsBad />
         <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
+        <KpiCard
+          label="Média p/ Iniciar"
+          value={avgToStart ?? 0}
+          display={avgToStart == null ? "—" : `${avgToStart}m`}
+          accent="oklch(0.8 0.16 85)"
+        />
+        <KpiCard
+          label="Média de Execução"
+          value={avgExecution ?? 0}
+          display={avgExecution == null ? "—" : `${avgExecution}m`}
+          accent="oklch(0.75 0.14 195)"
+        />
       </div>
+
 
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 px-4 lg:px-6 pb-4">
         <BedsPanel
@@ -591,16 +620,19 @@ function useClock() {
 function KpiCard({
   label,
   value,
+  display,
   accent,
   trend,
   higherIsBad,
 }: {
   label: string;
   value: number;
+  display?: string;
   accent: string;
   trend?: number | null;
   higherIsBad?: boolean;
 }) {
+
   const trendColor =
     trend == null || trend === 0
       ? "rgba(255,255,255,0.35)"
@@ -622,7 +654,7 @@ function KpiCard({
           className="text-2xl lg:text-4xl tabular-nums leading-none"
           style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
         >
-          {value}
+          {display ?? value}
         </div>
         {trend != null && trend !== 0 && (
           <span className="hidden lg:inline text-xs font-mono" style={{ color: trendColor }} title="Comparado a 1h atrás">
