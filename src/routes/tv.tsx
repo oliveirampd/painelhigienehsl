@@ -620,16 +620,19 @@ function useClock() {
 function KpiCard({
   label,
   value,
+  display,
   accent,
   trend,
   higherIsBad,
 }: {
   label: string;
   value: number;
+  display?: string;
   accent: string;
   trend?: number | null;
   higherIsBad?: boolean;
 }) {
+
   const trendColor =
     trend == null || trend === 0
       ? "rgba(255,255,255,0.35)"
