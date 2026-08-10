@@ -490,13 +490,26 @@ function TvPage() {
       )}
 
 
-      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
+      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
         <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendFor("inFlight", inFlight.length)} />
         <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendFor("enRoute", enRoute.length)} />
         <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendFor("paused", paused.length)} higherIsBad />
         <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendFor("completedIssues", completedIssues.length)} higherIsBad />
         <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
+        <KpiCard
+          label="Média p/ Iniciar"
+          value={avgToStart ?? 0}
+          display={avgToStart == null ? "—" : `${avgToStart}m`}
+          accent="oklch(0.8 0.16 85)"
+        />
+        <KpiCard
+          label="Média de Execução"
+          value={avgExecution ?? 0}
+          display={avgExecution == null ? "—" : `${avgExecution}m`}
+          accent="oklch(0.75 0.14 195)"
+        />
       </div>
+
 
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 px-4 lg:px-6 pb-4">
         <BedsPanel
