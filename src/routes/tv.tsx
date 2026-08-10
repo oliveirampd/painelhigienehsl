@@ -560,7 +560,8 @@ function TvPage() {
       </div>
 
       <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
-        <span>
+<span className="inline-flex items-center gap-1.5">
+          <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
           Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
         </span>
         <span className="text-white/20">·</span>
