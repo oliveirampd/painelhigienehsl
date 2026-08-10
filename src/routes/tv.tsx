@@ -462,7 +462,7 @@ function TvPage() {
                 key={i < recentCompletions.length ? c.id : `dup-${c.id}`}
                 className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
               >
-                <Check className="h-3 w-3 lg:h-3.5 lg:w-3.5 shrink-0 stroke-[3] text-[oklch(0.72_0.16_150)]" />
+                <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[oklch(0.72_0.16_150)]" />
                 <span className="font-semibold text-white/90">{c.bed}</span>
                 <span className="text-white/35">·</span>
                 <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
