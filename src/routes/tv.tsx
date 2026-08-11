@@ -511,7 +511,7 @@ function TvPage() {
       </div>
 
 
-      <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[1fr_0.8fr_1fr_1fr] gap-3 px-4 lg:px-6 pb-4">
+      <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
         <BedsPanel
           title="Leitos em Limpeza Terminal"
           icon={<BrushCleaning className="w-4 h-4 text-white/60" />}
