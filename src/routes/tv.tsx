@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, CircleCheck, BadgeCheck, Sun, Moon, Eraser } from "lucide-react";
+import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, CircleCheck, BadgeCheck, Sun, Moon, Eraser, ChevronRight } from "lucide-react";
+
 import { toast } from "sonner";
 import { clearCompletions } from "@/lib/hospital.functions";
 
@@ -469,6 +470,16 @@ function TvPage() {
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
+
+      <Link
+        to="/diaria"
+        title="Ver higiene diária de todos os leitos"
+        className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
+      >
+        <ChevronRight className="h-5 w-5" />
+        <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Diária</span>
+      </Link>
+
 
       {recentCompletions.length > 0 && (
         <div className="flex-none w-full overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)] py-1.5">

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TvRouteImport } from './routes/tv'
+import { Route as DiariaRouteImport } from './routes/diaria'
 import { Route as ControlRouteImport } from './routes/control'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiPublicHooksSyncListo360RouteImport } from './routes/api/public/hooks/sync-listo360'
@@ -18,6 +19,11 @@ import { Route as ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRouteImport 
 const TvRoute = TvRouteImport.update({
   id: '/tv',
   path: '/tv',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiariaRoute = DiariaRouteImport.update({
+  id: '/diaria',
+  path: '/diaria',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ControlRoute = ControlRouteImport.update({
@@ -46,6 +52,7 @@ const ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
+  '/diaria': typeof DiariaRoute
   '/tv': typeof TvRoute
   '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
   '/api/public/hooks/src/routes/api/public/hooks/sync-healthcon': typeof ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute
@@ -53,6 +60,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
+  '/diaria': typeof DiariaRoute
   '/tv': typeof TvRoute
   '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
   '/api/public/hooks/src/routes/api/public/hooks/sync-healthcon': typeof ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
+  '/diaria': typeof DiariaRoute
   '/tv': typeof TvRoute
   '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
   '/api/public/hooks/src/routes/api/public/hooks/sync-healthcon': typeof ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute
@@ -70,6 +79,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/control'
+    | '/diaria'
     | '/tv'
     | '/api/public/hooks/sync-listo360'
     | '/api/public/hooks/src/routes/api/public/hooks/sync-healthcon'
@@ -77,6 +87,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/control'
+    | '/diaria'
     | '/tv'
     | '/api/public/hooks/sync-listo360'
     | '/api/public/hooks/src/routes/api/public/hooks/sync-healthcon'
@@ -84,6 +95,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/control'
+    | '/diaria'
     | '/tv'
     | '/api/public/hooks/sync-listo360'
     | '/api/public/hooks/src/routes/api/public/hooks/sync-healthcon'
@@ -92,6 +104,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ControlRoute: typeof ControlRoute
+  DiariaRoute: typeof DiariaRoute
   TvRoute: typeof TvRoute
   ApiPublicHooksSyncListo360Route: typeof ApiPublicHooksSyncListo360Route
   ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute: typeof ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute
@@ -104,6 +117,13 @@ declare module '@tanstack/react-router' {
       path: '/tv'
       fullPath: '/tv'
       preLoaderRoute: typeof TvRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diaria': {
+      id: '/diaria'
+      path: '/diaria'
+      fullPath: '/diaria'
+      preLoaderRoute: typeof DiariaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/control': {
@@ -140,6 +160,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ControlRoute: ControlRoute,
+  DiariaRoute: DiariaRoute,
   TvRoute: TvRoute,
   ApiPublicHooksSyncListo360Route: ApiPublicHooksSyncListo360Route,
   ApiPublicHooksSrcRoutesApiPublicHooksSyncHealthconRoute:
@@ -148,13 +169,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
