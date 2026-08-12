@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrushCleaning, BedDouble, CircleCheck, ChevronLeft, Circle } from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
 import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/diaria")({
   component: DiariaPage,
 });
 
-const BLOCK_ORDER = ["D", "C", "B", "E"] as const;
+const BLOCK_ORDER = ["D", "E", "C", "B"] as const;
 
 function DiariaPage() {
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
@@ -33,6 +33,48 @@ function DiariaPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [lastAt, setLastAt] = useState<number>(Date.now());
   const [clock, setClock] = useState("");
+  const scrollRef = useRef<HTMLElement | null>(null);
+
+  // Rolagem automática: desce devagar até o fim da lista, pausa, volta ao topo,
+  // pausa de novo e repete — pensado pra rodar sozinho numa TV, sem controle manual.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    let direction: 1 | -1 = 1;
+    let paused = false;
+    let rafId = 0;
+    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const SPEED_PX_PER_FRAME = 0.6;
+    const PAUSE_MS = 2500;
+
+    const step = () => {
+      rafId = requestAnimationFrame(step);
+      if (paused) return;
+
+      const max = el.scrollHeight - el.clientHeight;
+      if (max <= 0) return;
+
+      el.scrollTop += direction * SPEED_PX_PER_FRAME;
+
+      const atBottom = el.scrollTop >= max - 1;
+      const atTop = el.scrollTop <= 1;
+
+      if (atBottom || atTop) {
+        paused = true;
+        direction = atBottom ? -1 : 1;
+        resumeTimeout = setTimeout(() => {
+          paused = false;
+        }, PAUSE_MS);
+      }
+    };
+
+    rafId = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(rafId);
+      if (resumeTimeout) clearTimeout(resumeTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     const tick = () =>
@@ -139,27 +181,27 @@ function DiariaPage() {
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
         <Legenda color="oklch(0.78 0.15 90)" text="Rotina camareira" />
         <Legenda color="oklch(0.72 0.16 150)" text="Concluído" />
-        <Legenda color="oklch(0.35 0.02 260)" text="Sem rotina" />
+        <Legenda color="oklch(0.62 0.21 25)" text="Sem rotina no turno" />
         {erro && <span className="text-[oklch(0.7_0.18_25)] normal-case">{erro}</span>}
         {loading && <span className="normal-case">carregando…</span>}
       </div>
 
-      <main className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-5">
+      <main ref={scrollRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6 scroll-smooth">
         {grupos.map((g) => (
           <section key={g.block}>
-            <h2 className="mb-2 flex items-center gap-2 text-xs lg:text-sm font-semibold uppercase tracking-widest text-white/70">
-              Bloco {g.block}
-              <span className="text-white/30 font-normal normal-case tracking-normal">
+            <h2 className="mb-3 flex items-center gap-3 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide">
+              <span>Bloco {g.block}</span>
+              <span className="text-sm lg:text-base font-normal normal-case tracking-normal text-white/40">
                 {g.beds.length} leitos
               </span>
             </h2>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {g.floors.map((floor) => (
                 <div key={floor} className="flex items-start gap-3">
-                  <span className="mt-1 w-10 flex-none text-right font-mono text-[11px] text-white/35">
+                  <span className="mt-1.5 w-10 flex-none text-right font-mono text-[11px] text-white/35">
                     {floor}º
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2.5">
                     {g.beds
                       .filter((b) => bedFloor(b.n) === floor)
                       .map((b) => (
@@ -221,22 +263,28 @@ function BedTile({ bed, ev }: { bed: string; ev: DailyBedEvent | undefined }) {
       : "oklch(0.72 0.16 235)"
     : done
       ? "oklch(0.72 0.16 150)"
-      : "oklch(0.5 0.02 260)";
+      : "oklch(0.62 0.21 25)";
 
   const title = ev
     ? `Leito ${bed} · ${camareira ? "Rotina camareira" : "Limpeza concorrente"} · ${
         active ? "em execução" : "concluído"
       }${ev.staff ? ` · ${ev.staff}` : ""} · ${ev.shift}`
-    : `Leito ${bed} · sem rotina no turno`;
+    : `Leito ${bed} · sem rotina neste turno`;
+
+  const semRotina = !ev;
 
   return (
     <div
       title={title}
       className="relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors"
       style={{
-        borderColor: color.replace(")", active ? " / 0.65)" : " / 0.28)"),
-        background: active ? color.replace(")", " / 0.16)") : "oklch(0.2 0.02 265 / 0.6)",
-        color: active || done ? color : "oklch(0.62 0.02 260)",
+        borderColor: color.replace(")", active || semRotina ? " / 0.65)" : " / 0.28)"),
+        background: active
+          ? color.replace(")", " / 0.16)")
+          : semRotina
+            ? color.replace(")", " / 0.14)")
+            : "oklch(0.2 0.02 265 / 0.6)",
+        color: active || done || semRotina ? color : "oklch(0.62 0.02 260)",
         boxShadow: active ? `0 0 12px -2px ${color.replace(")", " / 0.5)")}` : undefined,
       }}
     >
@@ -251,7 +299,7 @@ function BedTile({ bed, ev }: { bed: string; ev: DailyBedEvent | undefined }) {
         ) : done ? (
           <CircleCheck className="h-3 w-3 opacity-80" />
         ) : (
-          <span className="h-1 w-1 rounded-full bg-white/15" />
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
         )}
       </span>
     </div>
