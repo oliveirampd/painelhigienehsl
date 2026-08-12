@@ -107,19 +107,36 @@ function DiariaPage() {
     };
   }, []);
 
+  // Unidades onde "limpeza concorrente" não deve ser contabilizada/colorida
+  // (não são leitos de paciente, ou a rotina lá não faz sentido operacional).
+  const EXCLUDED_CONCORRENTE_UNITS = new Set(["5B", "5C", "9C", "3C", "3D"]);
+  const bedUnit = (bedCode: string) => {
+    const b = HOSPITAL_BEDS.find((x) => x.n === bedCode);
+    return b ? `${bedFloor(bedCode)}${b.b}` : "";
+  };
+  const eventsFiltered = useMemo(
+    () => events.filter((e) => !(e.kind === "concorrente" && EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(e.bed)))),
+    [events],
+  );
+
   const byBed = useMemo(() => {
     const m = new Map<string, { concorrente?: DailyBedEvent; camareira?: DailyBedEvent }>();
-    for (const e of events) {
+    for (const e of eventsFiltered) {
       const cur = m.get(e.bed) ?? {};
       cur[e.kind] = e;
       m.set(e.bed, cur);
     }
     return m;
-  }, [events]);
+  }, [eventsFiltered]);
 
-  const emHigiene = events.filter((e) => e.status === "in_progress" && e.kind === "concorrente");
-  const emCamareira = events.filter((e) => e.status === "in_progress" && e.kind === "camareira");
-  const concluidos = events.filter((e) => e.status === "completed").length;
+  const emHigiene = eventsFiltered.filter((e) => e.status === "in_progress" && e.kind === "concorrente");
+  const emCamareira = eventsFiltered.filter((e) => e.status === "in_progress" && e.kind === "camareira");
+  const concorrentesConcluidas = eventsFiltered.filter(
+    (e) => e.status === "completed" && e.kind === "concorrente",
+  ).length;
+  const camareirasConcluidas = eventsFiltered.filter(
+    (e) => e.status === "completed" && e.kind === "camareira",
+  ).length;
 
   const grupos = BLOCK_ORDER.map((block) => {
     const beds = HOSPITAL_BEDS.filter((b) => b.b === block);
@@ -156,7 +173,7 @@ function DiariaPage() {
         </div>
       </header>
 
-      <div className="flex-none grid grid-cols-2 lg:grid-cols-4 gap-2 px-4 lg:px-6 py-3">
+      <div className="flex-none grid grid-cols-2 lg:grid-cols-5 gap-2 px-4 lg:px-6 py-3">
         <Kpi
           icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
           label="Em higiene agora"
@@ -171,9 +188,15 @@ function DiariaPage() {
         />
         <Kpi
           icon={<CircleCheck className="h-4 w-4" />}
-          label="Concluídos no turno"
-          value={concluidos}
-          color="oklch(0.7 0.02 260)"
+          label="Concorrentes concluídas"
+          value={concorrentesConcluidas}
+          color="oklch(0.72 0.16 235)"
+        />
+        <Kpi
+          icon={<CircleCheck className="h-4 w-4" />}
+          label="Camareiras concluídas"
+          value={camareirasConcluidas}
+          color="oklch(0.75 0.17 55)"
         />
         <Kpi
           icon={<Circle className="h-4 w-4" />}
@@ -314,7 +337,7 @@ function BedTile({
         : `Leito ${bed} · sem rotina neste turno`;
 
   const background = both
-    ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.55)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.55)")} 50%)`
+    ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.28)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.28)")} 50%)`
     : hasC
       ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.22)" : " / 0.14)")
       : hasK
@@ -334,7 +357,9 @@ function BedTile({
   return (
     <div
       title={title}
-      className="relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors"
+      className={`relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors ${
+        anyActive ? "animate-bed-blink" : ""
+      }`}
       style={{
         borderColor,
         background,
