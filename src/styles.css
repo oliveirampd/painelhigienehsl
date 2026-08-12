@@ -202,3 +202,9 @@
 }
 .animate-linen { animation: linen-y 1.6s ease-in-out infinite; }
 
+/* Leito com rotina em execução: pisca o card inteiro para não confundir com concluído (estático) */
+@keyframes bed-blink {
+  0%, 100% { filter: brightness(1); opacity: 1; }
+  50%      { filter: brightness(1.6); opacity: 0.75; }
+}
+.animate-bed-blink { animation: bed-blink 0.9s ease-in-out infinite; }
