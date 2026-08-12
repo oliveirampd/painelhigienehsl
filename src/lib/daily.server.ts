@@ -32,6 +32,8 @@ export type DailyBedEvent = {
   staff: string | null;
   unit: string;
   at: string;
+  /** Quantos ciclos concluídos desse tipo de rotina esse leito já teve neste turno. */
+  count: number;
 };
 
 function parseBRT(s: string | null | undefined): Date | null {
@@ -165,7 +167,7 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
   const answers = await fetchAnswers(token, 26);
   const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
 
-  const byBed = new Map<string, DailyBedEvent>();
+  const byBed = new Map<string, { event: Omit<DailyBedEvent, "count">; completedCount: number }>();
   for (const a of answers) {
     const kind = kindOf(a);
     if (!kind) continue;
@@ -180,7 +182,7 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
     // volta a aparecer como "sem rotina" até que a equipe registre uma nova entrada.
     if (atDate < shiftStart || atDate >= shiftEnd) continue;
 
-    const ev: DailyBedEvent = {
+    const ev: Omit<DailyBedEvent, "count"> = {
       bed,
       kind,
       status,
@@ -192,19 +194,25 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
 
     // Chave por leito + tipo de rotina: um leito pode ter concorrente E camareira
     // no mesmo turno, e as duas precisam aparecer (não uma sobrescrever a outra).
+    // Se o mesmo tipo repetir (ex: concorrente de novo depois da camareira), o
+    // registro anterior não é descartado — soma no contador (completedCount),
+    // e o card mostra "×N" pra indicar que houve mais de um ciclo no turno.
     const key = `${bed}|${kind}`;
     const prev = byBed.get(key);
     if (!prev) {
-      byBed.set(key, ev);
+      byBed.set(key, { event: ev, completedCount: status === "completed" ? 1 : 0 });
       continue;
     }
-    // Em execução sempre vence; entre iguais, o mais recente vence.
-    const prevScore = prev.status === "in_progress" ? 1 : 0;
+    const completedCount = prev.completedCount + (status === "completed" ? 1 : 0);
+    // Em execução sempre vence pra exibição; entre iguais, o mais recente vence.
+    const prevScore = prev.event.status === "in_progress" ? 1 : 0;
     const score = status === "in_progress" ? 1 : 0;
-    if (score > prevScore || (score === prevScore && at > prev.at)) {
-      byBed.set(key, ev);
-    }
+    const event = score > prevScore || (score === prevScore && at > prev.event.at) ? ev : prev.event;
+    byBed.set(key, { event, completedCount });
   }
 
-  return Array.from(byBed.values());
+  return Array.from(byBed.values()).map(({ event, completedCount }) => ({
+    ...event,
+    count: Math.max(completedCount, event.status === "completed" ? 1 : 0),
+  }));
 }
