@@ -108,8 +108,12 @@ function DiariaPage() {
   }, []);
 
   const byBed = useMemo(() => {
-    const m = new Map<string, DailyBedEvent>();
-    for (const e of events) m.set(e.bed, e);
+    const m = new Map<string, { concorrente?: DailyBedEvent; camareira?: DailyBedEvent }>();
+    for (const e of events) {
+      const cur = m.get(e.bed) ?? {};
+      cur[e.kind] = e;
+      m.set(e.bed, cur);
+    }
     return m;
   }, [events]);
 
@@ -161,13 +165,13 @@ function DiariaPage() {
           icon={<BedDouble className="h-4 w-4 animate-linen" />}
           label="Camareira agora"
           value={emCamareira.length}
-          color="oklch(0.78 0.15 90)"
+          color="oklch(0.75 0.17 55)"
         />
         <Kpi
           icon={<CircleCheck className="h-4 w-4" />}
           label="Concluídos no turno"
           value={concluidos}
-          color="oklch(0.72 0.16 150)"
+          color="oklch(0.7 0.02 260)"
         />
         <Kpi
           icon={<Circle className="h-4 w-4" />}
@@ -177,10 +181,10 @@ function DiariaPage() {
         />
       </div>
 
-      <div className="flex items-center gap-4 px-4 lg:px-6 pb-2 text-[10px] uppercase tracking-wide text-white/45">
+      <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-[10px] uppercase tracking-wide text-white/45">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
-        <Legenda color="oklch(0.78 0.15 90)" text="Rotina camareira" />
-        <Legenda color="oklch(0.72 0.16 150)" text="Concluído" />
+        <Legenda color="oklch(0.75 0.17 55)" text="Rotina camareira" />
+        <LegendaSplit text="Ambas no turno" />
         <Legenda color="oklch(0.62 0.21 25)" text="Sem rotina no turno" />
         {erro && <span className="text-[oklch(0.7_0.18_25)] normal-case">{erro}</span>}
         {loading && <span className="normal-case">carregando…</span>}
@@ -205,7 +209,7 @@ function DiariaPage() {
                     {g.beds
                       .filter((b) => bedFloor(b.n) === floor)
                       .map((b) => (
-                        <BedTile key={b.n} bed={b.n} ev={byBed.get(b.n)} />
+                        <BedTile key={b.n} bed={b.n} events={byBed.get(b.n)} />
                       ))}
                   </div>
                 </div>
@@ -222,6 +226,18 @@ function Legenda({ color, text }: { color: string; text: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+      {text}
+    </span>
+  );
+}
+
+function LegendaSplit({ text }: { text: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span
+        className="h-2 w-2 rounded-full"
+        style={{ background: "linear-gradient(90deg, oklch(0.72 0.16 235) 50%, oklch(0.75 0.17 55) 50%)" }}
+      />
       {text}
     </span>
   );
@@ -252,54 +268,74 @@ function Kpi({
   );
 }
 
-function BedTile({ bed, ev }: { bed: string; ev: DailyBedEvent | undefined }) {
-  const active = ev?.status === "in_progress";
-  const camareira = ev?.kind === "camareira";
-  const done = ev?.status === "completed";
+const CONCORRENTE_COLOR = "oklch(0.72 0.16 235)"; // azul
+const CAMAREIRA_COLOR = "oklch(0.75 0.17 55)"; // laranja
+const SEM_ROTINA_COLOR = "oklch(0.62 0.21 25)"; // vermelho
 
-  const color = active
-    ? camareira
-      ? "oklch(0.78 0.15 90)"
-      : "oklch(0.72 0.16 235)"
-    : done
-      ? "oklch(0.72 0.16 150)"
-      : "oklch(0.62 0.21 25)";
+function BedTile({
+  bed,
+  events,
+}: {
+  bed: string;
+  events: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent } | undefined;
+}) {
+  const c = events?.concorrente;
+  const k = events?.camareira;
+  const hasC = !!c;
+  const hasK = !!k;
+  const activeC = c?.status === "in_progress";
+  const activeK = k?.status === "in_progress";
+  const anyActive = activeC || activeK;
+  const both = hasC && hasK;
 
-  const title = ev
-    ? `Leito ${bed} · ${camareira ? "Rotina camareira" : "Limpeza concorrente"} · ${
-        active ? "em execução" : "concluído"
-      }${ev.staff ? ` · ${ev.staff}` : ""} · ${ev.shift}`
-    : `Leito ${bed} · sem rotina neste turno`;
+  const title = both
+    ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : "concluída"} + Camareira ${
+        activeK ? "em execução" : "concluída"
+      }`
+    : hasC
+      ? `Leito ${bed} · Limpeza concorrente · ${activeC ? "em execução" : "concluída"}${c.staff ? ` · ${c.staff}` : ""} · ${c.shift}`
+      : hasK
+        ? `Leito ${bed} · Rotina camareira · ${activeK ? "em execução" : "concluída"}${k.staff ? ` · ${k.staff}` : ""} · ${k.shift}`
+        : `Leito ${bed} · sem rotina neste turno`;
 
-  const semRotina = !ev;
+  const background = both
+    ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.28)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.28)")} 50%)`
+    : hasC
+      ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.22)" : " / 0.14)")
+      : hasK
+        ? CAMAREIRA_COLOR.replace(")", activeK ? " / 0.22)" : " / 0.14)")
+        : SEM_ROTINA_COLOR.replace(")", " / 0.14)");
+
+  const borderColor = both
+    ? "oklch(0.9 0.01 260 / 0.55)"
+    : hasC
+      ? CONCORRENTE_COLOR.replace(")", " / 0.65)")
+      : hasK
+        ? CAMAREIRA_COLOR.replace(")", " / 0.65)")
+        : SEM_ROTINA_COLOR.replace(")", " / 0.65)");
+
+  const textColor = hasC || hasK ? "oklch(0.97 0.005 260)" : SEM_ROTINA_COLOR;
 
   return (
     <div
       title={title}
       className="relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors"
       style={{
-        borderColor: color.replace(")", active || semRotina ? " / 0.65)" : " / 0.28)"),
-        background: active
-          ? color.replace(")", " / 0.16)")
-          : semRotina
-            ? color.replace(")", " / 0.14)")
-            : "oklch(0.2 0.02 265 / 0.6)",
-        color: active || done || semRotina ? color : "oklch(0.62 0.02 260)",
-        boxShadow: active ? `0 0 12px -2px ${color.replace(")", " / 0.5)")}` : undefined,
+        borderColor,
+        background,
+        color: textColor,
+        boxShadow: anyActive
+          ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.55)")}`
+          : undefined,
       }}
     >
       <span className="font-semibold tabular-nums leading-none">{bed}</span>
-      <span className="mt-1 flex h-4 items-center justify-center">
-        {active ? (
-          camareira ? (
-            <BedDouble className="h-3.5 w-3.5 animate-linen" />
-          ) : (
-            <BrushCleaning className="h-3.5 w-3.5 animate-sweep" />
-          )
-        ) : done ? (
-          <CircleCheck className="h-3 w-3 opacity-80" />
-        ) : (
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      <span className="mt-1 flex h-4 items-center justify-center gap-1">
+        {activeK && <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />}
+        {activeC && <BrushCleaning className="h-3.5 w-3.5 animate-sweep" style={{ color: CONCORRENTE_COLOR }} />}
+        {!anyActive && (hasC || hasK) && <CircleCheck className="h-3 w-3 opacity-90" />}
+        {!anyActive && !hasC && !hasK && (
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEM_ROTINA_COLOR }} />
         )}
       </span>
     </div>
