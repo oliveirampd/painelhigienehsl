@@ -184,8 +184,8 @@ function DiariaPage() {
       <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-[10px] uppercase tracking-wide text-white/45">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
         <Legenda color="oklch(0.75 0.17 55)" text="Rotina camareira" />
-        <LegendaSplit text="Ambas no turno" />
-        <Legenda color="oklch(0.62 0.21 25)" text="Sem rotina no turno" />
+        <LegendaSplit text="Concorrente + Camareira concluídas" />
+        <Legenda color="oklch(0.5 0.02 260)" text="Sem rotina no turno" />
         {erro && <span className="text-[oklch(0.7_0.18_25)] normal-case">{erro}</span>}
         {loading && <span className="normal-case">carregando…</span>}
       </div>
@@ -270,7 +270,7 @@ function Kpi({
 
 const CONCORRENTE_COLOR = "oklch(0.72 0.16 235)"; // azul
 const CAMAREIRA_COLOR = "oklch(0.75 0.17 55)"; // laranja
-const SEM_ROTINA_COLOR = "oklch(0.62 0.21 25)"; // vermelho
+const SEM_ROTINA_COLOR = "oklch(0.5 0.02 260)"; // cinza
 
 function BedTile({
   bed,
@@ -287,15 +287,16 @@ function BedTile({
   const activeK = k?.status === "in_progress";
   const anyActive = activeC || activeK;
   const both = hasC && hasK;
+  const repeatBadge = Math.max(c?.count ?? 0, k?.count ?? 0) > 1 ? Math.max(c?.count ?? 0, k?.count ?? 0) : null;
 
   const title = both
-    ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : "concluída"} + Camareira ${
-        activeK ? "em execução" : "concluída"
+    ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : `concluída (×${c!.count})`} + Camareira ${
+        activeK ? "em execução" : `concluída (×${k!.count})`
       }`
     : hasC
-      ? `Leito ${bed} · Limpeza concorrente · ${activeC ? "em execução" : "concluída"}${c.staff ? ` · ${c.staff}` : ""} · ${c.shift}`
+      ? `Leito ${bed} · Limpeza concorrente · ${activeC ? "em execução" : `concluída ×${c!.count}`}${c!.staff ? ` · ${c!.staff}` : ""} · ${c!.shift}`
       : hasK
-        ? `Leito ${bed} · Rotina camareira · ${activeK ? "em execução" : "concluída"}${k.staff ? ` · ${k.staff}` : ""} · ${k.shift}`
+        ? `Leito ${bed} · Rotina camareira · ${activeK ? "em execução" : `concluída ×${k!.count}`}${k!.staff ? ` · ${k!.staff}` : ""} · ${k!.shift}`
         : `Leito ${bed} · sem rotina neste turno`;
 
   const background = both
@@ -338,6 +339,15 @@ function BedTile({
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEM_ROTINA_COLOR }} />
         )}
       </span>
+      {repeatBadge && (
+        <span
+          className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-[9px] font-bold leading-[14px] text-black"
+          style={{ background: "oklch(0.85 0.15 95)" }}
+          title="Rotina repetida neste turno"
+        >
+          ×{repeatBadge}
+        </span>
+      )}
     </div>
   );
 }
