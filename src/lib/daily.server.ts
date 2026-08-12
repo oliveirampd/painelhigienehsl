@@ -190,16 +190,19 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
       at,
     };
 
-    const prev = byBed.get(bed);
+    // Chave por leito + tipo de rotina: um leito pode ter concorrente E camareira
+    // no mesmo turno, e as duas precisam aparecer (não uma sobrescrever a outra).
+    const key = `${bed}|${kind}`;
+    const prev = byBed.get(key);
     if (!prev) {
-      byBed.set(bed, ev);
+      byBed.set(key, ev);
       continue;
     }
     // Em execução sempre vence; entre iguais, o mais recente vence.
     const prevScore = prev.status === "in_progress" ? 1 : 0;
     const score = status === "in_progress" ? 1 : 0;
     if (score > prevScore || (score === prevScore && at > prev.at)) {
-      byBed.set(bed, ev);
+      byBed.set(key, ev);
     }
   }
 
