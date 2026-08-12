@@ -124,23 +124,25 @@ function DiariaPage() {
   const grupos = BLOCK_ORDER.map((block) => {
     const beds = HOSPITAL_BEDS.filter((b) => b.b === block);
     const floors = Array.from(new Set(beds.map((b) => bedFloor(b.n)))).sort((a, b) => b - a);
-    return { block, floors, beds };
+    const concorrenteRealizadas = beds.filter((b) => byBed.get(b.n)?.concorrente).length;
+    const camareiraRealizadas = beds.filter((b) => byBed.get(b.n)?.camareira).length;
+    return { block, floors, beds, concorrenteRealizadas, camareiraRealizadas };
   }).filter((g) => g.beds.length > 0);
 
   return (
-    <div className="dark min-h-screen w-full flex flex-col font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
+    <div className="dark h-screen w-full flex flex-col overflow-hidden font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
         <div className="flex items-center gap-3">
           <Link
             to="/tv"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/60 transition-colors hover:bg-white/10"
+            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-xs uppercase text-white/60 transition-colors hover:bg-white/10"
           >
             <ChevronLeft className="h-3.5 w-3.5" /> Terminal
           </Link>
           <h1 className="text-base lg:text-2xl font-bold tracking-tight">Higiene Diária — Leitos</h1>
         </div>
-        <div className="flex items-center gap-3 lg:gap-5 text-[10px] lg:text-xs">
-          <span className="flex items-center gap-1.5 uppercase tracking-widest text-white/50">
+        <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
+          <span className="flex items-center gap-1.5 uppercase text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -181,22 +183,34 @@ function DiariaPage() {
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-[10px] uppercase tracking-wide text-white/45">
+      <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium uppercase text-white/60">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
         <Legenda color="oklch(0.75 0.17 55)" text="Rotina camareira" />
         <LegendaSplit text="Concorrente + Camareira concluídas" />
-        <Legenda color="oklch(0.5 0.02 260)" text="Sem rotina no turno" />
+        <Legenda color="oklch(0.5 0.02 260)" text="Sem rotinas registradas" />
         {erro && <span className="text-[oklch(0.7_0.18_25)] normal-case">{erro}</span>}
         {loading && <span className="normal-case">carregando…</span>}
       </div>
 
-      <main ref={scrollRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6 scroll-smooth">
+      <main ref={scrollRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
         {grupos.map((g) => (
           <section key={g.block}>
-            <h2 className="mb-3 flex items-center gap-3 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide">
+            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide">
               <span>Bloco {g.block}</span>
               <span className="text-sm lg:text-base font-normal normal-case tracking-normal text-white/40">
                 {g.beds.length} leitos
+              </span>
+              <span
+                className="text-sm lg:text-base font-semibold normal-case tracking-normal"
+                style={{ color: "oklch(0.72 0.16 235)" }}
+              >
+                {g.concorrenteRealizadas} concorrentes
+              </span>
+              <span
+                className="text-sm lg:text-base font-semibold normal-case tracking-normal"
+                style={{ color: "oklch(0.75 0.17 55)" }}
+              >
+                {g.camareiraRealizadas} camareiras
               </span>
             </h2>
             <div className="space-y-3">
@@ -259,7 +273,7 @@ function Kpi({
       className="rounded-lg border px-3 py-2"
       style={{ borderColor: `${color.replace(")", " / 0.3)")}`, background: color.replace(")", " / 0.08)") }}
     >
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide" style={{ color }}>
+      <div className="flex items-center gap-1.5 text-xs lg:text-sm font-semibold uppercase" style={{ color }}>
         {icon}
         {label}
       </div>
@@ -300,7 +314,7 @@ function BedTile({
         : `Leito ${bed} · sem rotina neste turno`;
 
   const background = both
-    ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.28)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.28)")} 50%)`
+    ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.55)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.55)")} 50%)`
     : hasC
       ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.22)" : " / 0.14)")
       : hasK
