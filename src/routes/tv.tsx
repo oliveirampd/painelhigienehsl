@@ -578,24 +578,7 @@ function TvPage() {
         <StaffPanel
           rows={staffRows}
           nowMs={now}
-          className={`order-1 lg:order-none lg:col-start-9 lg:col-span-4 ${
-            staffRows.length === 0 && timeAltasRows.length > 0
-              ? "lg:row-start-1 lg:row-span-1"
-              : timeAltasRows.length === 0 && staffRows.length > 0
-                ? "lg:row-start-1 lg:row-span-4"
-                : "lg:row-start-1 lg:row-span-3"
-          }`}
-        />
-        <BreaksPanel
-          rows={timeAltasRows}
-          nowMs={now}
-          className={`order-5 lg:order-none lg:col-start-9 lg:col-span-4 ${
-            staffRows.length === 0 && timeAltasRows.length > 0
-              ? "lg:row-start-2 lg:row-span-3"
-              : timeAltasRows.length === 0 && staffRows.length > 0
-                ? "lg:row-start-4 lg:row-span-1"
-                : "lg:row-start-4 lg:row-span-1"
-          }`}
+          className="order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-4"
         />
       </div>
 
