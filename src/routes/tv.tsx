@@ -334,14 +334,20 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 3) Médias de tempo: espera para iniciar (aberto → agora, leitos ainda não iniciados)
-  // e execução em andamento (início da limpeza → agora).
+  // 3) Médias de tempo: "Média p/ Iniciar" = média de quanto tempo as Altas
+  // Paradas levaram até alguém começar (created_at → momento em que entrou em
+  // execução). Só entram leitos que JÁ tiveram início — quem ainda está esperando
+  // não tem "tempo até iniciar" pra contar ainda. Isso evita que o número cresça
+  // pra sempre olhando quem tá parado agora (era isso que dava valores absurdos).
   const avgToStart = useMemo(() => {
-    const pend = [...enRoute, ...paused];
-    if (!pend.length) return null;
-    const sum = pend.reduce((acc, d) => acc + elapsedMinutes(d.created_at, now), 0);
-    return Math.round(sum / pend.length);
-  }, [enRoute, paused, now]);
+    const started = inFlight.filter((d) => new Date(d.status_updated_at).getTime() >= now - ONE_DAY_MS);
+    if (!started.length) return null;
+    const sum = started.reduce(
+      (acc, d) => acc + Math.max(0, elapsedMinutes(d.created_at, new Date(d.status_updated_at).getTime())),
+      0,
+    );
+    return Math.round(sum / started.length);
+  }, [inFlight, now]);
 
   const avgExecution = useMemo(() => {
     if (!inFlight.length) return null;
