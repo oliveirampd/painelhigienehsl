@@ -43,6 +43,15 @@ export function formatElapsed(iso: string, nowMs: number): string {
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
+/** Horário de parede (ex: "09:15") no fuso de Brasília, a partir de um timestamp ISO. */
+export function formatClockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
+
 export function isBreakOverLimit(status: StaffStatus, minutes: number): boolean {
   const limit = (BREAK_LIMITS as Record<string, number>)[status];
   return limit !== undefined && minutes >= limit;
