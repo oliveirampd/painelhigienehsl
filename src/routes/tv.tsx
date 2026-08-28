@@ -62,6 +62,27 @@ function formatTime(iso: string): string {
 
 type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
+// Leitos "suíte" — têm meta de tempo maior (2h15 em vez de 1h15 nos blocos D/E).
+const SUITE_BEDS = new Set([
+  "1852", "1752", "1652", "1552", "1452",
+  "1260", "1160", "1060", "960", "860", "760",
+  "1855", "1755", "1655", "1555", "1455",
+  "1261", "1161", "1061", "961", "861", "761",
+  "1264", "1164", "1064", "964", "864", "764",
+  "1267", "1167", "1067", "967", "884", "784",
+  "877", "777", "878", "778",
+]);
+
+/** Meta de tempo de higiene (minutos), com base no bloco e se é leito suíte. */
+function hygieneTargetMinutes(bedNumber: string, unit: string): number {
+  const bedCode = (bedNumber.match(/\d+/) || [])[0] ?? "";
+  const block = (unit.match(/Bloco\s+([A-Za-z])/i)?.[1] ?? "").toUpperCase();
+  if (block === "C") return 50;
+  if (block === "B") return 45;
+  if (block === "D" || block === "E") return SUITE_BEDS.has(bedCode) ? 135 : 75;
+  return 75; // fallback pra blocos não mapeados
+}
+
 // NOTA: assume que a tabela `staff` tem uma coluna `status_updated_at` (timestamptz),
 // igual ao padrão já usado em `discharges.status_updated_at`. Se o nome real da coluna
 // for diferente, troca só a referência `s.status_updated_at` abaixo.
@@ -186,7 +207,7 @@ function TvPage() {
 
   // Colaboradores: derivar atividade por staff
   const staffRows = useMemo(() => {
-    const activity = new Map<string, { kind: StaffActivity; start: string; bed: string }>();
+    const activity = new Map<string, { kind: StaffActivity; start: string; bed: string; unit: string }>();
 
     for (const d of activeDesmont) {
       if (!d.assigned_staff_id) continue;
@@ -196,6 +217,7 @@ function TvPage() {
           kind: "desmontando",
           start: d.status_updated_at,
           bed: d.bed_number,
+          unit: d.unit,
         });
       }
     }
@@ -208,6 +230,7 @@ function TvPage() {
           kind: "em_alta",
           start: d.status_updated_at,
           bed: d.bed_number,
+          unit: d.unit,
         });
       }
     }
@@ -222,6 +245,7 @@ function TvPage() {
           kind: a.kind,
           start: a.start,
           bed: a.bed,
+          unit: a.unit,
         };
       })
       .sort((a, b) => {
@@ -832,7 +856,7 @@ function StaffPanel({
   nowMs,
   className,
 }: {
-  rows: Array<{ staff: Staff; kind: StaffActivity; start: string | null; bed: string | null }>;
+  rows: Array<{ staff: Staff; kind: StaffActivity; start: string | null; bed: string | null; unit: string | null }>;
   nowMs: number;
   className?: string;
 }) {
@@ -854,10 +878,15 @@ function StaffPanel({
         ) : (
           <AutoScroll>
             <ul className="p-2 space-y-1.5">
-              {rows.map(({ staff, kind, start, bed }) => (
+              {rows.map(({ staff, kind, start, bed, unit }) => {
+                const target = kind === "em_alta" && start && bed && unit ? hygieneTargetMinutes(bed, unit) : null;
+                const elapsedMin = start ? elapsedMinutes(start, nowMs) : 0;
+                const pct = target ? Math.min(100, Math.round((elapsedMin / target) * 100)) : null;
+                const overTarget = target != null && elapsedMin >= target;
+                return (
                 <li
                   key={staff.id}
-                  className="flex items-center justify-between rounded-md px-3 py-2 border"
+                  className="flex flex-col gap-1.5 rounded-md px-3 py-2 border"
                   style={{
                     background:
                       kind === "desmontando"
@@ -873,25 +902,47 @@ function StaffPanel({
                           : "oklch(0.4 0.02 265 / 0.4)",
                   }}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold truncate text-sm">{staff.name}</div>
-                    <div className="text-[11px] text-white/60 truncate">
-                      <StatusPill kind={kind} />
-                      {bed ? <span className="ml-1">· {bed}</span> : null}
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold truncate text-sm">{staff.name}</div>
+                      <div className="text-[11px] text-white/60 truncate">
+                        <StatusPill kind={kind} />
+                        {bed ? <span className="ml-1">· {bed}</span> : null}
+                      </div>
                     </div>
+                    {start && (
+                      <div className="flex flex-col items-end ml-2">
+                        <span
+                          className="font-mono tabular-nums text-xs"
+                          style={{ color: overTarget ? "oklch(0.75 0.19 25)" : "rgba(255,255,255,0.7)" }}
+                        >
+                          {formatElapsed(start, nowMs)}
+                        </span>
+                        <span className="font-mono tabular-nums text-[10px] text-white/40">
+                          início {formatClockTime(start)}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  {start && (
-                    <div className="flex flex-col items-end ml-2">
-                      <span className="font-mono tabular-nums text-xs text-white/70">
-                        {formatElapsed(start, nowMs)}
-                      </span>
-                      <span className="font-mono tabular-nums text-[10px] text-white/40">
-                        início {formatClockTime(start)}
-                      </span>
+                  {pct != null && (
+                    <div>
+                      <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-[width]"
+                          style={{
+                            width: `${pct}%`,
+                            background: overTarget ? "oklch(0.65 0.2 25)" : "oklch(0.68 0.17 245)",
+                          }}
+                        />
+                      </div>
+                      <div className="mt-0.5 text-right text-[9px] font-mono text-white/35">
+                        meta {target}min{overTarget ? " · estourou" : ""}
+                      </div>
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </AutoScroll>
         )}
