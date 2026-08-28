@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, CircleCheck, BadgeCheck, Sun, Moon, Eraser, ChevronRight } from "lucide-react";
 
 import { toast } from "sonner";
-import { clearCompletions } from "@/lib/hospital.functions";
+import { clearCompletions, updateDischarge } from "@/lib/hospital.functions";
 
 
 
@@ -12,6 +12,7 @@ import { useNow } from "@/hooks/useNow";
 import {
   elapsedMinutes,
   formatElapsed,
+  formatClockTime,
   isBreakOverLimit,
   STAFF_STATUS_LABELS,
   type Discharge,
@@ -576,6 +577,7 @@ function TvPage() {
           staffMap={staffMap}
           tone="red"
           showReason
+          showComplete
           empty="Nenhum leito pausado hoje."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
@@ -683,6 +685,7 @@ function BedsPanel({
   staffMap,
   tone,
   showReason,
+  showComplete,
   empty,
   flashVersions,
   className,
@@ -696,6 +699,7 @@ function BedsPanel({
   staffMap: Map<string, Staff>;
   tone: Tone;
   showReason?: boolean;
+  showComplete?: boolean;
   empty: string;
   flashVersions?: Map<string, number>;
   className?: string;
@@ -730,6 +734,7 @@ function BedsPanel({
                     <th className="text-left px-2.5 lg:px-3 py-1.5 w-[26%] lg:w-auto">Tempo</th>
                   )}
                   <th className="text-left px-2.5 lg:px-4 py-1.5">Colaborador</th>
+                  {showComplete && <th className="w-8 px-1.5 py-1.5" aria-label="Concluir" />}
                 </tr>
               </thead>
               <tbody>
@@ -770,6 +775,11 @@ function BedsPanel({
                         <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
                       )}
                       <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-white/5 truncate">{name || "—"}</td>
+                      {showComplete && (
+                        <td className="px-1.5 py-1.5 border-t border-white/5 text-center">
+                          <CompleteButton dischargeId={d.id} />
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -779,6 +789,41 @@ function BedsPanel({
         )}
       </div>
     </section>
+  );
+}
+
+function CompleteButton({ dischargeId }: { dischargeId: string }) {
+  const [saving, setSaving] = useState(false);
+
+  const handleClick = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateDischarge({ data: { id: dischargeId, patch: { status: "completed", pause_reason: null } } });
+      toast.success("Leito marcado como concluído.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Não foi possível concluir o leito.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={saving}
+      title="Marcar leito como concluído (pausa resolvida)"
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors disabled:opacity-40"
+      style={{
+        borderColor: "oklch(0.55 0.15 155 / 0.5)",
+        color: "oklch(0.72 0.16 150)",
+        background: "oklch(0.72 0.16 150 / 0.12)",
+      }}
+    >
+      <CircleCheck className="h-4 w-4" />
+    </button>
   );
 }
 
@@ -836,9 +881,14 @@ function StaffPanel({
                     </div>
                   </div>
                   {start && (
-                    <span className="font-mono tabular-nums text-xs text-white/70 ml-2">
-                      {formatElapsed(start, nowMs)}
-                    </span>
+                    <div className="flex flex-col items-end ml-2">
+                      <span className="font-mono tabular-nums text-xs text-white/70">
+                        {formatElapsed(start, nowMs)}
+                      </span>
+                      <span className="font-mono tabular-nums text-[10px] text-white/40">
+                        início {formatClockTime(start)}
+                      </span>
+                    </div>
                   )}
                 </li>
               ))}
