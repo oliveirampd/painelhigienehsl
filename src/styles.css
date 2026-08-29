@@ -130,6 +130,60 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+
+  /* Painel de Higienização (TV) — paleta própria, tema escuro (padrão) */
+  --hig-bg: oklch(0.145 0.02 265);
+  --hig-fg: oklch(0.98 0.005 260);
+  --hig-surface: oklch(1 0 0 / 0.035);
+  --hig-surface-solid: oklch(0.16 0.02 265);
+  --hig-surface-strong: oklch(1 0 0 / 0.10);
+  --hig-border-15: oklch(1 0 0 / 0.15);
+  --hig-border-10: oklch(1 0 0 / 0.10);
+  --hig-border-5: oklch(1 0 0 / 0.05);
+  --hig-ink-90: oklch(1 0 0 / 0.90);
+  --hig-ink-80: oklch(1 0 0 / 0.80);
+  --hig-ink-70: oklch(1 0 0 / 0.70);
+  --hig-ink-60: oklch(1 0 0 / 0.60);
+  --hig-ink-55: oklch(1 0 0 / 0.55);
+  --hig-ink-50: oklch(1 0 0 / 0.50);
+  --hig-ink-40: oklch(1 0 0 / 0.40);
+  --hig-ink-35: oklch(1 0 0 / 0.35);
+  --hig-ink-30: oklch(1 0 0 / 0.30);
+  --hig-ink-20: oklch(1 0 0 / 0.20);
+  --hig-green: oklch(0.72 0.16 150);
+  --hig-red: oklch(0.7 0.19 25);
+  --hig-amber: oklch(0.78 0.18 75);
+  --hig-blue: oklch(0.72 0.16 235);
+  --hig-purple: oklch(0.68 0.2 300);
+  --hig-cyan: oklch(0.75 0.14 195);
+}
+
+:root {
+  /* Painel de Higienização (TV) — paleta própria, tema claro */
+  --hig-bg: oklch(0.975 0.004 260);
+  --hig-fg: oklch(0.2 0.02 265);
+  --hig-surface: oklch(0.2 0.02 265 / 0.045);
+  --hig-surface-solid: oklch(0.94 0.006 260);
+  --hig-surface-strong: oklch(0.2 0.02 265 / 0.09);
+  --hig-border-15: oklch(0.2 0.02 265 / 0.16);
+  --hig-border-10: oklch(0.2 0.02 265 / 0.11);
+  --hig-border-5: oklch(0.2 0.02 265 / 0.07);
+  --hig-ink-90: oklch(0.2 0.02 265 / 0.92);
+  --hig-ink-80: oklch(0.2 0.02 265 / 0.82);
+  --hig-ink-70: oklch(0.2 0.02 265 / 0.72);
+  --hig-ink-60: oklch(0.2 0.02 265 / 0.62);
+  --hig-ink-55: oklch(0.2 0.02 265 / 0.57);
+  --hig-ink-50: oklch(0.2 0.02 265 / 0.52);
+  --hig-ink-40: oklch(0.2 0.02 265 / 0.44);
+  --hig-ink-35: oklch(0.2 0.02 265 / 0.39);
+  --hig-ink-30: oklch(0.2 0.02 265 / 0.34);
+  --hig-ink-20: oklch(0.2 0.02 265 / 0.24);
+  --hig-green: oklch(0.5 0.15 150);
+  --hig-red: oklch(0.55 0.21 25);
+  --hig-amber: oklch(0.55 0.17 75);
+  --hig-blue: oklch(0.48 0.17 235);
+  --hig-purple: oklch(0.5 0.19 300);
+  --hig-cyan: oklch(0.48 0.13 195);
 }
 
 @layer base {
