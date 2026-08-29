@@ -439,42 +439,41 @@ function TvPage() {
   }
 
   const filtros = [
-    !isDark ? "invert(1) hue-rotate(180deg)" : null,
     isNoturno ? "brightness(0.82)" : null,
   ].filter(Boolean).join(" ");
 
   return (
     <div
-      className="dark min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter] duration-700 bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
+      className={`${isDark ? "dark" : ""} min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter,background-color,color] duration-700 bg-[var(--hig-bg)] text-[var(--hig-fg)]`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
         className="absolute top-0 left-0 right-0 h-px"
         style={{
-          background: "linear-gradient(90deg, transparent 0%, oklch(0.6 0.15 245 / 0.7) 25%, oklch(0.65 0.18 155 / 0.6) 50%, oklch(0.65 0.19 60 / 0.6) 75%, transparent 100%)",
-          boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
+          background: "linear-gradient(90deg, transparent 0%, color-mix(in oklch, var(--hig-blue) 70%, transparent) 25%, color-mix(in oklch, var(--hig-green) 60%, transparent) 50%, color-mix(in oklch, var(--hig-amber) 60%, transparent) 75%, transparent 100%)",
+          boxShadow: "0 0 16px 1px color-mix(in oklch, var(--hig-blue) 35%, transparent)",
         }}
       />
-      <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-white/15">
+      <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-[var(--hig-border-15)]">
         <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
         </h1>
         <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
-          <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
+          <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-[var(--hig-ink-50)]">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
             </span>
             ao vivo
           </span>
-          <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
+          <span className="hidden sm:inline text-[10px] text-[var(--hig-ink-35)] font-mono">
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
           <button
             onClick={() => limpar("recent")}
             disabled={limpando !== null}
             title="Limpar leitos finalizados recentemente"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+            className="flex items-center gap-1 rounded-md border border-[var(--hig-border-15)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--hig-ink-55)] transition-colors hover:bg-[var(--hig-surface-strong)] active:scale-95 disabled:opacity-40"
           >
             <Eraser className="h-3 w-3" /> Recentes
           </button>
@@ -482,18 +481,18 @@ function TvPage() {
             onClick={() => limpar("today")}
             disabled={limpando !== null}
             title="Limpar altas concluídas do dia"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+            className="flex items-center gap-1 rounded-md border border-[var(--hig-border-15)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--hig-ink-55)] transition-colors hover:bg-[var(--hig-surface-strong)] active:scale-95 disabled:opacity-40"
           >
             <Eraser className="h-3 w-3" /> Dia
           </button>
           <button
             onClick={() => setIsDark((v) => !v)}
             aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
-            className="flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-white/10 active:scale-95"
+            className="flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-[var(--hig-surface-strong)] active:scale-95"
             title={isDark ? "Tema claro" : "Tema escuro"}
           >
             {isDark ? (
-              <Sun className="h-4 w-4 lg:h-5 lg:w-5 text-[oklch(0.85_0.08_80)]" />
+              <Sun className="h-4 w-4 lg:h-5 lg:w-5 text-[var(--hig-amber)]" />
             ) : (
               <Moon className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
             )}
@@ -505,7 +504,7 @@ function TvPage() {
       <Link
         to="/diaria"
         title="Ver higiene diária de todos os leitos"
-        className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
+        className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-[var(--hig-border-15)] bg-[var(--hig-surface-solid)] px-1.5 py-3 text-[var(--hig-ink-60)] backdrop-blur transition-colors hover:bg-[var(--hig-surface-strong)] hover:text-[var(--hig-fg)]"
       >
         <ChevronRight className="h-5 w-5" />
         <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Diária</span>
@@ -513,18 +512,18 @@ function TvPage() {
 
 
       {recentCompletions.length > 0 && (
-        <div className="flex-none w-full overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)] py-1.5">
+        <div className="flex-none w-full overflow-hidden border-b border-[color-mix(in_oklch,var(--hig-green)_28%,transparent)] bg-[color-mix(in_oklch,var(--hig-green)_10%,var(--hig-bg))] py-1.5">
           <div className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6">
             {[...recentCompletions, ...recentCompletions].map((c, i) => (
               <div
                 key={i < recentCompletions.length ? c.id : `dup-${c.id}`}
-                className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
+                className="flex items-center gap-2 text-[11px] lg:text-xs text-[var(--hig-green)]"
               >
-                <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[oklch(0.72_0.16_150)]" />
-                <span className="font-semibold text-white/90">{c.bed}</span>
-                <span className="text-white/35">·</span>
+                <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[var(--hig-green)]" />
+                <span className="font-semibold text-[var(--hig-ink-90)]">{c.bed}</span>
+                <span className="text-[var(--hig-ink-35)]">·</span>
                 <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
-                <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
+                <span className="text-[var(--hig-ink-30)]">há {formatElapsed(c.completedAt, now)}</span>
               </div>
             ))}
           </div>
@@ -533,22 +532,22 @@ function TvPage() {
 
 
       <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendFor("inFlight", inFlight.length)} />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendFor("enRoute", enRoute.length)} />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendFor("paused", paused.length)} higherIsBad />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendFor("completedIssues", completedIssues.length)} higherIsBad />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
+        <KpiCard label="Em Limpeza" value={inFlight.length} accent="var(--hig-green)" trend={trendFor("inFlight", inFlight.length)} />
+        <KpiCard label="A Caminho" value={enRoute.length} accent="var(--hig-blue)" trend={trendFor("enRoute", enRoute.length)} />
+        <KpiCard label="Altas Paradas" value={paused.length} accent="var(--hig-amber)" trend={trendFor("paused", paused.length)} higherIsBad />
+        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="var(--hig-red)" trend={trendFor("completedIssues", completedIssues.length)} higherIsBad />
+        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="var(--hig-blue)" />
         <KpiCard
           label="Média p/ Iniciar"
           value={avgToStart ?? 0}
           display={avgToStart == null ? "—" : `${avgToStart}m`}
-          accent="oklch(0.8 0.16 85)"
+          accent="var(--hig-amber)"
         />
         <KpiCard
           label="Média de Execução"
           value={avgExecution ?? 0}
           display={avgExecution == null ? "—" : `${avgExecution}m`}
-          accent="oklch(0.75 0.14 195)"
+          accent="var(--hig-cyan)"
         />
       </div>
 
@@ -556,7 +555,7 @@ function TvPage() {
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
         <BedsPanel
           title="Leitos em Limpeza Terminal"
-          icon={<BrushCleaning className="w-4 h-4 text-white/60" />}
+          icon={<BrushCleaning className="w-4 h-4 text-[var(--hig-ink-60)]" />}
           rows={inFlight}
           nowMs={now}
           staffMap={staffMap}
@@ -569,7 +568,7 @@ function TvPage() {
         />
         <BedsPanel
           title="A Caminho"
-          icon={<Footprints className="w-4 h-4 text-white/60" />}
+          icon={<Footprints className="w-4 h-4 text-[var(--hig-ink-60)]" />}
           rows={enRoute}
           nowMs={now}
           staffMap={staffMap}
@@ -582,7 +581,7 @@ function TvPage() {
         />
         <BedsPanel
           title="Altas Paradas"
-          icon={<OctagonX className="w-4 h-4 text-white/60" />}
+          icon={<OctagonX className="w-4 h-4 text-[var(--hig-ink-60)]" />}
           rows={paused}
           nowMs={now}
           staffMap={staffMap}
@@ -595,7 +594,7 @@ function TvPage() {
         />
         <BedsPanel
           title="Leitos Pausados"
-          icon={<CirclePause className="w-4 h-4 text-white/60" />}
+          icon={<CirclePause className="w-4 h-4 text-[var(--hig-ink-60)]" />}
           rows={completedIssues}
           nowMs={now}
           staffMap={staffMap}
@@ -614,18 +613,18 @@ function TvPage() {
         />
       </div>
 
-      <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
+      <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-[var(--hig-border-10)] text-[11px] text-[var(--hig-ink-40)]">
 <span className="inline-flex items-center gap-1.5">
-          <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
-          Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+          <BadgeCheck className="h-3.5 w-3.5 text-[var(--hig-green)]" />
+          Hoje: <span className="text-[var(--hig-ink-70)] font-semibold">{concluidasHoje}</span> altas concluídas
         </span>
-        <span className="text-white/20">·</span>
+        <span className="text-[var(--hig-ink-20)]">·</span>
         <span>
-          Bloco D/E: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.de}</span>
+          Bloco D/E: <span className="text-[var(--hig-ink-70)] font-semibold">{concluidasHojePorBloco.de}</span>
         </span>
-        <span className="text-white/20">·</span>
+        <span className="text-[var(--hig-ink-20)]">·</span>
         <span>
-          Bloco B/C: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.bc}</span>
+          Bloco B/C: <span className="text-[var(--hig-ink-70)] font-semibold">{concluidasHojePorBloco.bc}</span>
         </span>
       </div>
 
@@ -663,18 +662,18 @@ function KpiCard({
     trend == null || trend === 0
       ? "rgba(255,255,255,0.35)"
       : (trend > 0) === !!higherIsBad
-        ? "oklch(0.7 0.19 25)" // piorou
-        : "oklch(0.72 0.17 155)"; // melhorou
+        ? "var(--hig-red)" // piorou
+        : "var(--hig-green)"; // melhorou
   return (
     <div
       className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
       style={{
-        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
-        borderColor: accent.replace(")", " / 0.45)"),
-        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
+        background: `linear-gradient(180deg, color-mix(in oklch, ${accent} 26%, transparent) 0%, var(--hig-surface-solid) 100%)`,
+        borderColor: `color-mix(in oklch, ${accent} 45%, transparent)`,
+        boxShadow: `inset 0 0 0 1px color-mix(in oklch, ${accent} 55%, transparent), 0 0 24px -8px color-mix(in oklch, ${accent} 50%, transparent)`,
       }}
     >
-      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">{label}</div>
+      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-[var(--hig-ink-70)] font-medium leading-tight">{label}</div>
       <div className="flex items-baseline gap-1.5">
         <div
           className="text-2xl lg:text-4xl tabular-nums leading-none"
@@ -695,10 +694,10 @@ function KpiCard({
 
 type Tone = "green" | "amber" | "red" | "blue";
 const toneBg: Record<Tone, string> = {
-  green: "oklch(0.32 0.13 155 / 0.2)",
-  amber: "oklch(0.48 0.19 85 / 0.3)",
-  red: "oklch(0.4 0.2 20 / 0.28)",
-  blue: "oklch(0.37 0.15 230 / 0.24)",
+  green: "color-mix(in oklch, var(--hig-green) 20%, var(--hig-bg))",
+  amber: "color-mix(in oklch, var(--hig-amber) 24%, var(--hig-bg))",
+  red: "color-mix(in oklch, var(--hig-red) 22%, var(--hig-bg))",
+  blue: "color-mix(in oklch, var(--hig-blue) 20%, var(--hig-bg))",
 };
 
 function BedsPanel({
@@ -731,24 +730,24 @@ function BedsPanel({
   caption?: string;
 }) {
   return (
-    <section className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
-      <div className="flex-none px-4 py-2 border-b border-white/10">
+    <section className={`h-[300px] lg:h-full rounded-xl border border-[var(--hig-border-15)] bg-[var(--hig-surface)] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
+      <div className="flex-none px-4 py-2 border-b border-[var(--hig-border-10)]">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
             {icon}
             {title}
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
+          <span className="text-[11px] text-[var(--hig-ink-50)]">{rows.length}</span>
         </div>
-        {caption && <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>}
+        {caption && <div className="hidden lg:block text-[10px] text-[var(--hig-ink-30)] mt-0.5">{caption}</div>}
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
+          <div className="p-4 text-center text-[var(--hig-ink-40)] text-sm">{empty}</div>
         ) : (
           <AutoScroll>
             <table className="w-full text-sm table-fixed">
-              <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-[oklch(0.16_0.02_265)]">
+              <thead className="text-[10px] uppercase tracking-widest text-[var(--hig-ink-50)] sticky top-0 bg-[var(--hig-surface-solid)]">
                 <tr>
                   <th className="text-left px-1.5 lg:px-4 py-1.5 w-[30%] lg:w-auto">Leito</th>
                   <th className="hidden lg:table-cell text-left px-3 py-1.5">Unidade</th>
@@ -772,10 +771,10 @@ function BedsPanel({
                       key={`${d.id}-v${version}`}
                       className={version > 0 ? "flash-row" : undefined}
                       style={{
-                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
+                        background: overtime && tone === "green" ? "color-mix(in oklch, var(--hig-amber) 24%, var(--hig-bg))" : toneBg[tone],
                       }}
                     >
-                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
+                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-[var(--hig-border-5)] truncate">
                         <span className="inline-flex items-center gap-1.5">
                           {d.bed_number}
                           {isWorst && (
@@ -783,8 +782,8 @@ function BedsPanel({
                               title="Andar crítico"
                               className="shrink-0 rounded-[3px] border px-1 py-px text-[8px] lg:text-[9px] font-semibold uppercase tracking-wide"
                               style={{
-                                borderColor: "oklch(0.7 0.2 25 / 0.5)",
-                                color: "oklch(0.78 0.19 25)",
+                                borderColor: "color-mix(in oklch, var(--hig-red) 50%, transparent)",
+                                color: "var(--hig-red)",
                               }}
                             >
                               andar crítico
@@ -792,15 +791,15 @@ function BedsPanel({
                           )}
                         </span>
                       </td>
-                      <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
+                      <td className="hidden lg:table-cell px-3 py-1.5 text-[var(--hig-ink-80)] text-xs border-t border-[var(--hig-border-5)]">{d.unit}</td>
                       {showReason ? (
-                        <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                        <td className="px-2.5 lg:px-3 py-1.5 text-[var(--hig-ink-90)] text-[11px] lg:text-xs border-t border-[var(--hig-border-5)]">{d.pause_reason || <span className="text-[var(--hig-ink-40)]">—</span>}</td>
                       ) : (
-                        <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                        <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-[var(--hig-border-5)]">{formatElapsed(d.status_updated_at, nowMs)}</td>
                       )}
-                      <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-white/5 truncate">{name || "—"}</td>
+                      <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-[var(--hig-border-5)] truncate">{name || "—"}</td>
                       {showComplete && (
-                        <td className="px-1.5 py-1.5 border-t border-white/5 text-center">
+                        <td className="px-1.5 py-1.5 border-t border-[var(--hig-border-5)] text-center">
                           <CompleteButton dischargeId={d.id} />
                         </td>
                       )}
@@ -841,9 +840,9 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
       title="Marcar leito como concluído (pausa resolvida)"
       className="inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors disabled:opacity-40"
       style={{
-        borderColor: "oklch(0.55 0.15 155 / 0.5)",
-        color: "oklch(0.72 0.16 150)",
-        background: "oklch(0.72 0.16 150 / 0.12)",
+        borderColor: "color-mix(in oklch, var(--hig-green) 50%, transparent)",
+        color: "var(--hig-green)",
+        background: "color-mix(in oklch, var(--hig-green) 12%, transparent)",
       }}
     >
       <CircleCheck className="h-4 w-4" />
@@ -861,20 +860,20 @@ function StaffPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[340px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
-      <div className="flex-none px-4 py-2 border-b border-white/10">
+    <section className={`h-[340px] lg:h-full lg:min-h-0 rounded-xl border border-[var(--hig-border-15)] bg-[var(--hig-surface)] overflow-hidden flex flex-col ${className ?? ""}`}>
+      <div className="flex-none px-4 py-2 border-b border-[var(--hig-border-10)]">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
-            <UsersRound className="w-4 h-4 text-white/60" />
+            <UsersRound className="w-4 h-4 text-[var(--hig-ink-60)]" />
             Colaboradores
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
+          <span className="text-[11px] text-[var(--hig-ink-50)]">{rows.length}</span>
         </div>
-        <div className="text-[10px] text-white/35 mt-0.5">Desmontagem e higienização terminal (Listo)</div>
+        <div className="text-[10px] text-[var(--hig-ink-35)] mt-0.5">Desmontagem e higienização terminal (Listo)</div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">Nenhum colaborador.</div>
+          <div className="p-4 text-center text-[var(--hig-ink-40)] text-sm">Nenhum colaborador.</div>
         ) : (
           <AutoScroll>
             <ul className="p-2 space-y-1.5">
@@ -890,22 +889,22 @@ function StaffPanel({
                   style={{
                     background:
                       kind === "desmontando"
-                        ? "oklch(0.37 0.18 300 / 0.32)"
+                        ? "color-mix(in oklch, var(--hig-purple) 32%, var(--hig-bg))"
                         : kind === "em_alta"
-                          ? "oklch(0.34 0.17 245 / 0.32)"
-                          : "oklch(0.25 0.02 265 / 0.4)",
+                          ? "color-mix(in oklch, var(--hig-blue) 32%, var(--hig-bg))"
+                          : "var(--hig-surface-strong)",
                     borderColor:
                       kind === "desmontando"
-                        ? "oklch(0.68 0.2 300 / 0.5)"
+                        ? "color-mix(in oklch, var(--hig-purple) 50%, transparent)"
                         : kind === "em_alta"
-                          ? "oklch(0.63 0.19 245 / 0.5)"
-                          : "oklch(0.4 0.02 265 / 0.4)",
+                          ? "color-mix(in oklch, var(--hig-blue) 50%, transparent)"
+                          : "var(--hig-border-15)",
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold truncate text-sm">{staff.name}</div>
-                      <div className="text-[11px] text-white/60 truncate">
+                      <div className="text-[11px] text-[var(--hig-ink-60)] truncate">
                         <StatusPill kind={kind} />
                         {bed ? <span className="ml-1">· {bed}</span> : null}
                       </div>
@@ -914,11 +913,11 @@ function StaffPanel({
                       <div className="flex flex-col items-end ml-2">
                         <span
                           className="font-mono tabular-nums text-xs"
-                          style={{ color: overTarget ? "oklch(0.75 0.19 25)" : "rgba(255,255,255,0.7)" }}
+                          style={{ color: overTarget ? "var(--hig-red)" : "var(--hig-ink-70)" }}
                         >
                           {formatElapsed(start, nowMs)}
                         </span>
-                        <span className="font-mono tabular-nums text-[10px] text-white/40">
+                        <span className="font-mono tabular-nums text-[10px] text-[var(--hig-ink-40)]">
                           início {formatClockTime(start)}
                         </span>
                       </div>
@@ -926,16 +925,16 @@ function StaffPanel({
                   </div>
                   {pct != null && (
                     <div>
-                      <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                      <div className="h-1.5 w-full rounded-full bg-[var(--hig-surface-strong)] overflow-hidden">
                         <div
                           className="h-full rounded-full transition-[width]"
                           style={{
                             width: `${pct}%`,
-                            background: overTarget ? "oklch(0.65 0.2 25)" : "oklch(0.68 0.17 245)",
+                            background: overTarget ? "var(--hig-red)" : "var(--hig-blue)",
                           }}
                         />
                       </div>
-                      <div className="mt-0.5 text-right text-[9px] font-mono text-white/35">
+                      <div className="mt-0.5 text-right text-[9px] font-mono text-[var(--hig-ink-35)]">
                         meta {target}min{overTarget ? " · estourou" : ""}
                       </div>
                     </div>
@@ -986,20 +985,20 @@ function BreaksPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[280px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
-      <div className="flex-none px-4 py-2 border-b border-white/10">
+    <section className={`h-[280px] lg:h-full lg:min-h-0 rounded-xl border border-[var(--hig-border-15)] bg-[var(--hig-surface)] overflow-hidden flex flex-col ${className ?? ""}`}>
+      <div className="flex-none px-4 py-2 border-b border-[var(--hig-border-10)]">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
-            <UtensilsCrossed className="w-4 h-4 text-white/60" />
+            <UtensilsCrossed className="w-4 h-4 text-[var(--hig-ink-60)]" />
             Time Altas
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
+          <span className="text-[11px] text-[var(--hig-ink-50)]">{rows.length}</span>
         </div>
-        <div className="text-[10px] text-white/35 mt-0.5">Login e pausas do time de campo (healthcon)</div>
+        <div className="text-[10px] text-[var(--hig-ink-35)] mt-0.5">Login e pausas do time de campo (healthcon)</div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">Ninguém do time logado agora.</div>
+          <div className="p-4 text-center text-[var(--hig-ink-40)] text-sm">Ninguém do time logado agora.</div>
         ) : (
           <AutoScroll>
             <ul className="p-2 space-y-1.5">
@@ -1022,7 +1021,7 @@ function BreaksPanel({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold truncate text-sm">{s.name}</div>
-                      <div className="text-[11px] text-white/60 truncate uppercase tracking-widest">
+                      <div className="text-[11px] text-[var(--hig-ink-60)] truncate uppercase tracking-widest">
                         {TIME_ALTAS_LABELS[kind]}
                       </div>
                     </div>
@@ -1049,10 +1048,10 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
   const label = kind === "desmontando" ? "Desmontando" : kind === "em_alta" ? "Em Alta" : "Disponível";
   const color =
     kind === "desmontando"
-      ? "oklch(0.8 0.15 300)"
+      ? "var(--hig-purple)"
       : kind === "em_alta"
-        ? "oklch(0.75 0.15 245)"
-        : "oklch(0.7 0.02 265)";
+        ? "var(--hig-blue)"
+        : "var(--hig-ink-60)";
   return (
     <span className="uppercase tracking-widest text-[10px] font-semibold" style={{ color }}>
       {label}
