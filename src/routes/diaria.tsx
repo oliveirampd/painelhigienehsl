@@ -27,6 +27,10 @@ export const Route = createFileRoute("/diaria")({
 
 const BLOCK_ORDER = ["D", "E", "C", "B"] as const;
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
 function DiariaPage() {
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +100,13 @@ function DiariaPage() {
     (e) => e.status === "completed" && e.kind === "camareira",
   ).length;
 
+  // Leitos que ainda não tiveram nenhum registro (concluído ou em execução) desse
+  // tipo de rotina neste turno. Higiene concorrente ignora as unidades excluídas
+  // (mesma regra usada no resto da tela); camareira considera todos os leitos.
+  const bedsElegiveisConcorrente = HOSPITAL_BEDS.filter((b) => !EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(b.n)));
+  const faltamHigiene = bedsElegiveisConcorrente.filter((b) => !byBed.get(b.n)?.concorrente).length;
+  const faltamCamareira = HOSPITAL_BEDS.filter((b) => !byBed.get(b.n)?.camareira).length;
+
   const grupos = BLOCK_ORDER.map((block) => {
     const beds = HOSPITAL_BEDS.filter((b) => b.b === block);
     const floors = Array.from(new Set(beds.map((b) => bedFloor(b.n)))).sort((a, b) => b - a);
@@ -131,7 +142,7 @@ function DiariaPage() {
         </div>
       </header>
 
-      <div className="flex-none grid grid-cols-2 lg:grid-cols-5 gap-2 px-4 lg:px-6 py-3">
+      <div className="flex-none grid grid-cols-2 lg:grid-cols-7 gap-2 px-4 lg:px-6 py-3">
         <Kpi
           icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
           label="Em higiene agora"
@@ -157,12 +168,23 @@ function DiariaPage() {
           color="oklch(0.75 0.17 55)"
         />
         <Kpi
+          icon={<BrushCleaning className="h-4 w-4" />}
+          label="Faltam higiene"
+          value={faltamHigiene}
+          color="oklch(0.7 0.19 25)"
+        />
+        <Kpi
+          icon={<BedDouble className="h-4 w-4" />}
+          label="Faltam camareira"
+          value={faltamCamareira}
+          color="oklch(0.7 0.19 25)"
+        />
+        <Kpi
           icon={<Circle className="h-4 w-4" />}
           label="Total de leitos"
           value={HOSPITAL_BEDS.length}
           color="oklch(0.7 0.02 260)"
-        />
-      </div>
+        />      </div>
 
       <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium uppercase text-white/60">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
@@ -293,9 +315,9 @@ function BedTile({
   const repeatBadge = Math.max(c?.count ?? 0, k?.count ?? 0) > 1 ? Math.max(c?.count ?? 0, k?.count ?? 0) : null;
 
   const title = both
-    ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : `concluída (×${c!.count})`} + Camareira ${
+    ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : `concluída (×${c!.count})`}${c!.staff ? ` · ${c!.staff}` : ""} + Camareira ${
         activeK ? "em execução" : `concluída (×${k!.count})`
-      }`
+      }${k!.staff ? ` · ${k!.staff}` : ""}`
     : hasC
       ? `Leito ${bed} · Limpeza concorrente · ${activeC ? "em execução" : `concluída ×${c!.count}`}${c!.staff ? ` · ${c!.staff}` : ""} · ${c!.shift}`
       : hasK
@@ -321,38 +343,47 @@ function BedTile({
   const textColor = hasC || hasK ? "oklch(0.97 0.005 260)" : SEM_ROTINA_COLOR;
 
   return (
-    <div
-      title={title}
-      className={`relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors ${
-        anyActive ? "animate-bed-blink" : ""
-      }`}
-      style={{
-        borderColor,
-        background,
-        color: textColor,
-        boxShadow: anyActive
-          ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.55)")}`
-          : undefined,
-      }}
-    >
-      <span className="font-semibold tabular-nums leading-none">{bed}</span>
-      <span className="mt-1 flex h-4 items-center justify-center gap-1">
-        {activeK && <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />}
-        {activeC && <BrushCleaning className="h-3.5 w-3.5 animate-sweep" style={{ color: CONCORRENTE_COLOR }} />}
-        {!anyActive && (hasC || hasK) && <CircleCheck className="h-3 w-3 opacity-90" />}
-        {!anyActive && !hasC && !hasK && (
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEM_ROTINA_COLOR }} />
-        )}
-      </span>
-      {repeatBadge && (
-        <span
-          className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-[9px] font-bold leading-[14px] text-black"
-          style={{ background: "oklch(0.85 0.15 95)" }}
-          title="Rotina repetida neste turno"
-        >
-          ×{repeatBadge}
-        </span>
+    <div className="flex flex-col items-center gap-0.5">
+      {(hasC || hasK) && (
+        <div className="flex items-center gap-1 font-mono text-[8px] leading-none tabular-nums">
+          {hasC && <span style={{ color: CONCORRENTE_COLOR }}>{formatTime(c!.at)}</span>}
+          {hasC && hasK && <span className="text-white/25">·</span>}
+          {hasK && <span style={{ color: CAMAREIRA_COLOR }}>{formatTime(k!.at)}</span>}
+        </div>
       )}
+      <div
+        title={title}
+        className={`relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors ${
+          anyActive ? "animate-bed-blink" : ""
+        }`}
+        style={{
+          borderColor,
+          background,
+          color: textColor,
+          boxShadow: anyActive
+            ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.55)")}`
+            : undefined,
+        }}
+      >
+        <span className="font-semibold tabular-nums leading-none">{bed}</span>
+        <span className="mt-1 flex h-4 items-center justify-center gap-1">
+          {activeK && <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />}
+          {activeC && <BrushCleaning className="h-3.5 w-3.5 animate-sweep" style={{ color: CONCORRENTE_COLOR }} />}
+          {!anyActive && (hasC || hasK) && <CircleCheck className="h-3 w-3 opacity-90" />}
+          {!anyActive && !hasC && !hasK && (
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEM_ROTINA_COLOR }} />
+          )}
+        </span>
+        {repeatBadge && (
+          <span
+            className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-[9px] font-bold leading-[14px] text-black"
+            style={{ background: "oklch(0.85 0.15 95)" }}
+            title="Rotina repetida neste turno"
+          >
+            ×{repeatBadge}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
