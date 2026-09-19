@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BrushCleaning, BedDouble, CircleCheck, ChevronLeft, ChevronRight, Circle } from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
 import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
@@ -33,48 +33,6 @@ function DiariaPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [lastAt, setLastAt] = useState<number>(Date.now());
   const [clock, setClock] = useState("");
-  const scrollRef = useRef<HTMLElement | null>(null);
-
-  // Rolagem automática: desce devagar até o fim da lista, pausa, volta ao topo,
-  // pausa de novo e repete — pensado pra rodar sozinho numa TV, sem controle manual.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    let direction: 1 | -1 = 1;
-    let paused = false;
-    let rafId = 0;
-    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
-    const SPEED_PX_PER_FRAME = 0.6;
-    const PAUSE_MS = 2500;
-
-    const step = () => {
-      rafId = requestAnimationFrame(step);
-      if (paused) return;
-
-      const max = el.scrollHeight - el.clientHeight;
-      if (max <= 0) return;
-
-      el.scrollTop += direction * SPEED_PX_PER_FRAME;
-
-      const atBottom = el.scrollTop >= max - 1;
-      const atTop = el.scrollTop <= 1;
-
-      if (atBottom || atTop) {
-        paused = true;
-        direction = atBottom ? -1 : 1;
-        resumeTimeout = setTimeout(() => {
-          paused = false;
-        }, PAUSE_MS);
-      }
-    };
-
-    rafId = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(rafId);
-      if (resumeTimeout) clearTimeout(resumeTimeout);
-    };
-  }, []);
 
   useEffect(() => {
     const tick = () =>
@@ -215,7 +173,7 @@ function DiariaPage() {
         {loading && <span className="normal-case">carregando…</span>}
       </div>
 
-      <main ref={scrollRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
+      <main className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
         {grupos.map((g) => (
           <section key={g.block}>
             <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide">
