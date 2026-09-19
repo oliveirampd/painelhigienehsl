@@ -133,19 +133,22 @@ function TvPage() {
 
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
   // A janela é reavaliada a cada atualização de dados / tique do relógio,
-  // então leitos antigos saem da faixa automaticamente.
+  // então leitos antigos saem da faixa automaticamente. Deduplicado por leito
+  // (se o mesmo leito tiver mais de um evento de conclusão na janela, só o
+  // mais recente aparece — evita repetir o mesmo leito na faixa).
   const recentCompletions = useMemo(() => {
     const cutoff = Math.max(now - 30 * 60 * 1000, recentClearedAt);
-    return discharges
-      .filter(
-        (d) =>
-          !isExcluded(d) &&
-          isBed(d) &&
-          isTerminal(d) &&
-          d.status === "completed" &&
-          d.completed_at &&
-          new Date(d.completed_at).getTime() >= cutoff,
-      )
+    const byBed = new Map<string, Discharge>();
+    for (const d of discharges) {
+      if (!isExcluded(d) && isBed(d) && isTerminal(d) && d.status === "completed" && d.completed_at) {
+        const completedAt = new Date(d.completed_at).getTime();
+        if (completedAt < cutoff) continue;
+        const bed = d.bed_number ?? "";
+        const prev = byBed.get(bed);
+        if (!prev || new Date(prev.completed_at!).getTime() < completedAt) byBed.set(bed, d);
+      }
+    }
+    return Array.from(byBed.values())
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
       .slice(0, 8)
       .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
@@ -390,6 +393,8 @@ function TvPage() {
     const cutoff = Math.max(inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
     const done = discharges.filter(
       (d) =>
+        !isExcluded(d) &&
+        isBed(d) &&
         isTerminal(d) &&
         d.status === "completed" &&
         !!d.completed_at &&
@@ -502,32 +507,56 @@ function TvPage() {
         </div>
       </header>
 
-      <Link
-        to="/diaria"
-        title="Ver higiene diária de todos os leitos"
-        className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
-      >
-        <ChevronRight className="h-5 w-5" />
-        <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Diária</span>
-      </Link>
-
+      <div className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col gap-1.5">
+        <Link
+          to="/diaria"
+          title="Ver higiene diária de todos os leitos"
+          className="flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
+        >
+          <ChevronRight className="h-5 w-5" />
+          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Diária</span>
+        </Link>
+        <Link
+          to="/terminal-geral"
+          title="Ver limpeza terminal de áreas comuns"
+          className="flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
+        >
+          <ChevronRight className="h-5 w-5" />
+          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Geral</span>
+        </Link>
+      </div>
 
       {recentCompletions.length > 0 && (
         <div className="flex-none w-full overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)] py-1.5">
-          <div className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6">
-            {[...recentCompletions, ...recentCompletions].map((c, i) => (
+          {(() => {
+            // Preenche a faixa com repetições suficientes do conteúdo real pra
+            // nunca deixar espaço em branco enquanto rola (a técnica de loop
+            // contínuo exige que uma "volta" já preencha bem mais que a tela).
+            // Com poucos leitos, repete só o necessário; com muitos, não repete.
+            const MIN_TRACK_ITEMS = 14;
+            const reps = Math.max(1, Math.ceil(MIN_TRACK_ITEMS / recentCompletions.length));
+            const track = Array.from({ length: reps }, () => recentCompletions).flat();
+            const durationS = Math.max(18, track.length * 2.6);
+            return (
               <div
-                key={i < recentCompletions.length ? c.id : `dup-${c.id}`}
-                className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
+                className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6"
+                style={{ animationDuration: `${durationS}s` }}
               >
-                <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[oklch(0.72_0.16_150)]" />
-                <span className="font-semibold text-white/90">{c.bed}</span>
-                <span className="text-white/35">·</span>
-                <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
-                <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
+                {[...track, ...track].map((c, i) => (
+                  <div
+                    key={`${c.id}-${i}`}
+                    className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
+                  >
+                    <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[oklch(0.72_0.16_150)]" />
+                    <span className="font-semibold text-white/90">{c.bed}</span>
+                    <span className="text-white/35">·</span>
+                    <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
+                    <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
       )}
 
