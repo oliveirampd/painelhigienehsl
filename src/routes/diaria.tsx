@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BrushCleaning, BedDouble, CircleCheck, ChevronLeft, Circle } from "lucide-react";
+import { BrushCleaning, BedDouble, CircleCheck, ChevronLeft, ChevronRight, Circle } from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
 import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
 
@@ -255,6 +255,14 @@ function DiariaPage() {
           </section>
         ))}
       </main>
+      <Link
+        to="/terminal-geral"
+        title="Ver limpeza terminal de áreas comuns"
+        className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
+      >
+        <ChevronRight className="h-5 w-5" />
+        <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Geral</span>
+      </Link>
     </div>
   );
 }
