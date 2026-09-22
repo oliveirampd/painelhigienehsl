@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, CircleCheck, Footprints, OctagonX, UtensilsCrossed, CirclePause } from "lucide-react";
-import { getTerminalGeral, type TerminalGeralEvent, type BlockGroup } from "@/lib/terminalGeral.functions";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
 
 export const Route = createFileRoute("/terminal-geral")({
   head: () => ({
@@ -9,19 +9,32 @@ export const Route = createFileRoute("/terminal-geral")({
       { title: "Limpeza Terminal Geral — Áreas Comuns" },
       {
         name: "description",
-        content: "Limpeza terminal de áreas comuns (não leitos) em tempo real, por bloco.",
+        content: "Limpeza terminal de áreas comuns (não leitos, não boxes) em tempo real, organizada por bloco e andar.",
       },
     ],
   }),
   component: TerminalGeralPage,
 });
 
-const GROUP_LABEL: Record<BlockGroup, string> = {
-  DE: "Bloco D/E",
-  BC: "Bloco B/C",
+const BLOCK_ORDER: TerminalGeralBlock[] = ["D", "E", "C", "B"];
+const BLOCK_LABEL: Record<TerminalGeralBlock, string> = {
+  D: "Bloco D",
+  E: "Bloco E",
+  C: "Bloco C",
+  B: "Bloco B",
   outro: "Outras áreas",
 };
-const GROUP_ORDER: BlockGroup[] = ["DE", "BC", "outro"];
+
+const STATUS_LABEL: Record<TerminalGeralEvent["status"], string> = {
+  in_progress: "Em andamento",
+  pendente: "Pendente",
+  completed: "Concluída",
+};
+const STATUS_TONE: Record<TerminalGeralEvent["status"], string> = {
+  in_progress: "oklch(0.75 0.22 155)",
+  pendente: "oklch(0.78 0.2 60)",
+  completed: "oklch(0.72 0.16 235)",
+};
 
 function TerminalGeralPage() {
   const [events, setEvents] = useState<TerminalGeralEvent[]>([]);
@@ -64,18 +77,19 @@ function TerminalGeralPage() {
     };
   }, []);
 
-  const emLimpeza = events.filter((e) => e.status === "in_progress");
-  const aCaminho = events.filter((e) => e.status === "en_route");
-  const aguardando = events.filter((e) => e.status === "waiting_cleaning");
-  const pausadas = events.filter((e) => e.status === "paused");
+  const emAndamento = events.filter((e) => e.status === "in_progress");
+  const pendentes = events.filter((e) => e.status === "pendente");
   const concluidas = events.filter((e) => e.status === "completed");
 
-  const grupos = GROUP_ORDER.map((group) => ({
-    group,
-    items: events
-      .filter((e) => e.blockGroup === group)
-      .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.area.localeCompare(b.area)),
-  })).filter((g) => g.items.length > 0);
+  const gruposComBloco = BLOCK_ORDER.map((block) => {
+    const items = events.filter((e) => e.block === block);
+    const floors = Array.from(new Set(items.map((e) => e.floor).filter((f): f is number => f != null))).sort(
+      (a, b) => b - a,
+    );
+    return { block, items, floors };
+  }).filter((g) => g.items.length > 0);
+
+  const outras = events.filter((e) => e.block === "outro").sort((a, b) => a.area.localeCompare(b.area));
 
   return (
     <div className="dark h-screen w-full flex flex-col overflow-hidden font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
@@ -87,7 +101,7 @@ function TerminalGeralPage() {
           >
             <ChevronLeft className="h-3.5 w-3.5" /> Terminal
           </Link>
-          <h1 className="text-base lg:text-2xl font-bold tracking-tight">Limpeza Terminal Geral — Áreas Comuns</h1>
+          <h1 className="text-sm lg:text-2xl font-bold tracking-tight">Limpeza Terminal Geral — Áreas Comuns</h1>
         </div>
         <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
           <span className="flex items-center gap-1.5 uppercase text-white/50">
@@ -104,12 +118,10 @@ function TerminalGeralPage() {
         </div>
       </header>
 
-      <div className="flex-none grid grid-cols-2 lg:grid-cols-5 gap-2 px-4 lg:px-6 py-3">
-        <Kpi icon={<UtensilsCrossed className="h-4 w-4" />} label="Em limpeza" value={emLimpeza.length} color="oklch(0.75 0.22 155)" />
-        <Kpi icon={<Footprints className="h-4 w-4" />} label="A caminho" value={aCaminho.length} color="oklch(0.74 0.18 230)" />
-        <Kpi icon={<OctagonX className="h-4 w-4" />} label="Aguardando" value={aguardando.length} color="oklch(0.78 0.2 60)" />
-        <Kpi icon={<CirclePause className="h-4 w-4" />} label="Pausadas" value={pausadas.length} color="oklch(0.72 0.23 25)" />
-        <Kpi icon={<CircleCheck className="h-4 w-4" />} label="Concluídas" value={concluidas.length} color="oklch(0.7 0.02 260)" />
+      <div className="flex-none grid grid-cols-3 gap-2 px-4 lg:px-6 py-3">
+        <Kpi label="Em andamento" value={emAndamento.length} color="oklch(0.75 0.22 155)" />
+        <Kpi label="Pendentes" value={pendentes.length} color="oklch(0.78 0.2 60)" />
+        <Kpi label="Concluídas" value={concluidas.length} color="oklch(0.72 0.16 235)" />
       </div>
 
       {(erro || loading) && (
@@ -120,55 +132,51 @@ function TerminalGeralPage() {
       )}
 
       <main className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
-        {grupos.length === 0 && !loading && (
-          <p className="text-sm text-white/40 pt-6">Nenhuma rotina de Limpeza Terminal Geral nas últimas 26h.</p>
+        {events.length === 0 && !loading && !erro && (
+          <p className="text-sm text-white/40 pt-6">Nenhuma área de Limpeza Terminal Geral encontrada.</p>
         )}
-        {grupos.map((g) => (
-          <section key={g.group}>
-            <h2 className="mb-3 flex items-center gap-3 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-2xl font-black uppercase tracking-wide">
-              <span>{GROUP_LABEL[g.group]}</span>
-              <span className="text-sm lg:text-base font-normal normal-case tracking-normal text-white/40">
+        {gruposComBloco.map((g) => (
+          <section key={g.block}>
+            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide">
+              <span>{BLOCK_LABEL[g.block]}</span>
+              <span className="text-xs lg:text-sm font-normal normal-case tracking-normal text-white/40">
                 {g.items.length} {g.items.length === 1 ? "área" : "áreas"}
               </span>
             </h2>
-            <div className="overflow-hidden rounded-lg border border-white/10">
-              <table className="w-full border-collapse">
-                <thead className="text-[10px] uppercase tracking-widest text-white/50 bg-[oklch(0.16_0.02_265)]">
-                  <tr>
-                    <th className="text-left px-3 lg:px-4 py-1.5">Área</th>
-                    <th className="text-left px-3 lg:px-4 py-1.5">Unidade</th>
-                    <th className="text-left px-3 lg:px-4 py-1.5">Status</th>
-                    <th className="text-left px-3 lg:px-4 py-1.5">Colaborador</th>
-                    <th className="text-left px-3 lg:px-4 py-1.5">Há</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.items.map((e) => (
-                    <tr key={e.area} style={{ background: STATUS_TONE[e.status].replace(")", " / 0.14)") }}>
-                      <td className="px-3 lg:px-4 py-2 text-sm font-semibold border-t border-white/5">{e.area}</td>
-                      <td className="px-3 lg:px-4 py-2 text-xs text-white/50 border-t border-white/5">{e.unit}</td>
-                      <td className="px-3 lg:px-4 py-2 text-xs border-t border-white/5">
-                        <span
-                          className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold uppercase tracking-wide text-[10px]"
-                          style={{ color: STATUS_TONE[e.status], background: STATUS_TONE[e.status].replace(")", " / 0.16)") }}
-                        >
-                          {STATUS_LABEL[e.status]}
-                        </span>
-                        {e.status === "paused" && e.reason && (
-                          <span className="ml-2 text-white/50 normal-case">{e.reason}</span>
-                        )}
-                      </td>
-                      <td className="px-3 lg:px-4 py-2 text-xs border-t border-white/5">{e.staff || "—"}</td>
-                      <td className="px-3 lg:px-4 py-2 text-xs font-mono tabular-nums border-t border-white/5">
-                        {formatElapsed(e.at, now)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-3">
+              {g.floors.map((floor) => (
+                <div key={floor} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+                  <span className="flex-none font-mono text-[11px] text-white/35 sm:mt-1.5 sm:w-10 sm:text-right">
+                    {floor}º
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {g.items
+                      .filter((e) => e.floor === floor)
+                      .sort((a, b) => a.area.localeCompare(b.area))
+                      .map((e) => (
+                        <AreaCard key={e.area} event={e} now={now} />
+                      ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         ))}
+        {outras.length > 0 && (
+          <section>
+            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide">
+              <span>{BLOCK_LABEL.outro}</span>
+              <span className="text-xs lg:text-sm font-normal normal-case tracking-normal text-white/40">
+                {outras.length} {outras.length === 1 ? "área" : "áreas"}
+              </span>
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {outras.map((e) => (
+                <AreaCard key={e.area} event={e} now={now} />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
       <Link
@@ -183,27 +191,37 @@ function TerminalGeralPage() {
   );
 }
 
-const STATUS_LABEL: Record<TerminalGeralEvent["status"], string> = {
-  waiting_cleaning: "Aguardando",
-  en_route: "A caminho",
-  in_progress: "Em limpeza",
-  paused: "Pausada",
-  completed: "Concluída",
-};
-const STATUS_TONE: Record<TerminalGeralEvent["status"], string> = {
-  waiting_cleaning: "oklch(0.78 0.2 60)",
-  en_route: "oklch(0.74 0.18 230)",
-  in_progress: "oklch(0.75 0.22 155)",
-  paused: "oklch(0.72 0.23 25)",
-  completed: "oklch(0.7 0.02 260)",
-};
-const STATUS_ORDER: Record<TerminalGeralEvent["status"], number> = {
-  paused: 0,
-  in_progress: 1,
-  en_route: 2,
-  waiting_cleaning: 3,
-  completed: 4,
-};
+function AreaCard({ event: e, now }: { event: TerminalGeralEvent; now: number }) {
+  const tone = STATUS_TONE[e.status];
+  return (
+    <div
+      className="flex min-w-[150px] max-w-[240px] flex-1 flex-col gap-1 rounded-lg border px-2.5 py-2 sm:flex-none sm:basis-[210px]"
+      style={{ borderColor: tone.replace(")", " / 0.4)"), background: tone.replace(")", " / 0.08)") }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-semibold" title={e.area}>
+          {e.area}
+        </span>
+        <span
+          className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+          style={{ color: tone, background: tone.replace(")", " / 0.16)") }}
+        >
+          {STATUS_LABEL[e.status]}
+        </span>
+      </div>
+      <div className="truncate text-[11px] text-white/50">
+        {e.staff ? e.staff : <span className="text-white/30">sem colaborador</span>}
+      </div>
+      {e.at && (
+        <div className="font-mono text-[10px] tabular-nums text-white/40">
+          {e.status === "in_progress" ? "há " : "concluída há "}
+          {formatElapsed(e.at, now)}
+        </div>
+      )}
+      {e.status === "pendente" && e.reason && <div className="truncate text-[10px] text-white/40">{e.reason}</div>}
+    </div>
+  );
+}
 
 function formatElapsed(iso: string, nowMs: number): string {
   const totalMin = Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 60000));
@@ -213,17 +231,16 @@ function formatElapsed(iso: string, nowMs: number): string {
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
-function Kpi({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
+function Kpi({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div
       className="rounded-lg border px-3 py-2"
       style={{ borderColor: color.replace(")", " / 0.3)"), background: color.replace(")", " / 0.08)") }}
     >
-      <div className="flex items-center gap-1.5 text-xs lg:text-sm font-semibold uppercase" style={{ color }}>
-        {icon}
+      <div className="text-[10px] lg:text-sm font-semibold uppercase" style={{ color }}>
         {label}
       </div>
-      <div className="text-2xl lg:text-3xl font-bold tabular-nums">{value}</div>
+      <div className="text-xl lg:text-3xl font-bold tabular-nums">{value}</div>
     </div>
   );
 }
