@@ -4,6 +4,7 @@ import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, User
 
 import { toast } from "sonner";
 import { clearCompletions, updateDischarge } from "@/lib/hospital.functions";
+import { UpdatesModal } from "@/components/UpdatesModal";
 
 
 
@@ -475,6 +476,7 @@ function TvPage() {
           boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
         }}
       />
+      <UpdatesModal />
       <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-white/15">
         <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
