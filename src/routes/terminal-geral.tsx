@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
+import { useCarouselScroll } from "@/hooks/useCarouselScroll";
+import { UpdatesModal } from "@/components/UpdatesModal";
 
 export const Route = createFileRoute("/terminal-geral")({
   head: () => ({
@@ -37,6 +39,7 @@ const STATUS_TONE: Record<TerminalGeralEvent["status"], string> = {
 };
 
 function TerminalGeralPage() {
+  const mainRef = useCarouselScroll<HTMLElement>();
   const [events, setEvents] = useState<TerminalGeralEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -131,7 +134,7 @@ function TerminalGeralPage() {
         </div>
       )}
 
-      <main className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
+      <main ref={mainRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
         {events.length === 0 && !loading && !erro && (
           <p className="text-sm text-white/40 pt-6">Nenhuma área de Limpeza Terminal Geral encontrada.</p>
         )}
@@ -179,6 +182,7 @@ function TerminalGeralPage() {
         )}
       </main>
 
+      <UpdatesModal />
       <Link
         to="/diaria"
         title="Ver higiene diária de todos os leitos"
