@@ -1,12 +1,25 @@
 /**
  * Leitura ao vivo da rotina "Limpeza Terminal Geral" no Listo360 — diferente da
- * limpeza terminal de leito (que é vinculada à alta de um paciente), essa é a
- * limpeza terminal de ÁREAS COMUNS (recepção, postos, corredores, etc.), sem
- * número de leito. Não usa banco: consulta o Listo direto a cada chamada.
+ * limpeza terminal de leito (vinculada à alta de um paciente), essa é a limpeza
+ * terminal de ÁREAS COMUNS (recepção, postos, corredores, etc.), sem número de
+ * leito nem "box". Não usa banco: consulta o Listo direto a cada chamada.
+ *
+ * LIMITAÇÃO CONHECIDA: ao contrário dos leitos (que têm uma lista fixa e
+ * completa em src/lib/beds.ts, fornecida pela operação), não existe aqui uma
+ * lista fixa das áreas comuns do hospital. A lista abaixo é "descoberta" a
+ * partir do histórico de respostas do Listo dos últimos DISCOVERY_HOURS —
+ * uma área que não teve NENHUMA rotina de Limpeza Terminal Geral nesse período
+ * simplesmente não aparece na tela. Se quiser garantir 100% de cobertura,
+ * passa a lista real das áreas (nome + bloco + andar) que o time usa no Listo,
+ * do mesmo jeito que foi feito para os leitos, que eu deixo isso fixo.
  */
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
+// Janela usada só pra "descobrir" quais áreas existem (ver limitação acima).
+// Maior que as 24h de um turno pra pegar áreas que não são limpas todo dia,
+// mas sem exagerar (isso é buscado a cada poll da tela, não pode ficar lento).
+const DISCOVERY_HOURS = 48;
 
 type ListoAnswer = {
   id: number;
@@ -24,19 +37,21 @@ type ListoAnswer = {
   statusAnswer: { id: number; displayName: string | null } | null;
 };
 
-export type TerminalGeralStatus = "waiting_cleaning" | "en_route" | "in_progress" | "paused" | "completed";
-/** Os dois agrupamentos de bloco usados nessa tela (mesmo agrupamento do rodapé do /tv). */
-export type BlockGroup = "DE" | "BC" | "outro";
+/** Só 3 estados, como pedido: em andamento, pendente, concluída — sem "a
+ * caminho", "pausada" ou "aguardando" (tudo isso vira "pendente"). */
+export type TerminalGeralStatus = "in_progress" | "pendente" | "completed";
+export type TerminalGeralBlock = "D" | "E" | "C" | "B" | "outro";
 
 export type TerminalGeralEvent = {
-  id: number;
   area: string;
   unit: string;
-  blockGroup: BlockGroup;
+  block: TerminalGeralBlock;
+  floor: number | null;
   status: TerminalGeralStatus;
   staff: string | null;
   reason: string | null;
-  at: string;
+  /** null quando a área está pendente (nenhum registro neste turno). */
+  at: string | null;
 };
 
 function parseBRT(s: string | null | undefined): Date | null {
@@ -68,7 +83,7 @@ async function fetchAnswers(token: string, hours: number): Promise<ListoAnswer[]
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
   const all: ListoAnswer[] = [];
   const pageSize = 500;
-  for (let page = 1; page <= 30; page++) {
+  for (let page = 1; page <= 60; page++) {
     const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
     const res = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -82,12 +97,19 @@ async function fetchAnswers(token: string, hours: number): Promise<ListoAnswer[]
   return all;
 }
 
-function isTerminalGeral(a: ListoAnswer): boolean {
+function isTerminalGeralRoute(a: ListoAnswer): boolean {
   const route = (a.routeName || "").toLowerCase();
   const insp = (a.inspectionName || "").toLowerCase();
-  const isBed = (a.locationName || "").toLowerCase().trim().startsWith("leito");
-  // "Limpeza Terminal Geral" é de área comum — nunca tem número de leito.
-  return !isBed && (route.includes("terminal geral") || insp.includes("terminal geral"));
+  return route.includes("terminal geral") || insp.includes("terminal geral");
+}
+
+/** Só áreas de verdade — nunca leito, nunca "box" (espaço avulso/temporário). */
+function isRealArea(a: ListoAnswer): boolean {
+  const name = (a.locationName || "").trim().toLowerCase();
+  if (!name) return false;
+  if (name.startsWith("leito")) return false;
+  if (/\bbox\b/.test(name)) return false;
+  return true;
 }
 
 function extractComment(c: ListoAnswer["answerComment"]): string | null {
@@ -96,58 +118,137 @@ function extractComment(c: ListoAnswer["answerComment"]): string | null {
   return c.comment ?? null;
 }
 
-function blockGroupOf(unit: string): BlockGroup {
-  const m = unit.toUpperCase().match(/BLOCO\s+([A-Z])/);
-  const b = m?.[1];
-  if (b === "D" || b === "E") return "DE";
-  if (b === "B" || b === "C") return "BC";
-  return "outro";
+function blockAndFloorOf(unit: string): { block: TerminalGeralBlock; floor: number | null } {
+  const m = unit.toUpperCase().match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
+  if (!m) return { block: "outro", floor: null };
+  const b = m[1];
+  const floor = parseInt(m[2], 10);
+  if (b === "D" || b === "E" || b === "C" || b === "B") return { block: b, floor };
+  return { block: "outro", floor };
 }
 
-/** Mesma lógica de status usada no sync principal (sync-listo360.ts), simplificada. */
 function statusOf(a: ListoAnswer): TerminalGeralStatus {
   const id = a.statusAnswer?.id;
   const hasEnd = !!a.endTime;
-  const hasStart = !!a.startTime;
-  const hasUser = !!(a.userName && a.userName.trim());
-
-  if (id === 4 || id === 7) return "paused";
-  if (id === 3 || id === 6) return "completed";
-  if (id === 2) return hasEnd ? "completed" : "in_progress";
-  if (hasEnd) return "completed";
-  if (hasStart) return "in_progress";
-  if (hasUser) return "en_route";
-  return "waiting_cleaning";
+  if (id === 3 || id === 6 || hasEnd) return "completed";
+  if (a.startTime && !hasEnd) return "in_progress";
+  if (id === 2 && !hasEnd) return "in_progress";
+  return "pendente";
 }
 
-/** Eventos de limpeza terminal de áreas comuns, um por área (a resposta mais recente). */
+// Turnos em horário de Brasília — mesma janela usada em /lib/daily.server.ts.
+// Sem isso, uma área concluída ontem à tarde continuaria aparecendo como
+// "concluída" hoje de manhã, mesmo sem nada feito no turno atual.
+const SHIFT_BOUNDARIES = [
+  { label: "Manhã", startMin: 6 * 60 + 20 },
+  { label: "Tarde", startMin: 13 * 60 + 40 },
+  { label: "Noite", startMin: 22 * 60 },
+] as const;
+
+function currentShiftWindow(): { start: Date; end: Date } {
+  const wall = new Date(Date.now() - 3 * 60 * 60 * 1000); // horário de parede BRT
+  const minutesNow = wall.getUTCHours() * 60 + wall.getUTCMinutes();
+
+  let startMin: number = SHIFT_BOUNDARIES[2].startMin;
+  let dayOffset = minutesNow < SHIFT_BOUNDARIES[0].startMin ? -1 : 0;
+  let shiftIndex = 2;
+
+  SHIFT_BOUNDARIES.forEach((s, i) => {
+    if (minutesNow >= s.startMin) {
+      startMin = s.startMin;
+      dayOffset = 0;
+      shiftIndex = i;
+    }
+  });
+
+  const startWall = new Date(
+    Date.UTC(
+      wall.getUTCFullYear(),
+      wall.getUTCMonth(),
+      wall.getUTCDate() + dayOffset,
+      Math.floor(startMin / 60),
+      startMin % 60,
+      0,
+      0,
+    ),
+  );
+  const start = new Date(startWall.getTime() + 3 * 60 * 60 * 1000);
+
+  const lengthMin =
+    shiftIndex === 0
+      ? SHIFT_BOUNDARIES[1].startMin - SHIFT_BOUNDARIES[0].startMin
+      : shiftIndex === 1
+        ? SHIFT_BOUNDARIES[2].startMin - SHIFT_BOUNDARIES[1].startMin
+        : 24 * 60 - SHIFT_BOUNDARIES[2].startMin + SHIFT_BOUNDARIES[0].startMin;
+  const end = new Date(start.getTime() + lengthMin * 60 * 1000);
+
+  return { start, end };
+}
+
+/**
+ * Eventos de limpeza terminal de áreas comuns: uma linha por área SEMPRE —
+ * mesmo que a área não tenha nenhuma rotina neste turno (aí ela entra como
+ * "pendente", nunca herdando um "concluída" de um turno já passado).
+ */
 export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
   const token = await login();
-  const answers = await fetchAnswers(token, 26);
-  const relevant = answers.filter(isTerminalGeral);
+  const answers = await fetchAnswers(token, DISCOVERY_HOURS);
+  const relevant = answers.filter((a) => isTerminalGeralRoute(a) && isRealArea(a));
+  const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
 
-  const byArea = new Map<string, TerminalGeralEvent>();
+  // 1) Catálogo de áreas conhecidas (nome + bloco/andar), descoberto no histórico
+  const catalog = new Map<string, { unit: string; block: TerminalGeralBlock; floor: number | null }>();
   for (const a of relevant) {
     const area = (a.locationName || a.sectorDescription || `Área ${a.id}`).trim();
     const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-    const at = (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()).toISOString();
-
-    const ev: TerminalGeralEvent = {
-      id: a.id,
-      area,
-      unit,
-      blockGroup: blockGroupOf(unit),
-      status: statusOf(a),
-      staff: a.userName?.trim() || null,
-      reason: extractComment(a.answerComment),
-      at,
-    };
-
-    const prev = byArea.get(area);
-    if (!prev || new Date(at) > new Date(prev.at)) {
-      byArea.set(area, ev);
+    if (!catalog.has(area)) {
+      catalog.set(area, { unit, ...blockAndFloorOf(unit) });
     }
   }
 
-  return Array.from(byArea.values());
+  // 2) Status atual: só o que caiu dentro do turno em andamento agora
+  const currentByArea = new Map<string, ListoAnswer>();
+  for (const a of relevant) {
+    const at = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
+    if (!at || at < shiftStart || at >= shiftEnd) continue;
+    const area = (a.locationName || a.sectorDescription || `Área ${a.id}`).trim();
+    const prev = currentByArea.get(area);
+    if (!prev) {
+      currentByArea.set(area, a);
+      continue;
+    }
+    const prevAt = parseBRT(prev.endTime) ?? parseBRT(prev.startTime) ?? parseBRT(prev.date) ?? new Date(0);
+    const emAndamento = (x: ListoAnswer) => (statusOf(x) === "in_progress" ? 1 : 0);
+    if (emAndamento(a) > emAndamento(prev) || (emAndamento(a) === emAndamento(prev) && at > prevAt)) {
+      currentByArea.set(area, a);
+    }
+  }
+
+  // 3) Junta: toda área do catálogo aparece, "pendente" por padrão
+  return Array.from(catalog.entries()).map(([area, info]) => {
+    const cur = currentByArea.get(area);
+    if (!cur) {
+      return {
+        area,
+        unit: info.unit,
+        block: info.block,
+        floor: info.floor,
+        status: "pendente" as const,
+        staff: null,
+        reason: null,
+        at: null,
+      };
+    }
+    const at = (parseBRT(cur.endTime) ?? parseBRT(cur.startTime) ?? parseBRT(cur.date) ?? new Date()).toISOString();
+    return {
+      area,
+      unit: info.unit,
+      block: info.block,
+      floor: info.floor,
+      status: statusOf(cur),
+      staff: cur.userName?.trim() || null,
+      reason: extractComment(cur.answerComment),
+      at,
+    };
+  });
 }
