@@ -35,6 +35,7 @@ export const Route = createFileRoute("/tv")({
 const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
   { floor: 3, block: "D" },
   { floor: 3, block: "C" },
+  { floor: 9, block: "C" },
   { floor: 12, block: "C" },
   { floor: 5, block: "B" },
 ];
@@ -322,6 +323,22 @@ function TvPage() {
       });
   }, [staff, filtered]);
 
+  // Altas Paradas por bloco, mostrado na legenda do painel (D/E juntos, B e C
+  // separados, igual você pediu).
+  const pausedPorBloco = useMemo(() => {
+    let de = 0;
+    let b = 0;
+    let c = 0;
+    for (const d of paused) {
+      const m = (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/);
+      const blk = m?.[1];
+      if (blk === "D" || blk === "E") de++;
+      else if (blk === "B") b++;
+      else if (blk === "C") c++;
+    }
+    return { de, b, c };
+  }, [paused]);
+
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
@@ -362,20 +379,18 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 3) Médias de tempo: "Média p/ Iniciar" = média de quanto tempo as Altas
-  // Paradas levaram até alguém começar (created_at → momento em que entrou em
-  // execução). Só entram leitos que JÁ tiveram início — quem ainda está esperando
-  // não tem "tempo até iniciar" pra contar ainda. Isso evita que o número cresça
-  // pra sempre olhando quem tá parado agora (era isso que dava valores absurdos).
+  // 3) Médias de tempo: "Média p/ Iniciar" = média de quanto tempo os leitos que
+  // ESTÃO parados agora (A Caminho + Altas Paradas) já estão nessa espera, usando
+  // o mesmo horário estável (status_updated_at) que as tabelas mostram — é o
+  // mesmo número que aparece na coluna "Tempo" de cada um. A versão anterior usava
+  // created_at do banco, que pra um leito reciclado há dias/semanas não reflete
+  // quando ele entrou nessa espera — dava valores tipo 500min sem sentido.
   const avgToStart = useMemo(() => {
-    const started = inFlight.filter((d) => new Date(d.status_updated_at).getTime() >= now - ONE_DAY_MS);
-    if (!started.length) return null;
-    const sum = started.reduce(
-      (acc, d) => acc + Math.max(0, elapsedMinutes(d.created_at, new Date(d.status_updated_at).getTime())),
-      0,
-    );
-    return Math.round(sum / started.length);
-  }, [inFlight, now]);
+    const pend = [...enRoute, ...paused];
+    if (!pend.length) return null;
+    const sum = pend.reduce((acc, d) => acc + elapsedMinutes(d.status_updated_at, now), 0);
+    return Math.round(sum / pend.length);
+  }, [enRoute, paused, now]);
 
   const avgExecution = useMemo(() => {
     if (!inFlight.length) return null;
@@ -619,7 +634,7 @@ function TvPage() {
           empty="Nenhuma alta parada."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          caption="meta: intervir em até 30min"
+          caption={`meta: intervir em até 30min  ·  D/E ${pausedPorBloco.de}  ·  B ${pausedPorBloco.b}  ·  C ${pausedPorBloco.c}`}
           className="order-4 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
         <BedsPanel
