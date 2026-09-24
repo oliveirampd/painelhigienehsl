@@ -2,24 +2,24 @@
  * Leitura ao vivo da rotina "Limpeza Terminal Geral" no Listo360 — diferente da
  * limpeza terminal de leito (vinculada à alta de um paciente), essa é a limpeza
  * terminal de ÁREAS COMUNS (recepção, postos, corredores, etc.), sem número de
- * leito nem "box". Não usa banco: consulta o Listo direto a cada chamada.
+ * leito. Não usa banco: consulta o Listo direto a cada chamada.
  *
- * LIMITAÇÃO CONHECIDA: ao contrário dos leitos (que têm uma lista fixa e
- * completa em src/lib/beds.ts, fornecida pela operação), não existe aqui uma
- * lista fixa das áreas comuns do hospital. A lista abaixo é "descoberta" a
- * partir do histórico de respostas do Listo dos últimos DISCOVERY_HOURS —
- * uma área que não teve NENHUMA rotina de Limpeza Terminal Geral nesse período
- * simplesmente não aparece na tela. Se quiser garantir 100% de cobertura,
- * passa a lista real das áreas (nome + bloco + andar) que o time usa no Listo,
- * do mesmo jeito que foi feito para os leitos, que eu deixo isso fixo.
+ * O catálogo de áreas (quais existem, em qual bloco/andar/setor) vem de
+ * TERMINAL_GERAL_AREAS (src/lib/terminalGeralAreas.ts — lista fornecida pela
+ * operação). Isso garante que toda área conhecida apareça na tela, mesmo sem
+ * nenhuma rotina registrada ainda (aí ela entra como "pendente"). Qualquer área
+ * que aparecer no Listo e NÃO estiver nessa lista ainda entra do mesmo jeito
+ * (descoberta ao vivo), como rede de segurança.
  */
+
+import { TERMINAL_GERAL_AREAS } from "@/lib/terminalGeralAreas";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
-// Janela usada só pra "descobrir" quais áreas existem (ver limitação acima).
-// Maior que as 24h de um turno pra pegar áreas que não são limpas todo dia,
-// mas sem exagerar (isso é buscado a cada poll da tela, não pode ficar lento).
-const DISCOVERY_HOURS = 48;
+// Janela do fetch principal — o catálogo de áreas já vem fixo da lista acima,
+// então essa janela só precisa cobrir o turno atual + uma margem de segurança
+// (não precisa mais ser gigante só pra "descobrir" área).
+const FETCH_HOURS = 26;
 
 type ListoAnswer = {
   id: number;
@@ -40,13 +40,23 @@ type ListoAnswer = {
 /** Só 3 estados, como pedido: em andamento, pendente, concluída — sem "a
  * caminho", "pausada" ou "aguardando" (tudo isso vira "pendente"). */
 export type TerminalGeralStatus = "in_progress" | "pendente" | "completed";
-export type TerminalGeralBlock = "D" | "E" | "C" | "B" | "outro";
+export type TerminalGeralBlock = "D" | "E" | "C" | "B" | "A" | "outro";
 
 export type TerminalGeralEvent = {
   area: string;
   unit: string;
   block: TerminalGeralBlock;
+  /** Número do andar, pra ordenar do maior pro menor. Null quando block="outro". */
   floor: number | null;
+  /** Nome completo do setor dentro do andar (ex: "1ºss - Tomografia",
+   * "07º Andar - Semi/Uti - Pediatrica") — vários setores podem compartilhar o
+   * mesmo número de andar (ex: vários "1ºss - X" são todos "andar 1"), então
+   * isso é o que realmente distingue uma área de outra, e o que agrupa a
+   * exibição quando há mais de um setor no mesmo andar. */
+  floorLabel: string | null;
+  /** Nome do grupo original quando block === "outro" (ex: "Térreo B",
+   * "Mezanino Diretoria") — pra não misturar tudo numa lista só sem contexto. */
+  outroGrupo: string | null;
   status: TerminalGeralStatus;
   staff: string | null;
   reason: string | null;
@@ -103,13 +113,12 @@ function isTerminalGeralRoute(a: ListoAnswer): boolean {
   return route.includes("terminal geral") || insp.includes("terminal geral");
 }
 
-/** Só áreas de verdade — nunca leito, nunca "box" (espaço avulso/temporário). */
-function isRealArea(a: ListoAnswer): boolean {
-  const name = (a.locationName || "").trim().toLowerCase();
-  if (!name) return false;
-  if (name.startsWith("leito")) return false;
-  if (/\bbox\b/.test(name)) return false;
-  return true;
+/** Só áreas de verdade — nunca leito (unidade avulsa por paciente). Nomes que
+ * contêm a palavra "box" como parte do nome de uma área fixa (ex: "Box de
+ * Sinais Vitais", "Corredor - Box 05|08") são áreas reais, não são excluídos. */
+function isRealArea(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return !!n && !n.startsWith("leito");
 }
 
 function extractComment(c: ListoAnswer["answerComment"]): string | null {
@@ -118,13 +127,31 @@ function extractComment(c: ListoAnswer["answerComment"]): string | null {
   return c.comment ?? null;
 }
 
-function blockAndFloorOf(unit: string): { block: TerminalGeralBlock; floor: number | null } {
-  const m = unit.toUpperCase().match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
-  if (!m) return { block: "outro", floor: null };
-  const b = m[1];
-  const floor = parseInt(m[2], 10);
-  if (b === "D" || b === "E" || b === "C" || b === "B") return { block: b, floor };
-  return { block: "outro", floor };
+const VALID_BLOCKS = new Set(["D", "E", "C", "B", "A"]);
+
+/**
+ * Extrai bloco + andar (número, pra ordenar) + setor (texto completo, pra
+ * identificar unicamente) de um "unit" (ex: "Bloco B 07º Andar - Semi/Uti -
+ * Pediatrica", "Bloco C 1ºss - Tomografia"). Trata "Térreo" sem número como
+ * andar 0. Áreas fora desse padrão (anexos administrativos distintos dos
+ * blocos principais no próprio Listo, ex: "Térreo B", "Mezanino Diretoria")
+ * caem em "outro".
+ *
+ * IMPORTANTE: vários setores diferentes podem começar com o mesmo número (ex:
+ * "1ºss - Tomografia", "1ºss - Raio X" e "01º Andar - Oncologia" são todos
+ * "andar 1", mas são lugares diferentes) — por isso floorLabel (o texto
+ * completo do setor) é o que deve ser usado pra identificar uma área de forma
+ * única, nunca só o número do andar.
+ */
+function blockAndFloorOf(unit: string): { block: TerminalGeralBlock; floor: number | null; floorLabel: string | null } {
+  const m = unit.match(/^BLOCO\s+([A-Z])\s*(.*)$/i);
+  if (m && VALID_BLOCKS.has(m[1].toUpperCase())) {
+    const floorLabel = m[2].trim() || null;
+    const numMatch = floorLabel?.match(/0*(\d+)/);
+    const floor = numMatch ? parseInt(numMatch[1], 10) : /T[ÉE]RREO/i.test(floorLabel || "") ? 0 : null;
+    return { block: m[1].toUpperCase() as TerminalGeralBlock, floor, floorLabel };
+  }
+  return { block: "outro", floor: null, floorLabel: null };
 }
 
 function statusOf(a: ListoAnswer): TerminalGeralStatus {
@@ -185,6 +212,26 @@ function currentShiftWindow(): { start: Date; end: Date } {
   return { start, end };
 }
 
+type CatalogEntry = {
+  unit: string;
+  area: string;
+  block: TerminalGeralBlock;
+  floor: number | null;
+  floorLabel: string | null;
+  outroGrupo: string | null;
+};
+
+/** Chave que identifica uma área de forma única: bloco + setor completo + nome
+ * — nunca só o número do andar (colide entre setores diferentes) nem só o
+ * nome (se repete em dezenas de andares, tipo "WC Masculino" ou "DML"). */
+function areaKey(block: TerminalGeralBlock, floorLabel: string | null, area: string): string {
+  return `${block}|${(floorLabel ?? "-").toLowerCase()}|${area.trim().toLowerCase()}`;
+}
+
+function outroGrupoOf(unit: string): string {
+  return unit.replace(/\s+Térreo$|\s+Mezanino$/i, "").trim() || unit.trim();
+}
+
 /**
  * Eventos de limpeza terminal de áreas comuns: uma linha por área SEMPRE —
  * mesmo que a área não tenha nenhuma rotina neste turno (aí ela entra como
@@ -192,47 +239,77 @@ function currentShiftWindow(): { start: Date; end: Date } {
  */
 export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
   const token = await login();
-  const answers = await fetchAnswers(token, DISCOVERY_HOURS);
-  const relevant = answers.filter((a) => isTerminalGeralRoute(a) && isRealArea(a));
+  const answers = await fetchAnswers(token, FETCH_HOURS);
+  const relevant = answers.filter((a) => isTerminalGeralRoute(a) && isRealArea(a.locationName || ""));
   const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
 
-  // 1) Catálogo de áreas conhecidas (nome + bloco/andar), descoberto no histórico
-  const catalog = new Map<string, { unit: string; block: TerminalGeralBlock; floor: number | null }>();
+  // 1) Catálogo: parte da lista fixa (garante cobertura total das áreas
+  // conhecidas), e soma qualquer área nova que apareça no Listo e ainda não
+  // esteja na lista (rede de segurança).
+  const catalog = new Map<string, CatalogEntry>();
+  for (const seed of TERMINAL_GERAL_AREAS) {
+    const { block, floor, floorLabel } = blockAndFloorOf(seed.unit);
+    const key = areaKey(block, floorLabel, seed.area);
+    if (!catalog.has(key)) {
+      catalog.set(key, {
+        unit: seed.unit,
+        area: seed.area,
+        block,
+        floor,
+        floorLabel,
+        outroGrupo: block === "outro" ? outroGrupoOf(seed.unit) : null,
+      });
+    }
+  }
   for (const a of relevant) {
     const area = (a.locationName || a.sectorDescription || `Área ${a.id}`).trim();
     const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-    if (!catalog.has(area)) {
-      catalog.set(area, { unit, ...blockAndFloorOf(unit) });
+    const { block, floor, floorLabel } = blockAndFloorOf(unit);
+    const key = areaKey(block, floorLabel, area);
+    if (!catalog.has(key)) {
+      catalog.set(key, {
+        unit,
+        area,
+        block,
+        floor,
+        floorLabel,
+        outroGrupo: block === "outro" ? outroGrupoOf(unit) : null,
+      });
     }
   }
 
   // 2) Status atual: só o que caiu dentro do turno em andamento agora
-  const currentByArea = new Map<string, ListoAnswer>();
+  const currentByKey = new Map<string, ListoAnswer>();
   for (const a of relevant) {
     const at = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
     if (!at || at < shiftStart || at >= shiftEnd) continue;
     const area = (a.locationName || a.sectorDescription || `Área ${a.id}`).trim();
-    const prev = currentByArea.get(area);
+    const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
+    const { block, floorLabel } = blockAndFloorOf(unit);
+    const key = areaKey(block, floorLabel, area);
+    const prev = currentByKey.get(key);
     if (!prev) {
-      currentByArea.set(area, a);
+      currentByKey.set(key, a);
       continue;
     }
     const prevAt = parseBRT(prev.endTime) ?? parseBRT(prev.startTime) ?? parseBRT(prev.date) ?? new Date(0);
     const emAndamento = (x: ListoAnswer) => (statusOf(x) === "in_progress" ? 1 : 0);
     if (emAndamento(a) > emAndamento(prev) || (emAndamento(a) === emAndamento(prev) && at > prevAt)) {
-      currentByArea.set(area, a);
+      currentByKey.set(key, a);
     }
   }
 
   // 3) Junta: toda área do catálogo aparece, "pendente" por padrão
-  return Array.from(catalog.entries()).map(([area, info]) => {
-    const cur = currentByArea.get(area);
+  return Array.from(catalog.entries()).map(([key, info]) => {
+    const cur = currentByKey.get(key);
     if (!cur) {
       return {
-        area,
+        area: info.area,
         unit: info.unit,
         block: info.block,
         floor: info.floor,
+        floorLabel: info.floorLabel,
+        outroGrupo: info.outroGrupo,
         status: "pendente" as const,
         staff: null,
         reason: null,
@@ -241,10 +318,12 @@ export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
     }
     const at = (parseBRT(cur.endTime) ?? parseBRT(cur.startTime) ?? parseBRT(cur.date) ?? new Date()).toISOString();
     return {
-      area,
+      area: info.area,
       unit: info.unit,
       block: info.block,
       floor: info.floor,
+      floorLabel: info.floorLabel,
+      outroGrupo: info.outroGrupo,
       status: statusOf(cur),
       staff: cur.userName?.trim() || null,
       reason: extractComment(cur.answerComment),
