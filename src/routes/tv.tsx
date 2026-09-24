@@ -16,8 +16,6 @@ import {
 
 import { toast } from "sonner";
 import { clearCompletions, updateDischarge } from "@/lib/hospital.functions";
-import { getConcluidas, type ConcluidaEvent } from "@/lib/concluidas.functions";
-import { blockOfBed } from "@/lib/panelScope";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -53,8 +51,6 @@ const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
   { floor: 3, block: "C" },
   { floor: 12, block: "C" },
   { floor: 5, block: "B" },
-  { floor: 5, block: "C" },
-  { floor: 9, block: "C" },
 ];
 
 function isExcluded(d: Discharge): boolean {
@@ -64,19 +60,6 @@ function isExcluded(d: Discharge): boolean {
   const block = m[1];
   const floor = parseInt(m[2], 10);
   return EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
-}
-
-/** Bloco do leito: pela lista oficial de leitos; se não achar, tenta pelo texto da unidade. */
-function blockOfDischarge(d: Discharge): string | null {
-  return (
-    blockOfBed(d.bed_number) ?? (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/)?.[1] ?? null
-  );
-}
-
-/** "75" -> "75m"; "135" -> "2h15". */
-function fmtMinutes(m: number): string {
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
 }
 
 const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
@@ -195,29 +178,6 @@ function TvPage() {
     setTodayClearedAt(Number(localStorage.getItem("tv:todayClearedAt") ?? 0));
   }, []);
 
-  // Altas concluídas: lidas direto do Listo (só conclusão real, só leitos do painel).
-  // Não usa o banco pra isso: o sync auto-conclui registros travados e reaproveita a
-  // linha do leito a cada ciclo, o que fazia o contador subir/descer sem alta real.
-  // Se a leitura falhar, mantém o último valor bom (ou "—" se nunca leu).
-  const [concl, setConcl] = useState<{ events: ConcluidaEvent[] } | null>(null);
-  useEffect(() => {
-    let alive = true;
-    async function load() {
-      try {
-        const res = await getConcluidas();
-        if (alive) setConcl({ events: res.events });
-      } catch {
-        // mantém o último valor
-      }
-    }
-    load();
-    const id = setInterval(load, 45000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, []);
-
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
   // A janela é reavaliada a cada atualização de dados / tique do relógio,
   // então leitos antigos saem da faixa automaticamente. Deduplicado por leito
@@ -225,19 +185,6 @@ function TvPage() {
   // mais recente aparece — evita repetir o mesmo leito na faixa).
   const recentCompletions = useMemo(() => {
     const cutoff = Math.max(now - 30 * 60 * 1000, recentClearedAt);
-    if (concl) {
-      const byBedListo = new Map<string, ConcluidaEvent>();
-      for (const e of concl.events) {
-        const t = new Date(e.at).getTime();
-        if (t < cutoff) continue;
-        const prev = byBedListo.get(e.bed);
-        if (!prev || new Date(prev.at).getTime() < t) byBedListo.set(e.bed, e);
-      }
-      return Array.from(byBedListo.values())
-        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
-        .slice(0, 8)
-        .map((e) => ({ bed: `Leito ${e.bed}`, completedAt: e.at, id: String(e.answerId) }));
-    }
     const byBed = new Map<string, Discharge>();
     for (const d of discharges) {
       if (
@@ -258,7 +205,7 @@ function TvPage() {
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
       .slice(0, 8)
       .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-  }, [discharges, concl, now, recentClearedAt]);
+  }, [discharges, now, recentClearedAt]);
 
   const flashVersions = flashVersionRef.current;
 
@@ -302,19 +249,6 @@ function TvPage() {
         ),
     [filtered],
   );
-
-  // Altas Paradas por bloco (D/E · B · C) — aparece no card lá em cima.
-  const paradasPorBloco = useMemo(() => {
-    const r = { de: 0, b: 0, c: 0, outros: 0 };
-    for (const d of paused) {
-      const blk = blockOfDischarge(d);
-      if (blk === "D" || blk === "E") r.de++;
-      else if (blk === "B") r.b++;
-      else if (blk === "C") r.c++;
-      else r.outros++;
-    }
-    return r;
-  }, [paused]);
 
   // Leitos Pausados: "Pendente" no Listo (motivo/comentário), só as de hoje
   const completedIssues = useMemo(() => {
@@ -526,25 +460,22 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 3) Médias de tempo: "Média p/ Iniciar" = quanto tempo a alta ficou esperando até
-  // alguém começar (created_at → início da execução). O sync marca created_at quando um
-  // ciclo novo do leito aparece, então esse é o momento em que a alta "ficou parada".
-  // Só entram leitos que JÁ iniciaram, e só amostras válidas:
-  //  - espera <= 0: o leito já apareceu iniciado, então não dá pra medir a espera;
-  //  - espera > 4h: dado antigo de linha reaproveitada de ciclo anterior (era isso que
-  //    dava 500 min), não uma espera real.
+  // 3) Médias de tempo: "Média p/ Iniciar" = média de quanto tempo as Altas
+  // Paradas levaram até alguém começar (created_at → momento em que entrou em
+  // execução). Só entram leitos que JÁ tiveram início — quem ainda está esperando
+  // não tem "tempo até iniciar" pra contar ainda. Isso evita que o número cresça
+  // pra sempre olhando quem tá parado agora (era isso que dava valores absurdos).
   const avgToStart = useMemo(() => {
-    const MAX_ESPERA_MIN = 4 * 60;
-    const esperas: number[] = [];
-    for (const d of inFlight) {
-      const iniciou = new Date(d.status_updated_at).getTime();
-      if (iniciou < now - ONE_DAY_MS) continue;
-      const espera = (iniciou - new Date(d.created_at).getTime()) / 60000;
-      if (!(espera > 0) || espera > MAX_ESPERA_MIN) continue;
-      esperas.push(espera);
-    }
-    if (!esperas.length) return null;
-    return Math.round(esperas.reduce((a, b) => a + b, 0) / esperas.length);
+    const started = inFlight.filter(
+      (d) => new Date(d.status_updated_at).getTime() >= now - ONE_DAY_MS,
+    );
+    if (!started.length) return null;
+    const sum = started.reduce(
+      (acc, d) =>
+        acc + Math.max(0, elapsedMinutes(d.created_at, new Date(d.status_updated_at).getTime())),
+      0,
+    );
+    return Math.round(sum / started.length);
   }, [inFlight, now]);
 
   const avgExecution = useMemo(() => {
@@ -553,25 +484,34 @@ function TvPage() {
     return Math.round(sum / inFlight.length);
   }, [inFlight, now]);
 
-  // 4) Resumo do dia: altas concluídas hoje (desde 00:00 BRT), lidas do Listo
-  // (ver `concl` acima), separadas por agrupamento de blocos (D/E e B/C).
-  // null = ainda não conseguiu ler (mostra "—", nunca um número chutado).
+  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
+  // separadas por agrupamento de blocos (D/E e B/C).
   const concluidasHojePorBloco = useMemo(() => {
-    if (!concl) return null;
-    const brt = new Date(now - 3 * 60 * 60 * 1000);
-    brt.setUTCHours(0, 0, 0, 0);
-    const cutoff = Math.max(brt.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
-    let total = 0;
+    const agora = new Date();
+    const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+    inicioDiaBRT.setUTCHours(0, 0, 0, 0);
+    const cutoff = Math.max(inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
+    const done = discharges.filter(
+      (d) =>
+        !isExcluded(d) &&
+        isBed(d) &&
+        isTerminal(d) &&
+        d.status === "completed" &&
+        !!d.completed_at &&
+        new Date(d.completed_at).getTime() >= cutoff,
+    );
+
     let de = 0;
     let bc = 0;
-    for (const e of concl.events) {
-      if (new Date(e.at).getTime() < cutoff) continue;
-      total++;
-      if (e.block === "D" || e.block === "E") de++;
-      else bc++;
+    for (const d of done) {
+      const m = (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/);
+      const block = m?.[1];
+      if (block === "D" || block === "E") de++;
+      else if (block === "B" || block === "C") bc++;
     }
-    return { total, de, bc };
-  }, [concl, now, todayClearedAt]);
+    return { total: done.length, de, bc };
+  }, [discharges, todayClearedAt]);
+  const concluidasHoje = concluidasHojePorBloco.total;
 
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
   // menos a vista/o painel de madrugada.
@@ -745,14 +685,6 @@ function TvPage() {
           accent="oklch(0.78 0.2 60)"
           trend={trendFor("paused", paused.length)}
           higherIsBad
-          breakdown={[
-            { label: "D/E", value: paradasPorBloco.de },
-            { label: "B", value: paradasPorBloco.b },
-            { label: "C", value: paradasPorBloco.c },
-            ...(paradasPorBloco.outros > 0
-              ? [{ label: "Outros", value: paradasPorBloco.outros }]
-              : []),
-          ]}
         />
         <KpiCard
           label="Leitos Pausados"
@@ -765,13 +697,13 @@ function TvPage() {
         <KpiCard
           label="Média p/ Iniciar"
           value={avgToStart ?? 0}
-          display={avgToStart == null ? "—" : fmtMinutes(avgToStart)}
+          display={avgToStart == null ? "—" : `${avgToStart}m`}
           accent="oklch(0.8 0.16 85)"
         />
         <KpiCard
           label="Média de Execução"
           value={avgExecution ?? 0}
-          display={avgExecution == null ? "—" : fmtMinutes(avgExecution)}
+          display={avgExecution == null ? "—" : `${avgExecution}m`}
           accent="oklch(0.75 0.14 195)"
         />
       </div>
@@ -823,21 +755,18 @@ function TvPage() {
       <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
         <span className="inline-flex items-center gap-1.5">
           <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
-          Hoje:{" "}
-          <span className="text-white/70 font-semibold">
-            {concluidasHojePorBloco?.total ?? "—"}
-          </span>{" "}
-          altas concluídas
+          Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas
+          concluídas
         </span>
         <span className="text-white/20">·</span>
         <span>
           Bloco D/E:{" "}
-          <span className="text-white/70 font-semibold">{concluidasHojePorBloco?.de ?? "—"}</span>
+          <span className="text-white/70 font-semibold">{concluidasHojePorBloco.de}</span>
         </span>
         <span className="text-white/20">·</span>
         <span>
           Bloco B/C:{" "}
-          <span className="text-white/70 font-semibold">{concluidasHojePorBloco?.bc ?? "—"}</span>
+          <span className="text-white/70 font-semibold">{concluidasHojePorBloco.bc}</span>
         </span>
       </div>
     </div>
@@ -861,7 +790,6 @@ function KpiCard({
   accent,
   trend,
   higherIsBad,
-  breakdown,
 }: {
   label: string;
   value: number;
@@ -869,8 +797,6 @@ function KpiCard({
   accent: string;
   trend?: number | null;
   higherIsBad?: boolean;
-  /** Divisão do número por grupo (ex: por bloco), mostrada em chips embaixo do rótulo. */
-  breakdown?: Array<{ label: string; value: number }>;
 }) {
   const trendColor =
     trend == null || trend === 0
@@ -887,30 +813,8 @@ function KpiCard({
         boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="min-w-0">
-        <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
-          {label}
-        </div>
-        {breakdown && breakdown.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {breakdown.map((b) => (
-              <span
-                key={b.label}
-                className="inline-flex items-baseline gap-1 rounded-md border border-white/10 bg-black/30 px-1.5 py-px text-[10px] lg:text-xs leading-tight"
-              >
-                <span className="font-semibold uppercase tracking-wide text-white/60">
-                  {b.label}
-                </span>
-                <span
-                  className="font-bold tabular-nums"
-                  style={{ color: b.value > 0 ? accent : "rgba(255,255,255,0.4)" }}
-                >
-                  {b.value}
-                </span>
-              </span>
-            ))}
-          </div>
-        )}
+      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
+        {label}
       </div>
       <div className="flex items-baseline gap-1.5">
         <div
@@ -943,9 +847,9 @@ const toneBg: Record<Tone, string> = {
 };
 
 /**
- * "A Caminho" + "Altas Paradas" unidos num único painel de cards (estilo Listo360
- * nativo: card por leito, barra de progresso, nome do colaborador quando alocado)
- * em vez de duas tabelas separadas em linhas.
+ * "A Caminho" + "Altas Paradas" unidos num único painel de cards (sem barra de
+ * progresso): leito, tempo parado e nome do colaborador. Azul = a caminho (tem
+ * colaborador alocado); âmbar = alta parada (ainda sem colaborador).
  */
 function WaitingBedsPanel({
   enRoute,
@@ -964,9 +868,6 @@ function WaitingBedsPanel({
   worstId?: string;
   className?: string;
 }) {
-  // Sem barra de progresso/meta aqui: só leito, tempo e colaborador. A cor do card
-  // já indica a categoria — azul = a caminho (tem colaborador), âmbar = alta parada
-  // (ainda sem colaborador alocado).
   const cards = [
     ...paused.map((d) => ({ d, kind: "parada" as const })),
     ...enRoute.map((d) => ({ d, kind: "caminho" as const })),
@@ -1554,3 +1455,4 @@ function AutoScroll({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
