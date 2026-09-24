@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   UtensilsCrossed,
   BrushCleaning,
-  Footprints,
   CirclePause,
   UsersRound,
   CircleCheck,
@@ -708,28 +707,16 @@ function TvPage() {
         />
       </div>
 
-      <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,0.85fr)_minmax(0,1.35fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
-        <BedsPanel
-          title="Leitos em Limpeza Terminal"
-          icon={<BrushCleaning className="w-4 h-4 text-white/60" />}
-          rows={inFlight}
-          nowMs={now}
-          staffMap={staffMap}
-          tone="green"
-          empty="Nenhum leito em higienização terminal."
-          flashVersions={flashVersions}
-          worstId={worstCase?.id}
-          caption="meta: até 90min"
-          className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
-        />
-        <WaitingBedsPanel
+      <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,2fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
+        <TerminalBedsPanel
+          inFlight={inFlight}
           enRoute={enRoute}
           paused={paused}
           nowMs={now}
           staffMap={staffMap}
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          className="order-3 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
+          className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
         />
         <BedsPanel
           title="Leitos Pausados"
@@ -743,12 +730,12 @@ function TvPage() {
           empty="Nenhum leito pausado hoje."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          className="order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
+          className="order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
         />
         <StaffPanel
           rows={staffRows}
           nowMs={now}
-          className="order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-3"
+          className="order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-2"
         />
       </div>
 
@@ -847,11 +834,22 @@ const toneBg: Record<Tone, string> = {
 };
 
 /**
- * "A Caminho" + "Altas Paradas" unidos num único painel de cards (sem barra de
- * progresso): leito, tempo parado e nome do colaborador. Azul = a caminho (tem
- * colaborador alocado); âmbar = alta parada (ainda sem colaborador).
+ * Bloco do leito ("D", "E", "B", "C"...) a partir do texto da unidade
+ * (ex: "Bloco D 12º Andar · Ala 2"). Mesma regex usada no resumo do dia.
  */
-function WaitingBedsPanel({
+function bedBlock(d: Discharge): string | null {
+  return (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/)?.[1] ?? null;
+}
+
+/**
+ * "Leitos em Limpeza Terminal" + "A Caminho" + "Altas Paradas" unidos num único
+ * painel de cards: leito, tempo e nome do colaborador. Verde = em execução
+ * (higienizando agora), azul = a caminho, laranja = alta parada (padrão já usado
+ * no resto do painel para leito sem colaborador alocado). Mantém, sempre visível,
+ * a contagem de altas paradas por bloco (D/E, B, C).
+ */
+function TerminalBedsPanel({
+  inFlight,
   enRoute,
   paused,
   nowMs,
@@ -860,6 +858,7 @@ function WaitingBedsPanel({
   worstId,
   className,
 }: {
+  inFlight: Discharge[];
   enRoute: Discharge[];
   paused: Discharge[];
   nowMs: number;
@@ -868,49 +867,116 @@ function WaitingBedsPanel({
   worstId?: string;
   className?: string;
 }) {
+  const KIND_ORDER = { parada: 0, caminho: 1, execucao: 2 } as const;
+  const KIND_COLOR = {
+    parada: "oklch(0.78 0.2 60)", // laranja — padrão já usado pra alta parada
+    caminho: "oklch(0.74 0.18 230)", // azul
+    execucao: "oklch(0.72 0.17 155)", // verde
+  } as const;
+  const KIND_LABEL = {
+    parada: "Alta Parada",
+    caminho: "A Caminho",
+    execucao: "Em Execução",
+  } as const;
+
   const cards = [
     ...paused.map((d) => ({ d, kind: "parada" as const })),
     ...enRoute.map((d) => ({ d, kind: "caminho" as const })),
-  ].sort(
-    (a, b) =>
-      elapsedMinutes(b.d.status_updated_at, nowMs) - elapsedMinutes(a.d.status_updated_at, nowMs),
-  );
-
+    ...inFlight.map((d) => ({ d, kind: "execucao" as const })),
+  ].sort((a, b) => {
+    if (KIND_ORDER[a.kind] !== KIND_ORDER[b.kind]) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
+    return (
+      elapsedMinutes(b.d.status_updated_at, nowMs) - elapsedMinutes(a.d.status_updated_at, nowMs)
+    );
+  });
   const total = cards.length;
+
+  const paradasPorBloco = useMemo(() => {
+    let de = 0;
+    let b = 0;
+    let c = 0;
+    let outros = 0;
+    for (const d of paused) {
+      const block = bedBlock(d);
+      if (block === "D" || block === "E") de++;
+      else if (block === "B") b++;
+      else if (block === "C") c++;
+      else outros++;
+    }
+    return { de, b, c, outros };
+  }, [paused]);
 
   return (
     <section
-      className={`h-[420px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
+      className={`h-[520px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
     >
       <div className="flex-none px-4 py-2 border-b border-white/10">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline justify-between gap-2">
           <h2 className="text-base font-bold flex items-center gap-2">
-            <Footprints className="w-4 h-4 text-white/60" />A Caminho &amp; Altas Paradas
+            <BrushCleaning className="w-4 h-4 text-white/60" />
+            Leitos em Higienização
           </h2>
-          <span className="text-[11px] text-white/50">{total}</span>
+          <span className="text-[11px] text-white/50 shrink-0">{total}</span>
         </div>
-        <div className="hidden lg:flex gap-3 text-[10px] text-white/30 mt-0.5">
-          <span className="inline-flex items-center gap-1">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: "oklch(0.78 0.2 60)" }}
-            />{" "}
-            alta parada
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: "oklch(0.74 0.18 230)" }}
-            />{" "}
-            a caminho
-          </span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+          <div className="flex gap-3 text-[10px] text-white/30">
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: KIND_COLOR.execucao }}
+              />
+              em execução
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: KIND_COLOR.caminho }}
+              />
+              a caminho
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: KIND_COLOR.parada }}
+              />
+              alta parada
+            </span>
+          </div>
+          {/* Altas paradas por bloco — sempre visível, mobile incluso. */}
+          <div className="flex items-center gap-1 ml-auto">
+            {(
+              [
+                ["D/E", paradasPorBloco.de],
+                ["B", paradasPorBloco.b],
+                ["C", paradasPorBloco.c],
+                ...(paradasPorBloco.outros > 0
+                  ? [["Outros", paradasPorBloco.outros] as const]
+                  : []),
+              ] as const
+            ).map(([label, value]) => (
+              <span
+                key={label}
+                className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-px text-[10px] leading-tight"
+                style={{
+                  borderColor: KIND_COLOR.parada.replace(")", " / 0.4)"),
+                  background: KIND_COLOR.parada.replace(")", " / 0.12)"),
+                }}
+              >
+                <span className="font-semibold uppercase tracking-wide text-white/60">{label}</span>
+                <span
+                  className="font-bold tabular-nums"
+                  style={{ color: value > 0 ? KIND_COLOR.parada : "rgba(255,255,255,0.4)" }}
+                >
+                  {value}
+                </span>
+              </span>
+            ))}
+          </div>
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {cards.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">
-            Nenhum leito a caminho ou parado.
-          </div>
+          <div className="p-4 text-center text-white/40 text-sm">Nenhum leito em higienização.</div>
         ) : (
           <AutoScroll>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 p-3">
@@ -918,7 +984,9 @@ function WaitingBedsPanel({
                 const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
                 const version = flashVersions?.get(d.external_id ?? "") ?? 0;
                 const isWorst = worstId && d.id === worstId;
-                const base = kind === "parada" ? "oklch(0.78 0.2 60)" : "oklch(0.74 0.18 230)";
+                const minutes = elapsedMinutes(d.status_updated_at, nowMs);
+                const overtime = kind === "execucao" && minutes >= 60;
+                const base = overtime ? KIND_COLOR.parada : KIND_COLOR[kind];
                 return (
                   <div
                     key={`${d.id}-v${version}`}
@@ -949,6 +1017,12 @@ function WaitingBedsPanel({
                       </span>
                     </div>
                     <div className="text-[10px] text-white/45 truncate">{d.unit}</div>
+                    <span
+                      className="self-start rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
+                      style={{ color: base, background: base.replace(")", " / 0.18)") }}
+                    >
+                      {KIND_LABEL[kind]}
+                    </span>
                     <div
                       className="text-[11px] font-semibold truncate"
                       style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
@@ -1455,4 +1529,3 @@ function AutoScroll({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
