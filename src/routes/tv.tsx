@@ -1,12 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UtensilsCrossed, BrushCleaning, Footprints, OctagonX, CirclePause, UsersRound, CircleCheck, BadgeCheck, Sun, Moon, Eraser, ChevronRight } from "lucide-react";
+import {
+  UtensilsCrossed,
+  BrushCleaning,
+  Footprints,
+  CirclePause,
+  UsersRound,
+  CircleCheck,
+  BadgeCheck,
+  Sun,
+  Moon,
+  Eraser,
+  ChevronRight,
+} from "lucide-react";
 
 import { toast } from "sonner";
 import { clearCompletions, updateDischarge } from "@/lib/hospital.functions";
-import { UpdatesModal } from "@/components/UpdatesModal";
-
-
+import { getConcluidas, type ConcluidaEvent } from "@/lib/concluidas.functions";
+import { blockOfBed } from "@/lib/panelScope";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -25,7 +36,11 @@ export const Route = createFileRoute("/tv")({
   head: () => ({
     meta: [
       { title: "TV — Painel de Higienização Terminal" },
-      { name: "description", content: "Painel em tempo real: leitos em limpeza terminal, altas paradas, pausadas e colaboradores." },
+      {
+        name: "description",
+        content:
+          "Painel em tempo real: leitos em limpeza terminal, altas paradas, pausadas e colaboradores.",
+      },
     ],
   }),
   component: TvPage,
@@ -36,9 +51,10 @@ export const Route = createFileRoute("/tv")({
 const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
   { floor: 3, block: "D" },
   { floor: 3, block: "C" },
-  { floor: 9, block: "C" },
   { floor: 12, block: "C" },
   { floor: 5, block: "B" },
+  { floor: 5, block: "C" },
+  { floor: 9, block: "C" },
 ];
 
 function isExcluded(d: Discharge): boolean {
@@ -50,13 +66,25 @@ function isExcluded(d: Discharge): boolean {
   return EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
 }
 
+/** Bloco do leito: pela lista oficial de leitos; se não achar, tenta pelo texto da unidade. */
+function blockOfDischarge(d: Discharge): string | null {
+  return (
+    blockOfBed(d.bed_number) ?? (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/)?.[1] ?? null
+  );
+}
+
+/** "75" -> "75m"; "135" -> "2h15". */
+function fmtMinutes(m: number): string {
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+}
+
 const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 // Contorno de "caso crítico": só vale para os leitos do 8D/E e 7D/E.
 const isCuidadoUnit = (d: Discharge) => /BLOCO\s+[DE]\s+0?[78]/i.test(d.unit || "");
-
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -66,13 +94,44 @@ type StaffActivity = "desmontando" | "em_alta" | "disponivel";
 
 // Leitos "suíte" — têm meta de tempo maior (2h15 em vez de 1h15 nos blocos D/E).
 const SUITE_BEDS = new Set([
-  "1852", "1752", "1652", "1552", "1452",
-  "1260", "1160", "1060", "960", "860", "760",
-  "1855", "1755", "1655", "1555", "1455",
-  "1261", "1161", "1061", "961", "861", "761",
-  "1264", "1164", "1064", "964", "864", "764",
-  "1267", "1167", "1067", "967", "884", "784",
-  "877", "777", "878", "778",
+  "1852",
+  "1752",
+  "1652",
+  "1552",
+  "1452",
+  "1260",
+  "1160",
+  "1060",
+  "960",
+  "860",
+  "760",
+  "1855",
+  "1755",
+  "1655",
+  "1555",
+  "1455",
+  "1261",
+  "1161",
+  "1061",
+  "961",
+  "861",
+  "761",
+  "1264",
+  "1164",
+  "1064",
+  "964",
+  "864",
+  "764",
+  "1267",
+  "1167",
+  "1067",
+  "967",
+  "884",
+  "784",
+  "877",
+  "777",
+  "878",
+  "778",
 ]);
 
 /** Meta de tempo de higiene (minutos), com base no bloco e se é leito suíte. */
@@ -116,7 +175,10 @@ function TvPage() {
     for (const d of discharges) {
       const before = prev.get(d.external_id ?? "");
       if (before !== undefined && before !== d.status) {
-        flashVersionRef.current.set(d.external_id ?? "", (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1);
+        flashVersionRef.current.set(
+          d.external_id ?? "",
+          (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1,
+        );
         mudou = true;
       }
     }
@@ -133,6 +195,29 @@ function TvPage() {
     setTodayClearedAt(Number(localStorage.getItem("tv:todayClearedAt") ?? 0));
   }, []);
 
+  // Altas concluídas: lidas direto do Listo (só conclusão real, só leitos do painel).
+  // Não usa o banco pra isso: o sync auto-conclui registros travados e reaproveita a
+  // linha do leito a cada ciclo, o que fazia o contador subir/descer sem alta real.
+  // Se a leitura falhar, mantém o último valor bom (ou "—" se nunca leu).
+  const [concl, setConcl] = useState<{ events: ConcluidaEvent[] } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        const res = await getConcluidas();
+        if (alive) setConcl({ events: res.events });
+      } catch {
+        // mantém o último valor
+      }
+    }
+    load();
+    const id = setInterval(load, 45000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
   // A janela é reavaliada a cada atualização de dados / tique do relógio,
   // então leitos antigos saem da faixa automaticamente. Deduplicado por leito
@@ -140,9 +225,28 @@ function TvPage() {
   // mais recente aparece — evita repetir o mesmo leito na faixa).
   const recentCompletions = useMemo(() => {
     const cutoff = Math.max(now - 30 * 60 * 1000, recentClearedAt);
+    if (concl) {
+      const byBedListo = new Map<string, ConcluidaEvent>();
+      for (const e of concl.events) {
+        const t = new Date(e.at).getTime();
+        if (t < cutoff) continue;
+        const prev = byBedListo.get(e.bed);
+        if (!prev || new Date(prev.at).getTime() < t) byBedListo.set(e.bed, e);
+      }
+      return Array.from(byBedListo.values())
+        .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+        .slice(0, 8)
+        .map((e) => ({ bed: `Leito ${e.bed}`, completedAt: e.at, id: String(e.answerId) }));
+    }
     const byBed = new Map<string, Discharge>();
     for (const d of discharges) {
-      if (!isExcluded(d) && isBed(d) && isTerminal(d) && d.status === "completed" && d.completed_at) {
+      if (
+        !isExcluded(d) &&
+        isBed(d) &&
+        isTerminal(d) &&
+        d.status === "completed" &&
+        d.completed_at
+      ) {
         const completedAt = new Date(d.completed_at).getTime();
         if (completedAt < cutoff) continue;
         const bed = d.bed_number ?? "";
@@ -154,8 +258,7 @@ function TvPage() {
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
       .slice(0, 8)
       .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-  }, [discharges, now, recentClearedAt]);
-
+  }, [discharges, concl, now, recentClearedAt]);
 
   const flashVersions = flashVersionRef.current;
 
@@ -169,7 +272,10 @@ function TvPage() {
     () =>
       filtered
         .filter((d) => isTerminal(d) && d.status === "in_progress")
-        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime(),
+        ),
     [filtered],
   );
 
@@ -178,7 +284,10 @@ function TvPage() {
     () =>
       filtered
         .filter((d) => isTerminal(d) && d.status === "en_route")
-        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime(),
+        ),
     [filtered],
   );
 
@@ -187,9 +296,25 @@ function TvPage() {
     () =>
       filtered
         .filter((d) => isTerminal(d) && d.status === "waiting_cleaning")
-        .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime()),
+        .sort(
+          (a, b) =>
+            new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime(),
+        ),
     [filtered],
   );
+
+  // Altas Paradas por bloco (D/E · B · C) — aparece no card lá em cima.
+  const paradasPorBloco = useMemo(() => {
+    const r = { de: 0, b: 0, c: 0, outros: 0 };
+    for (const d of paused) {
+      const blk = blockOfDischarge(d);
+      if (blk === "D" || blk === "E") r.de++;
+      else if (blk === "B") r.b++;
+      else if (blk === "C") r.c++;
+      else r.outros++;
+    }
+    return r;
+  }, [paused]);
 
   // Leitos Pausados: "Pendente" no Listo (motivo/comentário), só as de hoje
   const completedIssues = useMemo(() => {
@@ -201,7 +326,9 @@ function TvPage() {
           (d.status === "paused" || d.status === "completed_with_issues") &&
           new Date(d.status_updated_at).getTime() >= cutoff,
       )
-      .sort((a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime());
+      .sort(
+        (a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime(),
+      );
   }, [filtered, now]);
 
   // Desmontagens em andamento
@@ -212,7 +339,10 @@ function TvPage() {
 
   // Colaboradores: derivar atividade por staff
   const staffRows = useMemo(() => {
-    const activity = new Map<string, { kind: StaffActivity; start: string; bed: string; unit: string }>();
+    const activity = new Map<
+      string,
+      { kind: StaffActivity; start: string; bed: string; unit: string }
+    >();
 
     for (const d of activeDesmont) {
       if (!d.assigned_staff_id) continue;
@@ -306,39 +436,41 @@ function TvPage() {
         else if (nomesDesmontando.some((n) => namesMatch(n, nome))) kind = "desmontando";
         else {
           switch (s.status) {
-            case "coffee_break": kind = "cafe"; break;
-            case "lunch_break": kind = "almoco"; break;
-            case "dinner_break": kind = "jantar"; break;
-            case "off_duty": kind = "deslogou"; break;
-            default: kind = "sem_alta";
+            case "coffee_break":
+              kind = "cafe";
+              break;
+            case "lunch_break":
+              kind = "almoco";
+              break;
+            case "dinner_break":
+              kind = "jantar";
+              break;
+            case "off_duty":
+              kind = "deslogou";
+              break;
+            default:
+              kind = "sem_alta";
           }
         }
         return { staff: s, kind };
       })
       .sort((a, b) => {
-        const order = { em_alta: 0, a_caminho: 0, desmontando: 0, cafe: 1, almoco: 1, jantar: 1, sem_alta: 2, deslogou: 3 };
+        const order = {
+          em_alta: 0,
+          a_caminho: 0,
+          desmontando: 0,
+          cafe: 1,
+          almoco: 1,
+          jantar: 1,
+          sem_alta: 2,
+          deslogou: 3,
+        };
         if (order[a.kind] !== order[b.kind]) return order[a.kind] - order[b.kind];
         const aT = (a.staff as any).status_updated_at ?? "";
         const bT = (b.staff as any).status_updated_at ?? "";
         return new Date(bT).getTime() - new Date(aT).getTime();
       });
   }, [staff, filtered]);
-
-  // Altas Paradas por bloco, mostrado na legenda do painel (D/E juntos, B e C
-  // separados, igual você pediu).
-  const pausedPorBloco = useMemo(() => {
-    let de = 0;
-    let b = 0;
-    let c = 0;
-    for (const d of paused) {
-      const m = (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/);
-      const blk = m?.[1];
-      if (blk === "D" || blk === "E") de++;
-      else if (blk === "B") b++;
-      else if (blk === "C") c++;
-    }
-    return { de, b, c };
-  }, [paused]);
 
   const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
@@ -347,13 +479,25 @@ function TvPage() {
 
   // 1) Tendência: guarda um retrato dos números a cada ~5min, pra comparar com
   // "há 1 hora" e mostrar seta de subida/descida nos KPIs.
-  type Snapshot = { t: number; inFlight: number; enRoute: number; paused: number; completedIssues: number };
+  type Snapshot = {
+    t: number;
+    inFlight: number;
+    enRoute: number;
+    paused: number;
+    completedIssues: number;
+  };
   const historyRef = useRef<Snapshot[]>([]);
   useEffect(() => {
     const t = Date.now();
     const last = historyRef.current[historyRef.current.length - 1];
     if (!last || t - last.t > 5 * 60 * 1000) {
-      historyRef.current.push({ t, inFlight: inFlight.length, enRoute: enRoute.length, paused: paused.length, completedIssues: completedIssues.length });
+      historyRef.current.push({
+        t,
+        inFlight: inFlight.length,
+        enRoute: enRoute.length,
+        paused: paused.length,
+        completedIssues: completedIssues.length,
+      });
       if (historyRef.current.length > 30) historyRef.current.shift();
     }
   }, [inFlight.length, enRoute.length, paused.length, completedIssues.length]);
@@ -376,22 +520,32 @@ function TvPage() {
     const all = [...inFlight, ...enRoute, ...paused, ...completedIssues].filter(isCuidadoUnit);
     if (!all.length) return null;
     return all.reduce((oldest, d) =>
-      new Date(d.status_updated_at).getTime() < new Date(oldest.status_updated_at).getTime() ? d : oldest,
+      new Date(d.status_updated_at).getTime() < new Date(oldest.status_updated_at).getTime()
+        ? d
+        : oldest,
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 3) Médias de tempo: "Média p/ Iniciar" = média de quanto tempo os leitos que
-  // ESTÃO parados agora (A Caminho + Altas Paradas) já estão nessa espera, usando
-  // o mesmo horário estável (status_updated_at) que as tabelas mostram — é o
-  // mesmo número que aparece na coluna "Tempo" de cada um. A versão anterior usava
-  // created_at do banco, que pra um leito reciclado há dias/semanas não reflete
-  // quando ele entrou nessa espera — dava valores tipo 500min sem sentido.
+  // 3) Médias de tempo: "Média p/ Iniciar" = quanto tempo a alta ficou esperando até
+  // alguém começar (created_at → início da execução). O sync marca created_at quando um
+  // ciclo novo do leito aparece, então esse é o momento em que a alta "ficou parada".
+  // Só entram leitos que JÁ iniciaram, e só amostras válidas:
+  //  - espera <= 0: o leito já apareceu iniciado, então não dá pra medir a espera;
+  //  - espera > 4h: dado antigo de linha reaproveitada de ciclo anterior (era isso que
+  //    dava 500 min), não uma espera real.
   const avgToStart = useMemo(() => {
-    const pend = [...enRoute, ...paused];
-    if (!pend.length) return null;
-    const sum = pend.reduce((acc, d) => acc + elapsedMinutes(d.status_updated_at, now), 0);
-    return Math.round(sum / pend.length);
-  }, [enRoute, paused, now]);
+    const MAX_ESPERA_MIN = 4 * 60;
+    const esperas: number[] = [];
+    for (const d of inFlight) {
+      const iniciou = new Date(d.status_updated_at).getTime();
+      if (iniciou < now - ONE_DAY_MS) continue;
+      const espera = (iniciou - new Date(d.created_at).getTime()) / 60000;
+      if (!(espera > 0) || espera > MAX_ESPERA_MIN) continue;
+      esperas.push(espera);
+    }
+    if (!esperas.length) return null;
+    return Math.round(esperas.reduce((a, b) => a + b, 0) / esperas.length);
+  }, [inFlight, now]);
 
   const avgExecution = useMemo(() => {
     if (!inFlight.length) return null;
@@ -399,36 +553,25 @@ function TvPage() {
     return Math.round(sum / inFlight.length);
   }, [inFlight, now]);
 
-
-  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
-  // separadas por agrupamento de blocos (D/E e B/C).
+  // 4) Resumo do dia: altas concluídas hoje (desde 00:00 BRT), lidas do Listo
+  // (ver `concl` acima), separadas por agrupamento de blocos (D/E e B/C).
+  // null = ainda não conseguiu ler (mostra "—", nunca um número chutado).
   const concluidasHojePorBloco = useMemo(() => {
-    const agora = new Date();
-    const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
-    inicioDiaBRT.setUTCHours(0, 0, 0, 0);
-    const cutoff = Math.max(inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
-    const done = discharges.filter(
-      (d) =>
-        !isExcluded(d) &&
-        isBed(d) &&
-        isTerminal(d) &&
-        d.status === "completed" &&
-        !!d.completed_at &&
-        new Date(d.completed_at).getTime() >= cutoff,
-    );
-
+    if (!concl) return null;
+    const brt = new Date(now - 3 * 60 * 60 * 1000);
+    brt.setUTCHours(0, 0, 0, 0);
+    const cutoff = Math.max(brt.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
+    let total = 0;
     let de = 0;
     let bc = 0;
-    for (const d of done) {
-      const m = (d.unit || "").toUpperCase().match(/BLOCO\s+([A-Z])/);
-      const block = m?.[1];
-      if (block === "D" || block === "E") de++;
-      else if (block === "B" || block === "C") bc++;
+    for (const e of concl.events) {
+      if (new Date(e.at).getTime() < cutoff) continue;
+      total++;
+      if (e.block === "D" || e.block === "E") de++;
+      else bc++;
     }
-    return { total: done.length, de, bc };
-  }, [discharges, todayClearedAt]);
-  const concluidasHoje = concluidasHojePorBloco.total;
-
+    return { total, de, bc };
+  }, [concl, now, todayClearedAt]);
 
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
   // menos a vista/o painel de madrugada.
@@ -462,7 +605,9 @@ function TvPage() {
   const filtros = [
     !isDark ? "invert(1) hue-rotate(180deg)" : null,
     isNoturno ? "brightness(0.82)" : null,
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
@@ -472,11 +617,11 @@ function TvPage() {
       <div
         className="absolute top-0 left-0 right-0 h-px"
         style={{
-          background: "linear-gradient(90deg, transparent 0%, oklch(0.6 0.15 245 / 0.7) 25%, oklch(0.65 0.18 155 / 0.6) 50%, oklch(0.65 0.19 60 / 0.6) 75%, transparent 100%)",
+          background:
+            "linear-gradient(90deg, transparent 0%, oklch(0.6 0.15 245 / 0.7) 25%, oklch(0.65 0.18 155 / 0.6) 50%, oklch(0.65 0.19 60 / 0.6) 75%, transparent 100%)",
           boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
         }}
       />
-      <UpdatesModal />
       <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-white/15">
         <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
           Painel de Higienização Terminal
@@ -531,7 +676,9 @@ function TvPage() {
           className="flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
         >
           <ChevronRight className="h-5 w-5" />
-          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Diária</span>
+          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">
+            Diária
+          </span>
         </Link>
         <Link
           to="/terminal-geral"
@@ -539,7 +686,9 @@ function TvPage() {
           className="flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
         >
           <ChevronRight className="h-5 w-5" />
-          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Geral</span>
+          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">
+            Geral
+          </span>
         </Link>
       </div>
 
@@ -577,29 +726,57 @@ function TvPage() {
         </div>
       )}
 
-
       <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
-        <KpiCard label="Em Limpeza" value={inFlight.length} accent="oklch(0.75 0.22 155)" trend={trendFor("inFlight", inFlight.length)} />
-        <KpiCard label="A Caminho" value={enRoute.length} accent="oklch(0.74 0.18 230)" trend={trendFor("enRoute", enRoute.length)} />
-        <KpiCard label="Altas Paradas" value={paused.length} accent="oklch(0.78 0.2 60)" trend={trendFor("paused", paused.length)} higherIsBad />
-        <KpiCard label="Leitos Pausados" value={completedIssues.length} accent="oklch(0.72 0.23 25)" trend={trendFor("completedIssues", completedIssues.length)} higherIsBad />
+        <KpiCard
+          label="Em Limpeza"
+          value={inFlight.length}
+          accent="oklch(0.75 0.22 155)"
+          trend={trendFor("inFlight", inFlight.length)}
+        />
+        <KpiCard
+          label="A Caminho"
+          value={enRoute.length}
+          accent="oklch(0.74 0.18 230)"
+          trend={trendFor("enRoute", enRoute.length)}
+        />
+        <KpiCard
+          label="Altas Paradas"
+          value={paused.length}
+          accent="oklch(0.78 0.2 60)"
+          trend={trendFor("paused", paused.length)}
+          higherIsBad
+          breakdown={[
+            { label: "D/E", value: paradasPorBloco.de },
+            { label: "B", value: paradasPorBloco.b },
+            { label: "C", value: paradasPorBloco.c },
+            ...(paradasPorBloco.outros > 0
+              ? [{ label: "Outros", value: paradasPorBloco.outros }]
+              : []),
+          ]}
+        />
+        <KpiCard
+          label="Leitos Pausados"
+          value={completedIssues.length}
+          accent="oklch(0.72 0.23 25)"
+          trend={trendFor("completedIssues", completedIssues.length)}
+          higherIsBad
+        />
         <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
         <KpiCard
           label="Média p/ Iniciar"
           value={avgToStart ?? 0}
-          display={avgToStart == null ? "—" : `${avgToStart}m`}
+          display={avgToStart == null ? "—" : fmtMinutes(avgToStart)}
           accent="oklch(0.8 0.16 85)"
         />
         <KpiCard
           label="Média de Execução"
           value={avgExecution ?? 0}
-          display={avgExecution == null ? "—" : `${avgExecution}m`}
+          display={avgExecution == null ? "—" : fmtMinutes(avgExecution)}
           accent="oklch(0.75 0.14 195)"
         />
       </div>
 
-
-      <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
+      <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,0.85fr)_minmax(0,1.35fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
         <BedsPanel
           title="Leitos em Limpeza Terminal"
           icon={<BrushCleaning className="w-4 h-4 text-white/60" />}
@@ -613,31 +790,14 @@ function TvPage() {
           caption="meta: até 90min"
           className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
         />
-        <BedsPanel
-          title="A Caminho"
-          icon={<Footprints className="w-4 h-4 text-white/60" />}
-          rows={enRoute}
+        <WaitingBedsPanel
+          enRoute={enRoute}
+          paused={paused}
           nowMs={now}
           staffMap={staffMap}
-          tone="blue"
-          empty="Nenhum leito a caminho."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          caption="meta: até 15min"
           className="order-3 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
-        />
-        <BedsPanel
-          title="Altas Paradas"
-          icon={<OctagonX className="w-4 h-4 text-white/60" />}
-          rows={paused}
-          nowMs={now}
-          staffMap={staffMap}
-          tone="amber"
-          empty="Nenhuma alta parada."
-          flashVersions={flashVersions}
-          worstId={worstCase?.id}
-          caption={`meta: intervir em até 30min  ·  D/E ${pausedPorBloco.de}  ·  B ${pausedPorBloco.b}  ·  C ${pausedPorBloco.c}`}
-          className="order-4 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
         <BedsPanel
           title="Leitos Pausados"
@@ -651,30 +811,35 @@ function TvPage() {
           empty="Nenhum leito pausado hoje."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          className="order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-4"
+          className="order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-3"
         />
         <StaffPanel
           rows={staffRows}
           nowMs={now}
-          className="order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-4"
+          className="order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-3"
         />
       </div>
 
       <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
-<span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5">
           <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
-          Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
+          Hoje:{" "}
+          <span className="text-white/70 font-semibold">
+            {concluidasHojePorBloco?.total ?? "—"}
+          </span>{" "}
+          altas concluídas
         </span>
         <span className="text-white/20">·</span>
         <span>
-          Bloco D/E: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.de}</span>
+          Bloco D/E:{" "}
+          <span className="text-white/70 font-semibold">{concluidasHojePorBloco?.de ?? "—"}</span>
         </span>
         <span className="text-white/20">·</span>
         <span>
-          Bloco B/C: <span className="text-white/70 font-semibold">{concluidasHojePorBloco.bc}</span>
+          Bloco B/C:{" "}
+          <span className="text-white/70 font-semibold">{concluidasHojePorBloco?.bc ?? "—"}</span>
         </span>
       </div>
-
     </div>
   );
 }
@@ -696,6 +861,7 @@ function KpiCard({
   accent,
   trend,
   higherIsBad,
+  breakdown,
 }: {
   label: string;
   value: number;
@@ -703,12 +869,13 @@ function KpiCard({
   accent: string;
   trend?: number | null;
   higherIsBad?: boolean;
+  /** Divisão do número por grupo (ex: por bloco), mostrada em chips embaixo do rótulo. */
+  breakdown?: Array<{ label: string; value: number }>;
 }) {
-
   const trendColor =
     trend == null || trend === 0
       ? "rgba(255,255,255,0.35)"
-      : (trend > 0) === !!higherIsBad
+      : trend > 0 === !!higherIsBad
         ? "oklch(0.7 0.19 25)" // piorou
         : "oklch(0.72 0.17 155)"; // melhorou
   return (
@@ -720,7 +887,31 @@ function KpiCard({
         boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
       }}
     >
-      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">{label}</div>
+      <div className="min-w-0">
+        <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
+          {label}
+        </div>
+        {breakdown && breakdown.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {breakdown.map((b) => (
+              <span
+                key={b.label}
+                className="inline-flex items-baseline gap-1 rounded-md border border-white/10 bg-black/30 px-1.5 py-px text-[10px] lg:text-xs leading-tight"
+              >
+                <span className="font-semibold uppercase tracking-wide text-white/60">
+                  {b.label}
+                </span>
+                <span
+                  className="font-bold tabular-nums"
+                  style={{ color: b.value > 0 ? accent : "rgba(255,255,255,0.4)" }}
+                >
+                  {b.value}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="flex items-baseline gap-1.5">
         <div
           className="text-2xl lg:text-4xl tabular-nums leading-none"
@@ -729,7 +920,11 @@ function KpiCard({
           {display ?? value}
         </div>
         {trend != null && trend !== 0 && (
-          <span className="hidden lg:inline text-xs font-mono" style={{ color: trendColor }} title="Comparado a 1h atrás">
+          <span
+            className="hidden lg:inline text-xs font-mono"
+            style={{ color: trendColor }}
+            title="Comparado a 1h atrás"
+          >
             {trend > 0 ? "▲" : "▼"}
             {Math.abs(trend)}
           </span>
@@ -746,6 +941,129 @@ const toneBg: Record<Tone, string> = {
   red: "oklch(0.4 0.2 20 / 0.28)",
   blue: "oklch(0.37 0.15 230 / 0.24)",
 };
+
+/**
+ * "A Caminho" + "Altas Paradas" unidos num único painel de cards (estilo Listo360
+ * nativo: card por leito, barra de progresso, nome do colaborador quando alocado)
+ * em vez de duas tabelas separadas em linhas.
+ */
+function WaitingBedsPanel({
+  enRoute,
+  paused,
+  nowMs,
+  staffMap,
+  flashVersions,
+  worstId,
+  className,
+}: {
+  enRoute: Discharge[];
+  paused: Discharge[];
+  nowMs: number;
+  staffMap: Map<string, Staff>;
+  flashVersions?: Map<string, number>;
+  worstId?: string;
+  className?: string;
+}) {
+  // Sem barra de progresso/meta aqui: só leito, tempo e colaborador. A cor do card
+  // já indica a categoria — azul = a caminho (tem colaborador), âmbar = alta parada
+  // (ainda sem colaborador alocado).
+  const cards = [
+    ...paused.map((d) => ({ d, kind: "parada" as const })),
+    ...enRoute.map((d) => ({ d, kind: "caminho" as const })),
+  ].sort(
+    (a, b) =>
+      elapsedMinutes(b.d.status_updated_at, nowMs) - elapsedMinutes(a.d.status_updated_at, nowMs),
+  );
+
+  const total = cards.length;
+
+  return (
+    <section
+      className={`h-[420px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
+    >
+      <div className="flex-none px-4 py-2 border-b border-white/10">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <Footprints className="w-4 h-4 text-white/60" />A Caminho &amp; Altas Paradas
+          </h2>
+          <span className="text-[11px] text-white/50">{total}</span>
+        </div>
+        <div className="hidden lg:flex gap-3 text-[10px] text-white/30 mt-0.5">
+          <span className="inline-flex items-center gap-1">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: "oklch(0.78 0.2 60)" }}
+            />{" "}
+            alta parada
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: "oklch(0.74 0.18 230)" }}
+            />{" "}
+            a caminho
+          </span>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {cards.length === 0 ? (
+          <div className="p-4 text-center text-white/40 text-sm">
+            Nenhum leito a caminho ou parado.
+          </div>
+        ) : (
+          <AutoScroll>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 p-3">
+              {cards.map(({ d, kind }) => {
+                const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
+                const version = flashVersions?.get(d.external_id ?? "") ?? 0;
+                const isWorst = worstId && d.id === worstId;
+                const base = kind === "parada" ? "oklch(0.78 0.2 60)" : "oklch(0.74 0.18 230)";
+                return (
+                  <div
+                    key={`${d.id}-v${version}`}
+                    className={`relative flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 ${version > 0 ? "flash-row" : ""}`}
+                    style={{
+                      borderColor: base.replace(")", " / 0.45)"),
+                      background: base.replace(")", " / 0.14)"),
+                    }}
+                  >
+                    {isWorst && (
+                      <span
+                        className="absolute -top-1.5 -right-1.5 rounded-[3px] border px-1 py-px text-[8px] font-semibold uppercase tracking-wide"
+                        style={{
+                          borderColor: "oklch(0.7 0.2 25 / 0.5)",
+                          background: "oklch(0.22 0.02 265)",
+                          color: "oklch(0.78 0.19 25)",
+                        }}
+                      >
+                        crítico
+                      </span>
+                    )}
+                    <div className="flex items-baseline justify-between gap-1">
+                      <span className="font-bold text-sm lg:text-base tabular-nums truncate">
+                        {d.bed_number}
+                      </span>
+                      <span className="font-mono tabular-nums text-xs shrink-0 text-white/75">
+                        {formatElapsed(d.status_updated_at, nowMs)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-white/45 truncate">{d.unit}</div>
+                    <div
+                      className="text-[11px] font-semibold truncate"
+                      style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
+                    >
+                      {name ?? "sem colaborador"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </AutoScroll>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function BedsPanel({
   title,
@@ -777,7 +1095,9 @@ function BedsPanel({
   caption?: string;
 }) {
   return (
-    <section className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}>
+    <section
+      className={`h-[300px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
+    >
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
@@ -786,7 +1106,9 @@ function BedsPanel({
           </h2>
           <span className="text-[11px] text-white/50">{rows.length}</span>
         </div>
-        {caption && <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>}
+        {caption && (
+          <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -818,7 +1140,8 @@ function BedsPanel({
                       key={`${d.id}-v${version}`}
                       className={version > 0 ? "flash-row" : undefined}
                       style={{
-                        background: overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
+                        background:
+                          overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                       }}
                     >
                       <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
@@ -838,13 +1161,21 @@ function BedsPanel({
                           )}
                         </span>
                       </td>
-                      <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">{d.unit}</td>
+                      <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">
+                        {d.unit}
+                      </td>
                       {showReason ? (
-                        <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">{d.pause_reason || <span className="text-white/40">—</span>}</td>
+                        <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">
+                          {d.pause_reason || <span className="text-white/40">—</span>}
+                        </td>
                       ) : (
-                        <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-white/5">{formatElapsed(d.status_updated_at, nowMs)}</td>
+                        <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-white/5">
+                          {formatElapsed(d.status_updated_at, nowMs)}
+                        </td>
                       )}
-                      <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-white/5 truncate">{name || "—"}</td>
+                      <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-white/5 truncate">
+                        {name || "—"}
+                      </td>
                       {showComplete && (
                         <td className="px-1.5 py-1.5 border-t border-white/5 text-center">
                           <CompleteButton dischargeId={d.id} />
@@ -869,7 +1200,9 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
     if (saving) return;
     setSaving(true);
     try {
-      await updateDischarge({ data: { id: dischargeId, patch: { status: "completed", pause_reason: null } } });
+      await updateDischarge({
+        data: { id: dischargeId, patch: { status: "completed", pause_reason: null } },
+      });
       toast.success("Leito marcado como concluído.");
     } catch (err) {
       console.error(err);
@@ -902,12 +1235,20 @@ function StaffPanel({
   nowMs,
   className,
 }: {
-  rows: Array<{ staff: Staff; kind: StaffActivity; start: string | null; bed: string | null; unit: string | null }>;
+  rows: Array<{
+    staff: Staff;
+    kind: StaffActivity;
+    start: string | null;
+    bed: string | null;
+    unit: string | null;
+  }>;
   nowMs: number;
   className?: string;
 }) {
   return (
-    <section className={`h-[340px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
+    <section
+      className={`h-[340px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}
+    >
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
@@ -916,7 +1257,9 @@ function StaffPanel({
           </h2>
           <span className="text-[11px] text-white/50">{rows.length}</span>
         </div>
-        <div className="text-[10px] text-white/35 mt-0.5">Desmontagem e higienização terminal (Listo)</div>
+        <div className="text-[10px] text-white/35 mt-0.5">
+          Desmontagem e higienização terminal (Listo)
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -925,68 +1268,75 @@ function StaffPanel({
           <AutoScroll>
             <ul className="p-2 space-y-1.5">
               {rows.map(({ staff, kind, start, bed, unit }) => {
-                const target = kind === "em_alta" && start && bed && unit ? hygieneTargetMinutes(bed, unit) : null;
+                const target =
+                  kind === "em_alta" && start && bed && unit
+                    ? hygieneTargetMinutes(bed, unit)
+                    : null;
                 const elapsedMin = start ? elapsedMinutes(start, nowMs) : 0;
                 const pct = target ? Math.min(100, Math.round((elapsedMin / target) * 100)) : null;
                 const overTarget = target != null && elapsedMin >= target;
                 return (
-                <li
-                  key={staff.id}
-                  className="flex flex-col gap-1.5 rounded-md px-3 py-2 border"
-                  style={{
-                    background:
-                      kind === "desmontando"
-                        ? "oklch(0.37 0.18 300 / 0.32)"
-                        : kind === "em_alta"
-                          ? "oklch(0.34 0.17 245 / 0.32)"
-                          : "oklch(0.25 0.02 265 / 0.4)",
-                    borderColor:
-                      kind === "desmontando"
-                        ? "oklch(0.68 0.2 300 / 0.5)"
-                        : kind === "em_alta"
-                          ? "oklch(0.63 0.19 245 / 0.5)"
-                          : "oklch(0.4 0.02 265 / 0.4)",
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold truncate text-sm">{staff.name}</div>
-                      <div className="text-[11px] text-white/60 truncate">
-                        <StatusPill kind={kind} />
-                        {bed ? <span className="ml-1">· {bed}</span> : null}
+                  <li
+                    key={staff.id}
+                    className="flex flex-col gap-1.5 rounded-md px-3 py-2 border"
+                    style={{
+                      background:
+                        kind === "desmontando"
+                          ? "oklch(0.37 0.18 300 / 0.32)"
+                          : kind === "em_alta"
+                            ? "oklch(0.34 0.17 245 / 0.32)"
+                            : "oklch(0.25 0.02 265 / 0.4)",
+                      borderColor:
+                        kind === "desmontando"
+                          ? "oklch(0.68 0.2 300 / 0.5)"
+                          : kind === "em_alta"
+                            ? "oklch(0.63 0.19 245 / 0.5)"
+                            : "oklch(0.4 0.02 265 / 0.4)",
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold truncate text-sm">{staff.name}</div>
+                        <div className="text-[11px] text-white/60 truncate">
+                          <StatusPill kind={kind} />
+                          {bed ? <span className="ml-1">· {bed}</span> : null}
+                        </div>
                       </div>
+                      {start && (
+                        <div className="flex flex-col items-end ml-2">
+                          <span
+                            className="font-mono tabular-nums text-xs"
+                            style={{
+                              color: overTarget ? "oklch(0.75 0.19 25)" : "rgba(255,255,255,0.7)",
+                            }}
+                          >
+                            {formatElapsed(start, nowMs)}
+                          </span>
+                          <span className="font-mono tabular-nums text-[10px] text-white/40">
+                            início {formatClockTime(start)}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    {start && (
-                      <div className="flex flex-col items-end ml-2">
-                        <span
-                          className="font-mono tabular-nums text-xs"
-                          style={{ color: overTarget ? "oklch(0.75 0.19 25)" : "rgba(255,255,255,0.7)" }}
-                        >
-                          {formatElapsed(start, nowMs)}
-                        </span>
-                        <span className="font-mono tabular-nums text-[10px] text-white/40">
-                          início {formatClockTime(start)}
-                        </span>
+                    {pct != null && (
+                      <div>
+                        <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-[width]"
+                            style={{
+                              width: `${pct}%`,
+                              background: overTarget
+                                ? "oklch(0.65 0.2 25)"
+                                : "oklch(0.68 0.17 245)",
+                            }}
+                          />
+                        </div>
+                        <div className="mt-0.5 text-right text-[9px] font-mono text-white/35">
+                          meta {target}min{overTarget ? " · estourou" : ""}
+                        </div>
                       </div>
                     )}
-                  </div>
-                  {pct != null && (
-                    <div>
-                      <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-[width]"
-                          style={{
-                            width: `${pct}%`,
-                            background: overTarget ? "oklch(0.65 0.2 25)" : "oklch(0.68 0.17 245)",
-                          }}
-                        />
-                      </div>
-                      <div className="mt-0.5 text-right text-[9px] font-mono text-white/35">
-                        meta {target}min{overTarget ? " · estourou" : ""}
-                      </div>
-                    </div>
-                  )}
-                </li>
+                  </li>
                 );
               })}
             </ul>
@@ -998,7 +1348,8 @@ function StaffPanel({
 }
 
 // Café / Almoço / Janta — direto de staff.status, com alerta quando passa do limite (hospital.ts)
-type TimeAltasKind = "cafe" | "almoco" | "jantar" | "deslogou" | "em_alta" | "a_caminho" | "desmontando" | "sem_alta";
+type TimeAltasKind =
+  "cafe" | "almoco" | "jantar" | "deslogou" | "em_alta" | "a_caminho" | "desmontando" | "sem_alta";
 
 const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
   cafe: "CAFÉ",
@@ -1012,14 +1363,46 @@ const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
 };
 
 const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text: string }> = {
-  cafe: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
-  almoco: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
-  jantar: { bg: "oklch(0.42 0.18 55 / 0.35)", border: "oklch(0.72 0.21 55 / 0.55)", text: "oklch(0.82 0.21 55)" },
-  em_alta: { bg: "oklch(0.37 0.15 230 / 0.32)", border: "oklch(0.63 0.19 230 / 0.55)", text: "oklch(0.78 0.19 230)" },
-  a_caminho: { bg: "oklch(0.37 0.14 230 / 0.22)", border: "oklch(0.63 0.17 230 / 0.4)", text: "oklch(0.78 0.17 230)" },
-  desmontando: { bg: "oklch(0.37 0.16 300 / 0.32)", border: "oklch(0.66 0.2 300 / 0.55)", text: "oklch(0.8 0.2 300)" },
-  sem_alta: { bg: "oklch(0.37 0.17 25 / 0.32)", border: "oklch(0.63 0.21 25 / 0.55)", text: "oklch(0.78 0.21 25)" },
-  deslogou: { bg: "oklch(0.22 0.005 0 / 0.4)", border: "oklch(0.32 0.005 0 / 0.5)", text: "rgba(255,255,255,0.35)" },
+  cafe: {
+    bg: "oklch(0.42 0.18 55 / 0.35)",
+    border: "oklch(0.72 0.21 55 / 0.55)",
+    text: "oklch(0.82 0.21 55)",
+  },
+  almoco: {
+    bg: "oklch(0.42 0.18 55 / 0.35)",
+    border: "oklch(0.72 0.21 55 / 0.55)",
+    text: "oklch(0.82 0.21 55)",
+  },
+  jantar: {
+    bg: "oklch(0.42 0.18 55 / 0.35)",
+    border: "oklch(0.72 0.21 55 / 0.55)",
+    text: "oklch(0.82 0.21 55)",
+  },
+  em_alta: {
+    bg: "oklch(0.37 0.15 230 / 0.32)",
+    border: "oklch(0.63 0.19 230 / 0.55)",
+    text: "oklch(0.78 0.19 230)",
+  },
+  a_caminho: {
+    bg: "oklch(0.37 0.14 230 / 0.22)",
+    border: "oklch(0.63 0.17 230 / 0.4)",
+    text: "oklch(0.78 0.17 230)",
+  },
+  desmontando: {
+    bg: "oklch(0.37 0.16 300 / 0.32)",
+    border: "oklch(0.66 0.2 300 / 0.55)",
+    text: "oklch(0.8 0.2 300)",
+  },
+  sem_alta: {
+    bg: "oklch(0.37 0.17 25 / 0.32)",
+    border: "oklch(0.63 0.21 25 / 0.55)",
+    text: "oklch(0.78 0.21 25)",
+  },
+  deslogou: {
+    bg: "oklch(0.22 0.005 0 / 0.4)",
+    border: "oklch(0.32 0.005 0 / 0.5)",
+    text: "rgba(255,255,255,0.35)",
+  },
 };
 
 function BreaksPanel({
@@ -1032,7 +1415,9 @@ function BreaksPanel({
   className?: string;
 }) {
   return (
-    <section className={`h-[280px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}>
+    <section
+      className={`h-[280px] lg:h-full lg:min-h-0 rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col ${className ?? ""}`}
+    >
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-bold flex items-center gap-2">
@@ -1041,7 +1426,9 @@ function BreaksPanel({
           </h2>
           <span className="text-[11px] text-white/50">{rows.length}</span>
         </div>
-        <div className="text-[10px] text-white/35 mt-0.5">Login e pausas do time de campo (healthcon)</div>
+        <div className="text-[10px] text-white/35 mt-0.5">
+          Login e pausas do time de campo (healthcon)
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
@@ -1092,7 +1479,8 @@ function BreaksPanel({
 }
 
 function StatusPill({ kind }: { kind: StaffActivity }) {
-  const label = kind === "desmontando" ? "Desmontando" : kind === "em_alta" ? "Em Alta" : "Disponível";
+  const label =
+    kind === "desmontando" ? "Desmontando" : kind === "em_alta" ? "Em Alta" : "Disponível";
   const color =
     kind === "desmontando"
       ? "oklch(0.8 0.15 300)"
