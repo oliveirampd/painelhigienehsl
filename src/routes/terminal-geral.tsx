@@ -11,19 +11,20 @@ export const Route = createFileRoute("/terminal-geral")({
       { title: "Limpeza Terminal Geral — Áreas Comuns" },
       {
         name: "description",
-        content: "Limpeza terminal de áreas comuns (não leitos, não boxes) em tempo real, organizada por bloco e andar.",
+        content: "Limpeza terminal de áreas comuns (não leitos) em tempo real, organizada por bloco e andar.",
       },
     ],
   }),
   component: TerminalGeralPage,
 });
 
-const BLOCK_ORDER: TerminalGeralBlock[] = ["D", "E", "C", "B"];
+const BLOCK_ORDER: TerminalGeralBlock[] = ["D", "E", "C", "B", "A"];
 const BLOCK_LABEL: Record<TerminalGeralBlock, string> = {
   D: "Bloco D",
   E: "Bloco E",
   C: "Bloco C",
   B: "Bloco B",
+  A: "Bloco A",
   outro: "Outras áreas",
 };
 
@@ -39,13 +40,13 @@ const STATUS_TONE: Record<TerminalGeralEvent["status"], string> = {
 };
 
 function TerminalGeralPage() {
-  const mainRef = useCarouselScroll<HTMLElement>();
   const [events, setEvents] = useState<TerminalGeralEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [lastAt, setLastAt] = useState<number>(Date.now());
   const [clock, setClock] = useState("");
   const [now, setNow] = useState(Date.now());
+  const mainRef = useCarouselScroll<HTMLElement>();
 
   useEffect(() => {
     const tick = () => {
@@ -92,7 +93,19 @@ function TerminalGeralPage() {
     return { block, items, floors };
   }).filter((g) => g.items.length > 0);
 
-  const outras = events.filter((e) => e.block === "outro").sort((a, b) => a.area.localeCompare(b.area));
+  // "Outras áreas": agrupadas pelo nome real do grupo original (ex: "Térreo B",
+  // "Mezanino Diretoria") em vez de uma lista única sem contexto.
+  const outrasPorGrupo = Array.from(
+    events
+      .filter((e) => e.block === "outro")
+      .reduce((m, e) => {
+        const label = e.outroGrupo || "Outras áreas";
+        if (!m.has(label)) m.set(label, []);
+        m.get(label)!.push(e);
+        return m;
+      }, new Map<string, TerminalGeralEvent[]>())
+      .entries(),
+  ).sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
     <div className="dark h-screen w-full flex flex-col overflow-hidden font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
@@ -147,42 +160,75 @@ function TerminalGeralPage() {
               </span>
             </h2>
             <div className="space-y-3">
-              {g.floors.map((floor) => (
-                <div key={floor} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-                  <span className="flex-none font-mono text-[11px] text-white/35 sm:mt-1.5 sm:w-10 sm:text-right">
-                    {floor}º
-                  </span>
+              {g.floors.map((floor) => {
+                const itemsDoAndar = g.items.filter((e) => e.floor === floor);
+                const setores = Array.from(new Set(itemsDoAndar.map((e) => e.floorLabel))).sort((a, b) =>
+                  (a || "").localeCompare(b || ""),
+                );
+                // Quando o andar tem só 1 setor, mostra direto (sem sub-cabeçalho redundante).
+                // Quando tem mais de um (comum em 1ºss/subsolos, com vários setores no mesmo
+                // número de andar), separa por setor pra não virar uma lista única confusa.
+                return (
+                  <div key={floor} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+                    <span className="flex-none font-mono text-[11px] text-white/35 sm:mt-1.5 sm:w-10 sm:text-right">
+                      {floor}º
+                    </span>
+                    {setores.length <= 1 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {itemsDoAndar
+                          .sort((a, b) => a.area.localeCompare(b.area))
+                          .map((e) => (
+                            <AreaCard key={`${e.block}-${e.floorLabel}-${e.area}`} event={e} now={now} />
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-1 flex-col gap-2">
+                        {setores.map((setor) => (
+                          <div key={setor} className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-2">
+                            <span className="flex-none text-[10px] font-semibold uppercase tracking-wide text-white/40 sm:w-32">
+                              {setor}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {itemsDoAndar
+                                .filter((e) => e.floorLabel === setor)
+                                .sort((a, b) => a.area.localeCompare(b.area))
+                                .map((e) => (
+                                  <AreaCard key={`${e.block}-${e.floorLabel}-${e.area}`} event={e} now={now} />
+                                ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+        {outrasPorGrupo.length > 0 && (
+          <section>
+            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide">
+              <span>{BLOCK_LABEL.outro}</span>
+            </h2>
+            <div className="space-y-3">
+              {outrasPorGrupo.map(([label, items]) => (
+                <div key={label} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+                  <span className="flex-none text-xs font-semibold text-white/50 sm:mt-1.5 sm:w-40">{label}</span>
                   <div className="flex flex-wrap gap-2">
-                    {g.items
-                      .filter((e) => e.floor === floor)
+                    {items
                       .sort((a, b) => a.area.localeCompare(b.area))
                       .map((e) => (
-                        <AreaCard key={e.area} event={e} now={now} />
+                        <AreaCard key={`${e.block}-${e.outroGrupo}-${e.area}`} event={e} now={now} />
                       ))}
                   </div>
                 </div>
               ))}
             </div>
           </section>
-        ))}
-        {outras.length > 0 && (
-          <section>
-            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide">
-              <span>{BLOCK_LABEL.outro}</span>
-              <span className="text-xs lg:text-sm font-normal normal-case tracking-normal text-white/40">
-                {outras.length} {outras.length === 1 ? "área" : "áreas"}
-              </span>
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {outras.map((e) => (
-                <AreaCard key={e.area} event={e} now={now} />
-              ))}
-            </div>
-          </section>
         )}
       </main>
 
-      <UpdatesModal />
       <Link
         to="/diaria"
         title="Ver higiene diária de todos os leitos"
@@ -191,6 +237,7 @@ function TerminalGeralPage() {
         <ChevronRight className="h-5 w-5" />
         <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Diária</span>
       </Link>
+      <UpdatesModal />
     </div>
   );
 }
