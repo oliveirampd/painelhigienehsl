@@ -878,6 +878,9 @@ function TerminalBedsPanel({
     caminho: "A Caminho",
     execucao: "Em Execução",
   } as const;
+  // Em execução que estourou a meta: vermelho, sem chamar mais atenção que isso
+  // (sem piscar, sem selo extra) — só a cor muda e o rótulo vira "Estourado".
+  const OVERDUE_COLOR = "oklch(0.68 0.19 25)";
 
   const cards = [
     ...paused.map((d) => ({ d, kind: "parada" as const })),
@@ -941,6 +944,10 @@ function TerminalBedsPanel({
               />
               alta parada
             </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: OVERDUE_COLOR }} />
+              estourado
+            </span>
           </div>
           {/* Altas paradas por bloco — sempre visível, mobile incluso. */}
           <div className="flex items-center gap-1 ml-auto">
@@ -986,7 +993,7 @@ function TerminalBedsPanel({
                 const isWorst = worstId && d.id === worstId;
                 const minutes = elapsedMinutes(d.status_updated_at, nowMs);
                 const overtime = kind === "execucao" && minutes >= 60;
-                const base = overtime ? KIND_COLOR.parada : KIND_COLOR[kind];
+                const base = overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
                 return (
                   <div
                     key={`${d.id}-v${version}`}
@@ -1021,7 +1028,7 @@ function TerminalBedsPanel({
                       className="self-start rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
                       style={{ color: base, background: base.replace(")", " / 0.18)") }}
                     >
-                      {KIND_LABEL[kind]}
+                      {overtime ? "Estourado" : KIND_LABEL[kind]}
                     </span>
                     <div
                       className="text-[11px] font-semibold truncate"
