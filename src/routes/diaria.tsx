@@ -1,10 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BrushCleaning, BedDouble, CircleCheck, ChevronLeft, ChevronRight, Circle, X } from "lucide-react";
+import {
+  BrushCleaning,
+  BedDouble,
+  CircleCheck,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  X,
+  Mars,
+  Venus,
+  Baby,
+} from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
 import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
+import { useHospitalData } from "@/hooks/useHospitalData";
 
 export const Route = createFileRoute("/diaria")({
   head: () => ({
@@ -55,8 +67,16 @@ function periodoAtualBRT(): Periodo {
   return "noite";
 }
 
+// Extrai o código numérico do leito a partir do texto da alta (ex: "Leito 0711" -> "711"),
+// pra bater com o código usado em HOSPITAL_BEDS (sem zero à esquerda).
+function altaBedCode(bedNumber: string): string | null {
+  const m = bedNumber.match(/(\d+)/);
+  return m ? String(parseInt(m[1], 10)) : null;
+}
+
 function DiariaPage() {
   const mainRef = useCarouselScroll<HTMLElement>();
+  const { discharges } = useHospitalData();
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -109,7 +129,10 @@ function DiariaPage() {
     return b ? `${bedFloor(bedCode)}${b.b}` : "";
   };
   const eventsFiltered = useMemo(
-    () => events.filter((e) => !(e.kind === "concorrente" && EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(e.bed)))),
+    () =>
+      events.filter(
+        (e) => !(e.kind === "concorrente" && EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(e.bed))),
+      ),
     [events],
   );
 
@@ -123,8 +146,26 @@ function DiariaPage() {
     return m;
   }, [eventsFiltered]);
 
-  const emHigiene = eventsFiltered.filter((e) => e.status === "in_progress" && e.kind === "concorrente");
-  const emCamareira = eventsFiltered.filter((e) => e.status === "in_progress" && e.kind === "camareira");
+  // Sinalização de alta no mapa: leito com alta parada fica vermelho, leito com
+  // alta já em higienização (limpeza terminal) fica verde — só isso, sem números
+  // novos lá em cima, é sinal visual mesmo. Paradas têm prioridade sobre execução.
+  const altaByBed = useMemo(() => {
+    const m = new Map<string, "paused" | "in_progress">();
+    for (const d of discharges) {
+      if (d.status !== "paused" && d.status !== "in_progress") continue;
+      const code = altaBedCode(d.bed_number);
+      if (!code) continue;
+      if (d.status === "paused" || m.get(code) === undefined) m.set(code, d.status);
+    }
+    return m;
+  }, [discharges]);
+
+  const emHigiene = eventsFiltered.filter(
+    (e) => e.status === "in_progress" && e.kind === "concorrente",
+  );
+  const emCamareira = eventsFiltered.filter(
+    (e) => e.status === "in_progress" && e.kind === "camareira",
+  );
   const concorrentesConcluidas = eventsFiltered.filter(
     (e) => e.status === "completed" && e.kind === "concorrente",
   ).length;
@@ -135,7 +176,9 @@ function DiariaPage() {
   // Leitos que ainda não tiveram nenhum registro (concluído ou em execução) desse
   // tipo de rotina neste turno. Higiene concorrente ignora as unidades excluídas
   // (mesma regra usada no resto da tela); camareira considera todos os leitos.
-  const bedsElegiveisConcorrente = ACTIVE_BEDS.filter((b) => !EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(b.n)));
+  const bedsElegiveisConcorrente = ACTIVE_BEDS.filter(
+    (b) => !EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(b.n)),
+  );
   const faltamHigiene = bedsElegiveisConcorrente.filter((b) => !byBed.get(b.n)?.concorrente).length;
   const faltamCamareira = ACTIVE_BEDS.filter((b) => !byBed.get(b.n)?.camareira).length;
 
@@ -157,7 +200,9 @@ function DiariaPage() {
           >
             <ChevronLeft className="h-3.5 w-3.5" /> Terminal
           </Link>
-          <h1 className="text-base lg:text-2xl font-bold tracking-tight">Higiene Diária — Leitos</h1>
+          <h1 className="text-base lg:text-2xl font-bold tracking-tight">
+            Higiene Diária — Leitos
+          </h1>
         </div>
         <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
           <span className="flex items-center gap-1.5 uppercase text-white/50">
@@ -216,13 +261,16 @@ function DiariaPage() {
           label="Total de leitos"
           value={ACTIVE_BEDS.length}
           color="oklch(0.7 0.02 260)"
-        />      </div>
+        />{" "}
+      </div>
 
       <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium uppercase text-white/60">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
         <Legenda color="oklch(0.75 0.17 55)" text="Rotina camareira" />
         <LegendaSplit text="Concorrente + Camareira concluídas" />
         <Legenda color="oklch(0.5 0.02 260)" text="Sem rotinas registradas" />
+        <Legenda color={ALTA_PARADA_COLOR} text="Alta parada" />
+        <Legenda color={ALTA_EXECUCAO_COLOR} text="Alta em higienização" />
         {erro && <span className="text-[oklch(0.7_0.18_25)] normal-case">{erro}</span>}
         {loading && <span className="normal-case">carregando…</span>}
       </div>
@@ -277,7 +325,10 @@ function DiariaPage() {
                         <BedTile
                           key={b.n}
                           bed={b.n}
+                          block={g.block}
+                          floor={floor}
                           events={byBed.get(b.n)}
+                          altaStatus={altaByBed.get(b.n)}
                           onSelect={() => setSelectedBed({ bed: b.n, events: byBed.get(b.n) })}
                         />
                       ))}
@@ -302,7 +353,9 @@ function DiariaPage() {
         className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
       >
         <ChevronRight className="h-5 w-5" />
-        <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">Geral</span>
+        <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">
+          Geral
+        </span>
       </Link>
     </div>
   );
@@ -320,7 +373,10 @@ function BedDetailSheet({
   const c = events?.concorrente;
   const k = events?.camareira;
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 lg:items-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 lg:items-center"
+      onClick={onClose}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-sm rounded-t-xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-xl"
@@ -365,16 +421,25 @@ function DetailRow({
   event: DailyBedEvent | undefined;
 }) {
   return (
-    <div className="rounded-lg border px-3 py-2" style={{ borderColor: color.replace(")", " / 0.35)"), background: color.replace(")", " / 0.08)") }}>
+    <div
+      className="rounded-lg border px-3 py-2"
+      style={{
+        borderColor: color.replace(")", " / 0.35)"),
+        background: color.replace(")", " / 0.08)"),
+      }}
+    >
       <div className="flex items-center gap-1.5 text-xs font-semibold uppercase" style={{ color }}>
         {icon}
         {label}
       </div>
       {event ? (
         <div className="mt-1 space-y-0.5 text-sm">
-          <div className="font-semibold">{event.staff ?? <span className="text-white/40">Colaborador não identificado</span>}</div>
+          <div className="font-semibold">
+            {event.staff ?? <span className="text-white/40">Colaborador não identificado</span>}
+          </div>
           <div className="text-xs text-white/50">
-            {event.status === "in_progress" ? "Em execução desde" : "Concluída às"} {formatTime(event.at)}
+            {event.status === "in_progress" ? "Em execução desde" : "Concluída às"}{" "}
+            {formatTime(event.at)}
             {event.count > 1 ? ` · ×${event.count} neste turno` : ""} · {event.shift}
           </div>
         </div>
@@ -399,7 +464,9 @@ function LegendaSplit({ text }: { text: string }) {
     <span className="flex items-center gap-1.5">
       <span
         className="h-2 w-2 rounded-full"
-        style={{ background: "linear-gradient(90deg, oklch(0.72 0.16 235) 50%, oklch(0.75 0.17 55) 50%)" }}
+        style={{
+          background: "linear-gradient(90deg, oklch(0.72 0.16 235) 50%, oklch(0.75 0.17 55) 50%)",
+        }}
       />
       {text}
     </span>
@@ -426,7 +493,10 @@ function ProgressBar({
           style={{ width: `${pct}%`, background: color }}
         />
       </span>
-      <span className="w-9 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/50" title={label}>
+      <span
+        className="w-9 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/50"
+        title={label}
+      >
         {pct}%
       </span>
     </span>
@@ -447,9 +517,15 @@ function Kpi({
   return (
     <div
       className="rounded-lg border px-3 py-2"
-      style={{ borderColor: `${color.replace(")", " / 0.3)")}`, background: color.replace(")", " / 0.08)") }}
+      style={{
+        borderColor: `${color.replace(")", " / 0.3)")}`,
+        background: color.replace(")", " / 0.08)"),
+      }}
     >
-      <div className="flex items-center gap-1.5 text-xs lg:text-sm font-semibold uppercase" style={{ color }}>
+      <div
+        className="flex items-center gap-1.5 text-xs lg:text-sm font-semibold uppercase"
+        style={{ color }}
+      >
         {icon}
         {label}
       </div>
@@ -461,14 +537,29 @@ function Kpi({
 const CONCORRENTE_COLOR = "oklch(0.72 0.16 235)"; // azul
 const CAMAREIRA_COLOR = "oklch(0.75 0.17 55)"; // laranja
 const SEM_ROTINA_COLOR = "oklch(0.5 0.02 260)"; // cinza
+const ALTA_PARADA_COLOR = "oklch(0.7 0.19 25)"; // vermelho — alta parada
+const ALTA_EXECUCAO_COLOR = "oklch(0.72 0.17 155)"; // verde — alta já em higienização
+
+// Ícones decorativos dos leitos "sem rotina" (só estética, sem dado de paciente real):
+// alternam homem/mulher pelo número do leito, e viram bebê nos andares pediátricos.
+const MALE_ICON_COLOR = "oklch(0.62 0.07 240)";
+const FEMALE_ICON_COLOR = "oklch(0.66 0.08 20)";
+const PEDIATRIC_ICON_COLOR = "oklch(0.76 0.09 95)";
+const PEDIATRIC_FLOORS = new Set(["B6", "B7"]); // 6B e 7B são leitos pediátricos
 
 function BedTile({
   bed,
+  block,
+  floor,
   events,
+  altaStatus,
   onSelect,
 }: {
   bed: string;
+  block: string;
+  floor: number;
   events: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent } | undefined;
+  altaStatus?: "paused" | "in_progress";
   onSelect?: () => void;
 }) {
   const c = events?.concorrente;
@@ -479,42 +570,85 @@ function BedTile({
   const activeK = k?.status === "in_progress";
   const anyActive = activeC || activeK;
   const both = hasC && hasK;
-  const repeatBadge = Math.max(c?.count ?? 0, k?.count ?? 0) > 1 ? Math.max(c?.count ?? 0, k?.count ?? 0) : null;
+  const repeatBadge =
+    Math.max(c?.count ?? 0, k?.count ?? 0) > 1 ? Math.max(c?.count ?? 0, k?.count ?? 0) : null;
 
-  const title = both
-    ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : `concluída (×${c!.count})`}${c!.staff ? ` · ${c!.staff}` : ""} + Camareira ${
-        activeK ? "em execução" : `concluída (×${k!.count})`
-      }${k!.staff ? ` · ${k!.staff}` : ""}`
-    : hasC
-      ? `Leito ${bed} · Limpeza concorrente · ${activeC ? "em execução" : `concluída ×${c!.count}`}${c!.staff ? ` · ${c!.staff}` : ""} · ${c!.shift}`
-      : hasK
-        ? `Leito ${bed} · Rotina camareira · ${activeK ? "em execução" : `concluída ×${k!.count}`}${k!.staff ? ` · ${k!.staff}` : ""} · ${k!.shift}`
-        : `Leito ${bed} · sem rotina neste turno`;
+  const isPediatric = PEDIATRIC_FLOORS.has(`${block}${floor}`);
+  const PatientIcon = isPediatric ? Baby : parseInt(bed, 10) % 2 === 0 ? Venus : Mars;
+  const patientIconColor = isPediatric
+    ? PEDIATRIC_ICON_COLOR
+    : parseInt(bed, 10) % 2 === 0
+      ? FEMALE_ICON_COLOR
+      : MALE_ICON_COLOR;
 
-  const background = both
-    ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.28)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.28)")} 50%)`
-    : hasC
-      ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.22)" : " / 0.14)")
-      : hasK
-        ? CAMAREIRA_COLOR.replace(")", activeK ? " / 0.22)" : " / 0.14)")
-        : SEM_ROTINA_COLOR.replace(")", " / 0.14)");
+  const altaLabel =
+    altaStatus === "paused"
+      ? "Alta parada"
+      : altaStatus === "in_progress"
+        ? "Alta em higienização"
+        : null;
 
-  const borderColor = both
-    ? "oklch(0.9 0.01 260 / 0.55)"
-    : hasC
-      ? CONCORRENTE_COLOR.replace(")", " / 0.65)")
-      : hasK
-        ? CAMAREIRA_COLOR.replace(")", " / 0.65)")
-        : SEM_ROTINA_COLOR.replace(")", " / 0.65)");
+  const title = altaLabel
+    ? `Leito ${bed} · ${altaLabel}`
+    : both
+      ? `Leito ${bed} · Concorrente ${activeC ? "em execução" : `concluída (×${c!.count})`}${c!.staff ? ` · ${c!.staff}` : ""} + Camareira ${
+          activeK ? "em execução" : `concluída (×${k!.count})`
+        }${k!.staff ? ` · ${k!.staff}` : ""}`
+      : hasC
+        ? `Leito ${bed} · Limpeza concorrente · ${activeC ? "em execução" : `concluída ×${c!.count}`}${c!.staff ? ` · ${c!.staff}` : ""} · ${c!.shift}`
+        : hasK
+          ? `Leito ${bed} · Rotina camareira · ${activeK ? "em execução" : `concluída ×${k!.count}`}${k!.staff ? ` · ${k!.staff}` : ""} · ${k!.shift}`
+          : `Leito ${bed} · sem rotina neste turno`;
 
-  const textColor = hasC || hasK ? "oklch(0.97 0.005 260)" : SEM_ROTINA_COLOR;
+  const altaColor =
+    altaStatus === "paused"
+      ? ALTA_PARADA_COLOR
+      : altaStatus === "in_progress"
+        ? ALTA_EXECUCAO_COLOR
+        : null;
+
+  const background = altaColor
+    ? altaColor.replace(")", " / 0.3)")
+    : both
+      ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.28)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.28)")} 50%)`
+      : hasC
+        ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.22)" : " / 0.14)")
+        : hasK
+          ? CAMAREIRA_COLOR.replace(")", activeK ? " / 0.22)" : " / 0.14)")
+          : SEM_ROTINA_COLOR.replace(")", " / 0.14)");
+
+  const borderColor = altaColor
+    ? altaColor.replace(")", " / 0.8)")
+    : both
+      ? "oklch(0.9 0.01 260 / 0.55)"
+      : hasC
+        ? CONCORRENTE_COLOR.replace(")", " / 0.65)")
+        : hasK
+          ? CAMAREIRA_COLOR.replace(")", " / 0.65)")
+          : SEM_ROTINA_COLOR.replace(")", " / 0.65)");
+
+  const textColor = altaColor
+    ? "oklch(0.98 0.005 260)"
+    : hasC || hasK
+      ? "oklch(0.97 0.005 260)"
+      : SEM_ROTINA_COLOR;
 
   return (
     <div className="flex flex-col items-center gap-0.5">
       <div className="flex h-[11px] items-center gap-1 font-mono text-[8px] leading-none tabular-nums">
-        {hasC && <span style={{ color: CONCORRENTE_COLOR }}>{formatTime(c!.at)}</span>}
-        {hasC && hasK && <span className="text-white/25">·</span>}
-        {hasK && <span style={{ color: CAMAREIRA_COLOR }}>{formatTime(k!.at)}</span>}
+        {!altaColor && hasC && (
+          <span style={{ color: CONCORRENTE_COLOR }}>{formatTime(c!.at)}</span>
+        )}
+        {!altaColor && hasC && hasK && <span className="text-white/25">·</span>}
+        {!altaColor && hasK && <span style={{ color: CAMAREIRA_COLOR }}>{formatTime(k!.at)}</span>}
+        {altaColor && (
+          <span
+            className="font-sans font-semibold uppercase tracking-wide"
+            style={{ color: altaColor }}
+          >
+            {altaStatus === "paused" ? "parada" : "alta"}
+          </span>
+        )}
       </div>
       <div
         title={title}
@@ -538,11 +672,26 @@ function BedTile({
       >
         <span className="font-semibold tabular-nums leading-none">{bed}</span>
         <span className="mt-1 flex h-4 items-center justify-center gap-1">
-          {activeK && <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />}
-          {activeC && <BrushCleaning className="h-3.5 w-3.5 animate-sweep" style={{ color: CONCORRENTE_COLOR }} />}
-          {!anyActive && (hasC || hasK) && <CircleCheck className="h-3 w-3 opacity-90" />}
-          {!anyActive && !hasC && !hasK && (
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: SEM_ROTINA_COLOR }} />
+          {altaStatus === "paused" && (
+            <span className="h-2 w-2 rounded-full" style={{ background: "white" }} />
+          )}
+          {altaStatus === "in_progress" && (
+            <BrushCleaning className="h-3.5 w-3.5 animate-sweep" style={{ color: "white" }} />
+          )}
+          {!altaColor && activeK && (
+            <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />
+          )}
+          {!altaColor && activeC && (
+            <BrushCleaning
+              className="h-3.5 w-3.5 animate-sweep"
+              style={{ color: CONCORRENTE_COLOR }}
+            />
+          )}
+          {!altaColor && !anyActive && (hasC || hasK) && (
+            <CircleCheck className="h-3 w-3 opacity-90" />
+          )}
+          {!altaColor && !anyActive && !hasC && !hasK && (
+            <PatientIcon className="h-3.5 w-3.5" style={{ color: patientIconColor }} />
           )}
         </span>
         {repeatBadge && (
