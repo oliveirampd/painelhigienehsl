@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
-import { clearCompletions, updateDischarge } from "@/lib/hospital.functions";
+import { updateDischarge } from "@/lib/hospital.functions";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -67,6 +67,32 @@ const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desm
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
 // Contorno de "caso crítico": só vale para os leitos do 8D/E e 7D/E.
 const isCuidadoUnit = (d: Discharge) => /BLOCO\s+[DE]\s+0?[78]/i.test(d.unit || "");
+
+// Turno atual em Brasília: manhã 06:20–13:40, tarde 13:40–22:00, noite 22:00–06:20.
+// "Altas concluídas" usa o início do turno em curso como corte — reseta sozinho a
+// cada troca de turno (bate com a operação real), em vez de só à meia-noite.
+type Turno = "manha" | "tarde" | "noite";
+const TURNO_LABEL: Record<Turno, string> = {
+  manha: "Turno 06:20–13:40",
+  tarde: "Turno 13:40–22:00",
+  noite: "Turno 22:00–06:20",
+};
+function turnoAtualBRT(nowMs: number): { label: Turno; startMs: number } {
+  const wall = new Date(nowMs - 3 * 60 * 60 * 1000); // campo de parede em horário de Brasília
+  const minutos = wall.getUTCHours() * 60 + wall.getUTCMinutes();
+  const startAt = (hh: number, mm: number, dayOffset = 0) => {
+    const w = new Date(wall);
+    w.setUTCDate(w.getUTCDate() + dayOffset);
+    w.setUTCHours(hh, mm, 0, 0);
+    return w.getTime() + 3 * 60 * 60 * 1000; // volta pra instante real (UTC)
+  };
+  if (minutos >= 6 * 60 + 20 && minutos < 13 * 60 + 40)
+    return { label: "manha", startMs: startAt(6, 20) };
+  if (minutos >= 13 * 60 + 40 && minutos < 22 * 60)
+    return { label: "tarde", startMs: startAt(13, 40) };
+  if (minutos < 6 * 60 + 20) return { label: "noite", startMs: startAt(22, 0, -1) };
+  return { label: "noite", startMs: startAt(22, 0) };
+}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -168,13 +194,13 @@ function TvPage() {
     if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
 
-  // Marcos de limpeza manual (persistidos no navegador da TV): conclusões
-  // anteriores a esses horários não aparecem mais, mesmo que o sync as reenvie.
+  // Marco de "limpar recentes" (só localStorage deste navegador/TV, nunca escreve no
+  // banco): esconde da faixa de finalizados recentes as conclusões antes desse
+  // horário. Não afeta em nada a contagem do turno — essa vem sempre direto do banco
+  // (ver concluidasHojePorBloco), então limpar a faixa nunca "some" uma alta contada.
   const [recentClearedAt, setRecentClearedAt] = useState(0);
-  const [todayClearedAt, setTodayClearedAt] = useState(0);
   useEffect(() => {
     setRecentClearedAt(Number(localStorage.getItem("tv:recentClearedAt") ?? 0));
-    setTodayClearedAt(Number(localStorage.getItem("tv:todayClearedAt") ?? 0));
   }, []);
 
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
@@ -482,13 +508,12 @@ function TvPage() {
     return Math.round(sum / inFlight.length);
   }, [inFlight, now]);
 
-  // 4) Resumo do dia: quantas altas foram concluídas hoje (desde 00:00 BRT),
-  // separadas por agrupamento de blocos (D/E e B/C).
+  // 4) Resumo do turno: quantas altas foram concluídas desde o início do turno em
+  // curso (manhã/tarde/noite — ver turnoAtualBRT), separadas por bloco (D/E e B/C).
+  // Fonte única: discharges.completed_at, direto do banco — nunca depende de um
+  // "limpar" local, pra ser sempre 100% fiel ao que realmente aconteceu.
+  const turnoAtual = useMemo(() => turnoAtualBRT(now), [now]);
   const concluidasHojePorBloco = useMemo(() => {
-    const agora = new Date();
-    const inicioDiaBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
-    inicioDiaBRT.setUTCHours(0, 0, 0, 0);
-    const cutoff = Math.max(inicioDiaBRT.getTime() + 3 * 60 * 60 * 1000, todayClearedAt);
     const done = discharges.filter(
       (d) =>
         !isExcluded(d) &&
@@ -496,7 +521,7 @@ function TvPage() {
         isTerminal(d) &&
         d.status === "completed" &&
         !!d.completed_at &&
-        new Date(d.completed_at).getTime() >= cutoff,
+        new Date(d.completed_at).getTime() >= turnoAtual.startMs,
     );
 
     let de = 0;
@@ -508,7 +533,7 @@ function TvPage() {
       else if (block === "B" || block === "C") bc++;
     }
     return { total: done.length, de, bc };
-  }, [discharges, todayClearedAt]);
+  }, [discharges, turnoAtual]);
   const concluidasHoje = concluidasHojePorBloco.total;
 
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
@@ -517,27 +542,16 @@ function TvPage() {
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
   const [isDark, setIsDark] = useState(true);
-  const [limpando, setLimpando] = useState<null | "today" | "recent">(null);
 
-  async function limpar(scope: "today" | "recent") {
-    setLimpando(scope);
+  // Só esconde a faixa de finalizados recentes neste navegador — 100% local,
+  // nunca mexe no banco. A contagem do turno não usa esse marco, então nunca é
+  // afetada por isso (era esse o bug: limpar aqui antes apagava completed_at no
+  // banco, e o próximo sync do Listo recriava o registro, contando de novo).
+  function limparRecentes() {
     const ts = Date.now();
-    try {
-      await clearCompletions({ data: { scope } });
-    } catch {
-      // segue: o marco local já esconde os registros mesmo se o banco recusar
-    }
-    if (scope === "recent") {
-      setRecentClearedAt(ts);
-      localStorage.setItem("tv:recentClearedAt", String(ts));
-    } else {
-      setTodayClearedAt(ts);
-      setRecentClearedAt(ts);
-      localStorage.setItem("tv:todayClearedAt", String(ts));
-      localStorage.setItem("tv:recentClearedAt", String(ts));
-    }
-    toast.success(scope === "today" ? "Altas do dia limpas." : "Recentes limpos.");
-    setLimpando(null);
+    setRecentClearedAt(ts);
+    localStorage.setItem("tv:recentClearedAt", String(ts));
+    toast.success("Recentes limpos.");
   }
 
   const filtros = [
@@ -576,20 +590,11 @@ function TvPage() {
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
           <button
-            onClick={() => limpar("recent")}
-            disabled={limpando !== null}
-            title="Limpar leitos finalizados recentemente"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
+            onClick={limparRecentes}
+            title="Esconder a faixa de finalizados recentes (só neste painel — não afeta a contagem do turno)"
+            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95"
           >
             <Eraser className="h-3 w-3" /> Recentes
-          </button>
-          <button
-            onClick={() => limpar("today")}
-            disabled={limpando !== null}
-            title="Limpar altas concluídas do dia"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95 disabled:opacity-40"
-          >
-            <Eraser className="h-3 w-3" /> Dia
           </button>
           <button
             onClick={() => setIsDark((v) => !v)}
@@ -659,6 +664,9 @@ function TvPage() {
                       className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
                     >
                       <span className="font-semibold text-white/90">{c.bed}</span>
+                      <span className="font-mono tabular-nums text-white/55">
+                        {formatClockTime(c.completedAt)}
+                      </span>
                       <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
                     </div>
                   ))}
@@ -745,8 +753,8 @@ function TvPage() {
       <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
         <span className="inline-flex items-center gap-1.5">
           <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
-          Hoje: <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas
-          concluídas
+          {TURNO_LABEL[turnoAtual.label]}:{" "}
+          <span className="text-white/70 font-semibold">{concluidasHoje}</span> altas concluídas
         </span>
         <span className="text-white/20">·</span>
         <span>
@@ -1016,25 +1024,33 @@ function TerminalBedsPanel({
                       </span>
                     )}
                     <div className="flex items-baseline justify-between gap-1">
-                      <span className="font-bold text-sm lg:text-base tabular-nums truncate">
+                      <span className="font-bold text-base lg:text-lg tabular-nums truncate">
                         {d.bed_number}
                       </span>
                       <span className="font-mono tabular-nums text-xs shrink-0 text-white/75">
                         {formatElapsed(d.status_updated_at, nowMs)}
                       </span>
                     </div>
-                    <div className="text-[10px] text-white/45 truncate">{d.unit}</div>
-                    <span
-                      className="self-start rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
-                      style={{ color: base, background: base.replace(")", " / 0.18)") }}
-                    >
-                      {overtime ? "Estourado" : KIND_LABEL[kind]}
-                    </span>
-                    <div
-                      className="text-[11px] font-semibold truncate"
-                      style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
-                    >
-                      {name ?? "sem colaborador"}
+                    <div className="flex-1 flex items-center justify-center py-1 text-center">
+                      <span
+                        className="text-[13px] lg:text-[15px] font-bold leading-tight line-clamp-2"
+                        style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
+                      >
+                        {name ?? "sem colaborador"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <span
+                        className="rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ color: base, background: base.replace(")", " / 0.18)") }}
+                      >
+                        {overtime ? "Estourado" : KIND_LABEL[kind]}
+                      </span>
+                      {kind === "parada" && (
+                        <span className="font-mono tabular-nums text-[10px] text-white/50 shrink-0">
+                          saída {formatClockTime(d.created_at)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
