@@ -8,9 +8,10 @@ import {
   ChevronRight,
   Circle,
   X,
-  Mars,
-  Venus,
+  User,
+  UserRound,
   Baby,
+  Radiation,
 } from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
 import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
@@ -73,6 +74,29 @@ function altaBedCode(bedNumber: string): string | null {
   const m = bedNumber.match(/(\d+)/);
   return m ? String(parseInt(m[1], 10)) : null;
 }
+
+// Mesmos filtros que a /tv usa pra decidir o que conta como alta de verdade
+// (senão sobra registro de desmontagem, unidade excluída etc. e aparece leito
+// "de alta" sem ser alta). E o mesmo status: "Altas Paradas" na /tv é
+// waiting_cleaning (sem colaborador alocado) — não "paused", que é outra coisa
+// (leito pausado manualmente por um motivo, ex: cofre travado).
+const ALTA_EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
+  { floor: 3, block: "D" },
+  { floor: 3, block: "C" },
+  { floor: 12, block: "C" },
+  { floor: 5, block: "B" },
+];
+function isAltaExcluded(unit: string | null): boolean {
+  const u = (unit || "").toUpperCase();
+  const m = u.match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
+  if (!m) return false;
+  const block = m[1];
+  const floor = parseInt(m[2], 10);
+  return ALTA_EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
+}
+const isAltaBed = (bedNumber: string | null) => (bedNumber || "").toLowerCase().startsWith("leito");
+const isAltaTerminal = (externalId: string | null) =>
+  (externalId || "").startsWith("listo:answer:");
 
 function DiariaPage() {
   const mainRef = useCarouselScroll<HTMLElement>();
@@ -150,12 +174,14 @@ function DiariaPage() {
   // alta já em higienização (limpeza terminal) fica verde — só isso, sem números
   // novos lá em cima, é sinal visual mesmo. Paradas têm prioridade sobre execução.
   const altaByBed = useMemo(() => {
-    const m = new Map<string, "paused" | "in_progress">();
+    const m = new Map<string, "waiting_cleaning" | "in_progress">();
     for (const d of discharges) {
-      if (d.status !== "paused" && d.status !== "in_progress") continue;
+      if (d.status !== "waiting_cleaning" && d.status !== "in_progress") continue;
+      if (!isAltaBed(d.bed_number) || !isAltaTerminal(d.external_id) || isAltaExcluded(d.unit))
+        continue;
       const code = altaBedCode(d.bed_number);
       if (!code) continue;
-      if (d.status === "paused" || m.get(code) === undefined) m.set(code, d.status);
+      if (d.status === "waiting_cleaning" || m.get(code) === undefined) m.set(code, d.status);
     }
     return m;
   }, [discharges]);
@@ -541,11 +567,24 @@ const ALTA_PARADA_COLOR = "oklch(0.7 0.19 25)"; // vermelho — alta parada
 const ALTA_EXECUCAO_COLOR = "oklch(0.72 0.17 155)"; // verde — alta já em higienização
 
 // Ícones decorativos dos leitos "sem rotina" (só estética, sem dado de paciente real):
-// alternam homem/mulher pelo número do leito, e viram bebê nos andares pediátricos.
-const MALE_ICON_COLOR = "oklch(0.62 0.07 240)";
-const FEMALE_ICON_COLOR = "oklch(0.66 0.08 20)";
+// alternam entre dois ícones de pessoa (não símbolos de gênero) de forma embaralhada
+// pelo número do leito, viram bebê nos andares pediátricos e radioativo nos leitos de
+// lutécio/iodoterapia.
+const PERSON_A_COLOR = "oklch(0.63 0.07 240)";
+const PERSON_B_COLOR = "oklch(0.66 0.08 20)";
 const PEDIATRIC_ICON_COLOR = "oklch(0.76 0.09 95)";
+const RADIOACTIVE_ICON_COLOR = "oklch(0.78 0.17 130)";
 const PEDIATRIC_FLOORS = new Set(["B6", "B7"]); // 6B e 7B são leitos pediátricos
+// Leitos de lutécio/iodoterapia — recebem o ícone de radioativo em vez de pessoa.
+const RADIOACTIVE_BEDS = new Set(["1405", "1410", "1411", "1417", "1418"]);
+
+// Embaralha os dois ícones de pessoa por leito sem seguir um padrão óbvio tipo
+// par/ímpar (fica "aleatório" mas estável — não troca de ícone a cada atualização).
+function shuffledPersonIsA(bed: string): boolean {
+  let hash = 0;
+  for (let i = 0; i < bed.length; i++) hash = (hash * 31 + bed.charCodeAt(i)) | 0;
+  return Math.abs(hash) % 2 === 0;
+}
 
 function BedTile({
   bed,
@@ -559,7 +598,7 @@ function BedTile({
   block: string;
   floor: number;
   events: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent } | undefined;
-  altaStatus?: "paused" | "in_progress";
+  altaStatus?: "waiting_cleaning" | "in_progress";
   onSelect?: () => void;
 }) {
   const c = events?.concorrente;
@@ -574,15 +613,24 @@ function BedTile({
     Math.max(c?.count ?? 0, k?.count ?? 0) > 1 ? Math.max(c?.count ?? 0, k?.count ?? 0) : null;
 
   const isPediatric = PEDIATRIC_FLOORS.has(`${block}${floor}`);
-  const PatientIcon = isPediatric ? Baby : parseInt(bed, 10) % 2 === 0 ? Venus : Mars;
-  const patientIconColor = isPediatric
-    ? PEDIATRIC_ICON_COLOR
-    : parseInt(bed, 10) % 2 === 0
-      ? FEMALE_ICON_COLOR
-      : MALE_ICON_COLOR;
+  const isRadioactive = RADIOACTIVE_BEDS.has(bed);
+  const PatientIcon = isRadioactive
+    ? Radiation
+    : isPediatric
+      ? Baby
+      : shuffledPersonIsA(bed)
+        ? User
+        : UserRound;
+  const patientIconColor = isRadioactive
+    ? RADIOACTIVE_ICON_COLOR
+    : isPediatric
+      ? PEDIATRIC_ICON_COLOR
+      : shuffledPersonIsA(bed)
+        ? PERSON_A_COLOR
+        : PERSON_B_COLOR;
 
   const altaLabel =
-    altaStatus === "paused"
+    altaStatus === "waiting_cleaning"
       ? "Alta parada"
       : altaStatus === "in_progress"
         ? "Alta em higienização"
@@ -601,7 +649,7 @@ function BedTile({
           : `Leito ${bed} · sem rotina neste turno`;
 
   const altaColor =
-    altaStatus === "paused"
+    altaStatus === "waiting_cleaning"
       ? ALTA_PARADA_COLOR
       : altaStatus === "in_progress"
         ? ALTA_EXECUCAO_COLOR
@@ -646,7 +694,7 @@ function BedTile({
             className="font-sans font-semibold uppercase tracking-wide"
             style={{ color: altaColor }}
           >
-            {altaStatus === "paused" ? "parada" : "alta"}
+            {altaStatus === "waiting_cleaning" ? "parada" : "alta"}
           </span>
         )}
       </div>
@@ -672,7 +720,7 @@ function BedTile({
       >
         <span className="font-semibold tabular-nums leading-none">{bed}</span>
         <span className="mt-1 flex h-4 items-center justify-center gap-1">
-          {altaStatus === "paused" && (
+          {altaStatus === "waiting_cleaning" && (
             <span className="h-2 w-2 rounded-full" style={{ background: "white" }} />
           )}
           {altaStatus === "in_progress" && (
