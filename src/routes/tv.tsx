@@ -405,7 +405,6 @@ function TvPage() {
       });
   }, [staff, filtered]);
 
-  const activeCount = staffRows.filter((r) => r.kind !== "disponivel").length;
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
   // --- Extras (desktop/TV) ---
@@ -632,40 +631,45 @@ function TvPage() {
       </div>
 
       {recentCompletions.length > 0 && (
-        <div className="flex-none w-full overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)] py-1.5">
-          {(() => {
-            // Preenche a faixa com repetições suficientes do conteúdo real pra
-            // nunca deixar espaço em branco enquanto rola (a técnica de loop
-            // contínuo exige que uma "volta" já preencha bem mais que a tela).
-            // Com poucos leitos, repete só o necessário; com muitos, não repete.
-            const MIN_TRACK_ITEMS = 14;
-            const reps = Math.max(1, Math.ceil(MIN_TRACK_ITEMS / recentCompletions.length));
-            const track = Array.from({ length: reps }, () => recentCompletions).flat();
-            const durationS = Math.max(18, track.length * 2.6);
-            return (
-              <div
-                className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6"
-                style={{ animationDuration: `${durationS}s` }}
-              >
-                {[...track, ...track].map((c, i) => (
-                  <div
-                    key={`${c.id}-${i}`}
-                    className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
-                  >
-                    <CircleCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4 shrink-0 text-[oklch(0.72_0.16_150)]" />
-                    <span className="font-semibold text-white/90">{c.bed}</span>
-                    <span className="text-white/35">·</span>
-                    <span className="font-mono tabular-nums">{formatTime(c.completedAt)}</span>
-                    <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+        <div className="flex-none w-full flex items-stretch overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)]">
+          <div className="flex-none flex items-center gap-1.5 px-3 lg:px-4 bg-[oklch(0.22_0.05_150_/_0.65)] border-r border-[oklch(0.55_0.14_150_/_0.28)]">
+            <CircleCheck className="h-3.5 w-3.5 shrink-0 text-[oklch(0.72_0.16_150)]" />
+            <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-wide text-[oklch(0.80_0.06_150)] whitespace-nowrap">
+              Finalizados recentes
+            </span>
+          </div>
+          <div className="flex-1 overflow-hidden py-1.5">
+            {(() => {
+              // Preenche a faixa com repetições suficientes do conteúdo real pra
+              // nunca deixar espaço em branco enquanto rola (a técnica de loop
+              // contínuo exige que uma "volta" já preencha bem mais que a tela).
+              // Com poucos leitos, repete só o necessário; com muitos, não repete.
+              const MIN_TRACK_ITEMS = 14;
+              const reps = Math.max(1, Math.ceil(MIN_TRACK_ITEMS / recentCompletions.length));
+              const track = Array.from({ length: reps }, () => recentCompletions).flat();
+              const durationS = Math.max(18, track.length * 2.6);
+              return (
+                <div
+                  className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6"
+                  style={{ animationDuration: `${durationS}s` }}
+                >
+                  {[...track, ...track].map((c, i) => (
+                    <div
+                      key={`${c.id}-${i}`}
+                      className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
+                    >
+                      <span className="font-semibold text-white/90">{c.bed}</span>
+                      <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
-      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
+      <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
         <KpiCard
           label="Em Limpeza"
           value={inFlight.length}
@@ -692,7 +696,6 @@ function TvPage() {
           trend={trendFor("completedIssues", completedIssues.length)}
           higherIsBad
         />
-        <KpiCard label="Colaboradores Ativos" value={activeCount} accent="oklch(0.72 0.2 245)" />
         <KpiCard
           label="Média p/ Iniciar"
           value={avgToStart ?? 0}
@@ -921,36 +924,30 @@ function TerminalBedsPanel({
           </h2>
           <span className="text-[11px] text-white/50 shrink-0">{total}</span>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-          <div className="flex gap-3 text-[10px] text-white/30">
-            <span className="inline-flex items-center gap-1">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: KIND_COLOR.execucao }}
-              />
-              em execução
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-1.5">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] lg:text-xs font-medium text-white/55">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: KIND_COLOR.execucao }} />
+              Em execução
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: KIND_COLOR.caminho }}
-              />
-              a caminho
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: KIND_COLOR.caminho }} />A
+              caminho
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ background: KIND_COLOR.parada }}
-              />
-              alta parada
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: KIND_COLOR.parada }} />
+              Alta parada
             </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: OVERDUE_COLOR }} />
-              estourado
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: OVERDUE_COLOR }} />
+              Estourado
             </span>
           </div>
           {/* Altas paradas por bloco — sempre visível, mobile incluso. */}
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-wide text-white/40 whitespace-nowrap">
+              Altas paradas por bloco:
+            </span>
             {(
               [
                 ["D/E", paradasPorBloco.de],
@@ -963,13 +960,16 @@ function TerminalBedsPanel({
             ).map(([label, value]) => (
               <span
                 key={label}
-                className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-px text-[10px] leading-tight"
+                title={`Altas paradas no Bloco ${label}`}
+                className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-[11px] leading-tight"
                 style={{
                   borderColor: KIND_COLOR.parada.replace(")", " / 0.4)"),
                   background: KIND_COLOR.parada.replace(")", " / 0.12)"),
                 }}
               >
-                <span className="font-semibold uppercase tracking-wide text-white/60">{label}</span>
+                <span className="font-semibold uppercase tracking-wide text-white/60">
+                  Bloco {label}
+                </span>
                 <span
                   className="font-bold tabular-nums"
                   style={{ color: value > 0 ? KIND_COLOR.parada : "rgba(255,255,255,0.4)" }}
