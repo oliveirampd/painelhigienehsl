@@ -213,7 +213,18 @@ function DiariaPage() {
     const floors = Array.from(new Set(beds.map((b) => bedFloor(b.n)))).sort((a, b) => b - a);
     const concorrenteRealizadas = beds.filter((b) => byBed.get(b.n)?.concorrente).length;
     const camareiraRealizadas = beds.filter((b) => byBed.get(b.n)?.camareira).length;
-    return { block, floors, beds, concorrenteRealizadas, camareiraRealizadas };
+    // Progresso por andar: ignora leitos com alta em curso (parada ou já em
+    // higienização) — não são rotina diária, iam contar errado no progresso.
+    const floorStats = new Map(
+      floors.map((floor) => {
+        const bedsAndar = beds.filter((b) => bedFloor(b.n) === floor);
+        const elegiveis = bedsAndar.filter((b) => !altaByBed.has(b.n));
+        const concorrenteFeitas = elegiveis.filter((b) => byBed.get(b.n)?.concorrente).length;
+        const camareiraFeitas = elegiveis.filter((b) => byBed.get(b.n)?.camareira).length;
+        return [floor, { total: elegiveis.length, concorrenteFeitas, camareiraFeitas }] as const;
+      }),
+    );
+    return { block, floors, beds, concorrenteRealizadas, camareiraRealizadas, floorStats };
   }).filter((g) => g.beds.length > 0);
 
   return (
@@ -339,28 +350,53 @@ function DiariaPage() {
               </span>
             </h2>
             <div className="space-y-3">
-              {g.floors.map((floor) => (
-                <div key={floor} className="flex items-start gap-3">
-                  <span className="mt-1.5 w-10 flex-none text-right font-mono text-[11px] text-white/35">
-                    {floor}º
-                  </span>
-                  <div className="flex flex-wrap gap-2.5">
-                    {g.beds
-                      .filter((b) => bedFloor(b.n) === floor)
-                      .map((b) => (
-                        <BedTile
-                          key={b.n}
-                          bed={b.n}
-                          block={g.block}
-                          floor={floor}
-                          events={byBed.get(b.n)}
-                          altaStatus={altaByBed.get(b.n)}
-                          onSelect={() => setSelectedBed({ bed: b.n, events: byBed.get(b.n) })}
+              {g.floors.map((floor) => {
+                const stats = g.floorStats.get(floor) ?? {
+                  total: 0,
+                  concorrenteFeitas: 0,
+                  camareiraFeitas: 0,
+                };
+                return (
+                  <div key={floor} className="flex items-start gap-3">
+                    <div className="mt-1.5 w-10 flex-none flex flex-col items-center gap-1">
+                      <span className="w-full text-right font-mono text-[11px] text-white/35">
+                        {floor}º
+                      </span>
+                      <div className="flex items-end gap-1">
+                        <VerticalProgressBar
+                          value={stats.concorrenteFeitas}
+                          total={stats.total}
+                          color={CONCORRENTE_COLOR}
+                          label="Concorrente"
                         />
-                      ))}
+                        {periodo === "tarde" && (
+                          <VerticalProgressBar
+                            value={stats.camareiraFeitas}
+                            total={stats.total}
+                            color={CAMAREIRA_COLOR}
+                            label="Camareira"
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2.5">
+                      {g.beds
+                        .filter((b) => bedFloor(b.n) === floor)
+                        .map((b) => (
+                          <BedTile
+                            key={b.n}
+                            bed={b.n}
+                            block={g.block}
+                            floor={floor}
+                            events={byBed.get(b.n)}
+                            altaStatus={altaByBed.get(b.n)}
+                            onSelect={() => setSelectedBed({ bed: b.n, events: byBed.get(b.n) })}
+                          />
+                        ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         ))}
@@ -526,6 +562,33 @@ function ProgressBar({
         {pct}%
       </span>
     </span>
+  );
+}
+
+// Barra de progresso vertical (usada embaixo do número do andar, no lugar da
+// horizontal que fica no cabeçalho do bloco — espaço ali é estreito e vertical).
+function VerticalProgressBar({
+  value,
+  total,
+  color,
+  label,
+}: {
+  value: number;
+  total: number;
+  color: string;
+  label: string;
+}) {
+  const pct = total > 0 ? Math.min(100, Math.round((value / total) * 100)) : 0;
+  return (
+    <div
+      className="relative h-7 w-[5px] shrink-0 overflow-hidden rounded-full bg-white/10"
+      title={`${label}: ${value}/${total} (${pct}%)`}
+    >
+      <div
+        className="absolute bottom-0 left-0 w-full rounded-full transition-[height] duration-500"
+        style={{ height: `${pct}%`, background: color }}
+      />
+    </div>
   );
 }
 
