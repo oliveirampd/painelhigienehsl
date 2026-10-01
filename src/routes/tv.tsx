@@ -280,9 +280,12 @@ function TvPage() {
     const cutoff = now - ONE_DAY_MS;
     return filtered
       .filter(
+        // Só "paused" de verdade (ainda bloqueado). "completed_with_issues" é o
+        // status que o botão "concluir" usa pra resolver sem contar como alta de
+        // verdade (ver CompleteButton) — some da lista assim que resolvido.
         (d) =>
           isTerminal(d) &&
-          (d.status === "paused" || d.status === "completed_with_issues") &&
+          d.status === "paused" &&
           new Date(d.status_updated_at).getTime() >= cutoff,
       )
       .sort(
@@ -1198,8 +1201,12 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
     if (saving) return;
     setSaving(true);
     try {
+      // "completed_with_issues", não "completed": essa é uma resolução manual
+      // (clique do colaborador), não uma confirmação real da Listo de que a
+      // higienização terminal aconteceu — então não pode contar como "alta
+      // concluída" (ver concluidasHojePorBloco, que exige status === "completed").
       await updateDischarge({
-        data: { id: dischargeId, patch: { status: "completed", pause_reason: null } },
+        data: { id: dischargeId, patch: { status: "completed_with_issues", pause_reason: null } },
       });
       toast.success("Leito marcado como concluído.");
     } catch (err) {
