@@ -92,7 +92,7 @@ async function login(): Promise<string> {
     }),
   });
   if (!res.ok) throw new Error(`Login Listo360 falhou: ${res.status}`);
-  const data = await res.json() as { token?: string; accessToken?: string };
+  const data = (await res.json()) as { token?: string; accessToken?: string };
   const token = data.token || data.accessToken;
   if (!token) throw new Error("Login Listo360 sem token");
   return token;
@@ -110,7 +110,7 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
     });
     if (!res.ok) throw new Error(`all-answers p${page} ${res.status}`);
-    const body = await res.json() as ListoAnswer[] | { data?: ListoAnswer[] };
+    const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
     const rows = Array.isArray(body) ? body : (body.data ?? []);
     all.push(...rows);
     if (rows.length < pageSize) break;
@@ -153,9 +153,9 @@ async function handle() {
     const relevant = [...bedAnswers, ...dismantleAnswers];
 
     // 1) upsert staff (unique per userName) — inclui quem está em desmontagem
-    const staffNames = Array.from(new Set(
-      relevant.map((a) => (a.userName || "").trim()).filter(Boolean),
-    ));
+    const staffNames = Array.from(
+      new Set(relevant.map((a) => (a.userName || "").trim()).filter(Boolean)),
+    );
 
     if (staffNames.length) {
       const staffRows = staffNames.map((name) => ({
@@ -169,9 +169,7 @@ async function handle() {
       });
     }
 
-    const { data: staffAll } = await supabase
-      .from("staff")
-      .select("id, external_id, name");
+    const { data: staffAll } = await supabase.from("staff").select("id, external_id, name");
     const staffByName = new Map<string, string>();
     for (const s of staffAll ?? []) {
       if (s.name) staffByName.set(s.name, s.id);
@@ -210,7 +208,13 @@ async function handle() {
     async function fetchAllDischarges() {
       const pageSize = 1000;
       let from = 0;
-      const all: { external_id: string; status: string; status_updated_at: string; last_answer_id: number | null; completed_at: string | null }[] = [];
+      const all: {
+        external_id: string;
+        status: string;
+        status_updated_at: string;
+        last_answer_id: number | null;
+        completed_at: string | null;
+      }[] = [];
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
@@ -227,9 +231,7 @@ async function handle() {
     }
 
     const existingDischarges = await fetchAllDischarges();
-    const existingByExternalId = new Map(
-      existingDischarges.map((d) => [d.external_id, d]),
-    );
+    const existingByExternalId = new Map(existingDischarges.map((d) => [d.external_id, d]));
 
     const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
 
@@ -237,15 +239,15 @@ async function handle() {
     // do painel/control, sem precisar de ninguém clicar em nada. Não é o Listo que
     // fecha o registro, é só o nosso painel que para de mostrar.
     const STALE_LIMIT_MIN: Partial<Record<DischargeStatus, number>> = {
-      in_progress: 4 * 60,       // Em Limpeza Terminal: 4h
-      en_route: 40,               // A Caminho: 40min
-      waiting_cleaning: 20 * 60,  // Altas Paradas: 20h
-      paused: 4 * 24 * 60,        // Leitos Pausados: 4 dias
+      in_progress: 4 * 60, // Em Limpeza Terminal: 4h
+      en_route: 40, // A Caminho: 40min
+      waiting_cleaning: 20 * 60, // Altas Paradas: 20h
+      paused: 4 * 24 * 60, // Leitos Pausados: 4 dias
     };
 
     const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
       const rawStatus = mapStatus(a);
-      const assigned = a.userName ? staffByName.get(a.userName.trim()) ?? null : null;
+      const assigned = a.userName ? (staffByName.get(a.userName.trim()) ?? null) : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
       const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
       const bedSlug = bed.toLowerCase().replace(/\s+/g, "-");
@@ -256,12 +258,18 @@ async function handle() {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Só pra "Leitos Pausados": se já foi concluído (manual ou automático), só
-      // volta a aparecer se o Listo mostrar um horário realmente mais novo — sem
-      // isso, a mesma pendência antiga reaparecia toda hora mesmo já resolvida.
+      // Só pra "Leitos Pausados": se já foi resolvido (manual via botão "concluir"
+      // -> completed_with_issues, ou automático -> completed), só volta a
+      // aparecer se o Listo mostrar um horário realmente mais novo — sem isso, a
+      // mesma pendência antiga reaparecia toda hora mesmo já resolvida (o Listo
+      // continua mandando a mesma resposta "pausada" de antes, sem novidade real).
       // As outras categorias (Em Limpeza, A Caminho, Altas Paradas) não têm essa
       // trava — funcionam do jeito simples de sempre.
-      if (rawStatus === "paused" && prevRow && prevRow.status === "completed") {
+      if (
+        rawStatus === "paused" &&
+        prevRow &&
+        (prevRow.status === "completed" || prevRow.status === "completed_with_issues")
+      ) {
         const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
         const semNovidade = ref.getTime() <= new Date(prevRow.status_updated_at).getTime();
         if (semNovidade) {
@@ -269,13 +277,17 @@ async function handle() {
             external_id: externalId,
             bed_number: bed,
             unit,
-            status: "completed" as DischargeStatus,
+            // Preserva o status exato de antes — nunca "promove" um
+            // completed_with_issues (resolução manual) pra completed (alta
+            // real), senão volta a contar errado no contador de altas.
+            status: prevRow.status as DischargeStatus,
             priority: !!a.isPriority,
             pause_reason: extractComment(a.answerComment),
             assigned_staff_id: assigned,
             status_updated_at: prevRow.status_updated_at,
             completed_at: prevRow.completed_at,
-            _debug: "mantido concluido (Leitos Pausados sem novidade real do Listo)",
+            last_answer_id: a.id,
+            _debug: "mantido resolvido (Leitos Pausados sem novidade real do Listo)",
           };
         }
       }
@@ -305,7 +317,12 @@ async function handle() {
       // Horário real da conclusão: usa endTime do Listo quando disponível.
       const completedAt: string | null =
         status === "completed"
-          ? (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()).toISOString()
+          ? (
+              parseBRT(a.endTime) ??
+              parseBRT(a.startTime) ??
+              parseBRT(a.date) ??
+              new Date()
+            ).toISOString()
           : null;
 
       if (status === "completed" && status !== rawStatus) {
@@ -361,12 +378,18 @@ async function handle() {
 
     if (staffAll) {
       const toAssign = staffAll.filter((s) => activeIds.has(s.id)).map((s) => s.id);
-      const toFree = staffAll.filter((s) => !activeIds.has(s.id) && s.external_id?.startsWith("listo:user:")).map((s) => s.id);
+      const toFree = staffAll
+        .filter((s) => !activeIds.has(s.id) && s.external_id?.startsWith("listo:user:"))
+        .map((s) => s.id);
       if (toAssign.length) {
         await supabase.from("staff").update({ status: "assigned" }).in("id", toAssign);
       }
       if (toFree.length) {
-        await supabase.from("staff").update({ status: "available" }).in("id", toFree).eq("status", "assigned");
+        await supabase
+          .from("staff")
+          .update({ status: "available" })
+          .in("id", toFree)
+          .eq("status", "assigned");
       }
     }
 
@@ -388,9 +411,6 @@ async function handle() {
     });
   } catch (err) {
     console.error("[sync-listo360]", err);
-    return Response.json(
-      { ok: false, error: (err as Error).message },
-      { status: 500 },
-    );
+    return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }
 }
