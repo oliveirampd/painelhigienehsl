@@ -11,10 +11,15 @@ import {
   Moon,
   Eraser,
   ChevronRight,
+  AlertTriangle,
+  Activity,
+  Eye,
 } from "lucide-react";
 
 import { toast } from "sonner";
 import { updateDischarge } from "@/lib/hospital.functions";
+import { PanelNav } from "@/components/PanelNav";
+import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -161,6 +166,8 @@ function TvPage() {
   const { discharges, staff } = useHospitalData();
   const now = useNow(15000);
   const clock = useClock();
+  const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
+  const [exceptionsOnly, setExceptionsOnly] = useState(false);
 
   // Marca quando os dados mudaram pela última vez, pra mostrar "sincronizado há Xs"
   const lastSyncRef = useRef<number>(Date.now());
@@ -436,6 +443,86 @@ function TvPage() {
 
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
+  // Memória operacional local da TV: permite detectar acúmulo de fila mesmo após
+  // pequenas atualizações do realtime. Não escreve no banco.
+  const [queueHistory, setQueueHistory] = useState<Array<{ t: number; count: number }>>([]);
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("tv:queueHistory") || "[]") as Array<{
+        t: number;
+        count: number;
+      }>;
+      setQueueHistory(raw.filter((p) => Date.now() - p.t < 2 * 60 * 60 * 1000));
+    } catch {
+      setQueueHistory([]);
+    }
+  }, []);
+  useEffect(() => {
+    setQueueHistory((prev) => {
+      const nowPoint = Date.now();
+      const last = prev[prev.length - 1];
+      if (last && nowPoint - last.t < 2 * 60 * 1000 && last.count === paused.length) return prev;
+      const next = [...prev, { t: nowPoint, count: paused.length }].filter(
+        (p) => nowPoint - p.t < 2 * 60 * 60 * 1000,
+      );
+      localStorage.setItem("tv:queueHistory", JSON.stringify(next));
+      return next;
+    });
+  }, [paused.length]);
+
+  const queueDelta15 = useMemo(() => {
+    if (!queueHistory.length) return 0;
+    const target = now - 15 * 60 * 1000;
+    const candidates = queueHistory.filter((p) => p.t <= target);
+    const base = candidates[candidates.length - 1];
+    return base ? paused.length - base.count : 0;
+  }, [queueHistory, paused.length, now]);
+
+  const oldestPausedMin = paused.length ? elapsedMinutes(paused[0].status_updated_at, now) : 0;
+
+  const criticalBlock = useMemo(() => {
+    const stats = new Map<string, { count: number; oldest: number }>();
+    for (const d of paused) {
+      const block = bedBlock(d) ?? "Outro";
+      const minutes = elapsedMinutes(d.status_updated_at, now);
+      const cur = stats.get(block) ?? { count: 0, oldest: 0 };
+      stats.set(block, { count: cur.count + 1, oldest: Math.max(cur.oldest, minutes) });
+    }
+    return Array.from(stats.entries())
+      .map(([block, value]) => ({ block, ...value }))
+      .sort((a, b) => b.count - a.count || b.oldest - a.oldest)[0] ?? null;
+  }, [paused, now]);
+
+  const availableStaff = timeAltasRows.filter((r) => r.kind === "sem_alta").length;
+  const busyStaff = timeAltasRows.filter((r) =>
+    r.kind === "em_alta" || r.kind === "a_caminho" || r.kind === "desmontando",
+  ).length;
+
+  const operationState =
+    paused.length >= 5 || queueDelta15 >= 3 || oldestPausedMin >= 45
+      ? "critical"
+      : paused.length >= 2 || queueDelta15 >= 2 || oldestPausedMin >= 25
+        ? "attention"
+        : "normal";
+
+  const operationAttention = useMemo(() => {
+    const items: string[] = [];
+    if (paused[0]) {
+      items.push(`${paused[0].bed_number} é a alta parada mais antiga (${oldestPausedMin} min)`);
+    }
+    if (criticalBlock && criticalBlock.count >= 2) {
+      items.push(`Bloco ${criticalBlock.block} concentra ${criticalBlock.count} altas paradas`);
+    }
+    if (queueDelta15 >= 2) {
+      items.push(`Fila cresceu +${queueDelta15} nos últimos 15 min`);
+    }
+    if (completedIssues.length > 0) {
+      items.push(`${completedIssues.length} leito(s) pausado(s) aguardando resolução`);
+    }
+    if (!items.length) items.push("Sem exceções relevantes neste momento");
+    return items.slice(0, 3);
+  }, [paused, oldestPausedMin, criticalBlock, queueDelta15, completedIssues.length]);
+
   // --- Extras (desktop/TV) ---
 
   // 1) Tendência: guarda um retrato dos números a cada ~5min, pra comparar com
@@ -565,9 +652,12 @@ function TvPage() {
         }}
       />
       <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-white/15">
-        <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
-          Painel de Higienização Terminal
-        </h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
+            Painel de Higienização Terminal
+          </h1>
+          <PanelNav />
+        </div>
         <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
           <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
@@ -579,6 +669,17 @@ function TvPage() {
           <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
+          <button
+            onClick={() => setExceptionsOnly((v) => !v)}
+            title="Mostrar somente exceções na grade principal"
+            className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] uppercase tracking-wide transition-colors active:scale-95 ${
+              exceptionsOnly
+                ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
+                : "border-white/15 text-white/55 hover:bg-white/10"
+            }`}
+          >
+            <Eye className="h-3 w-3" /> Só exceções
+          </button>
           <button
             onClick={limparRecentes}
             title="Esconder a faixa de finalizados recentes (só neste painel — não afeta a contagem do turno)"
@@ -602,27 +703,50 @@ function TvPage() {
         </div>
       </header>
 
-      <div className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col gap-1.5">
-        <Link
-          to="/diaria"
-          title="Ver higiene diária de todos os leitos"
-          className="flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
+      <div className="flex-none px-4 lg:px-6 pt-2.5">
+        <div
+          className={`grid gap-2 rounded-xl border px-3 py-2.5 lg:grid-cols-[180px_1fr_auto] lg:items-center ${
+            operationState === "critical"
+              ? "border-red-400/35 bg-red-400/[0.08]"
+              : operationState === "attention"
+                ? "border-amber-400/30 bg-amber-400/[0.07]"
+                : "border-emerald-400/20 bg-emerald-400/[0.045]"
+          }`}
         >
-          <ChevronRight className="h-5 w-5" />
-          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">
-            Diária
-          </span>
-        </Link>
-        <Link
-          to="/terminal-geral"
-          title="Ver limpeza terminal de áreas comuns"
-          className="flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
-        >
-          <ChevronRight className="h-5 w-5" />
-          <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">
-            Geral
-          </span>
-        </Link>
+          <div className="flex items-center gap-2">
+            {operationState === "normal" ? (
+              <Activity className="h-4 w-4 text-emerald-300" />
+            ) : (
+              <AlertTriangle
+                className={`h-4 w-4 ${operationState === "critical" ? "text-red-300" : "text-amber-300"}`}
+              />
+            )}
+            <div>
+              <div className="text-[9px] uppercase tracking-widest text-white/40">Situação da operação</div>
+              <div className="text-sm font-bold uppercase">
+                {operationState === "critical" ? "Crítica" : operationState === "attention" ? "Atenção" : "Normal"}
+              </div>
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/60">
+            {operationAttention.map((item) => (
+              <span key={item} className="truncate">• {item}</span>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 text-[10px] lg:text-xs">
+            <span className="text-white/45">
+              Fila 15m: <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
+                {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
+              </strong>
+            </span>
+            <span className="text-white/45">
+              Livres: <strong className="text-white/75">{availableStaff}</strong>
+            </span>
+            <span className="text-white/45">
+              Ocupados: <strong className="text-white/75">{busyStaff}</strong>
+            </span>
+          </div>
+        </div>
       </div>
 
       {recentCompletions.length > 0 && (
@@ -710,14 +834,19 @@ function TvPage() {
 
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,2fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
         <TerminalBedsPanel
-          inFlight={inFlight}
-          enRoute={enRoute}
+          inFlight={exceptionsOnly ? [] : inFlight}
+          enRoute={exceptionsOnly ? [] : enRoute}
           paused={paused}
           nowMs={now}
           staffMap={staffMap}
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          className="order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
+          onSelect={setSelectedDischarge}
+          className={
+            paused.length >= 4
+              ? "order-2 lg:order-none lg:col-start-1 lg:col-span-9 lg:row-start-1"
+              : "order-2 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-1"
+          }
         />
         <BedsPanel
           title="Leitos Pausados"
@@ -731,12 +860,20 @@ function TvPage() {
           empty="Nenhum leito pausado hoje."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
-          className="order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
+          className={
+            paused.length >= 4
+              ? "order-6 lg:order-none lg:col-start-1 lg:col-span-9 lg:row-start-2"
+              : "order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
+          }
         />
         <StaffPanel
           rows={staffRows}
           nowMs={now}
-          className="order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-2"
+          className={
+            paused.length >= 4
+              ? "order-1 lg:order-none lg:col-start-10 lg:col-span-3 lg:row-start-1 lg:row-span-2"
+              : "order-1 lg:order-none lg:col-start-9 lg:col-span-4 lg:row-start-1 lg:row-span-2"
+          }
         />
       </div>
 
@@ -756,7 +893,18 @@ function TvPage() {
           Bloco B/C:{" "}
           <span className="text-white/70 font-semibold">{concluidasHojePorBloco.bc}</span>
         </span>
+        <span className="text-white/20">·</span>
+        <span>
+          Execução média agora:{" "}
+          <span className="text-white/70 font-semibold">{avgExecution == null ? "—" : `${avgExecution}m`}</span>
+        </span>
       </div>
+      {selectedDischarge && (
+        <DischargeTimelineModal
+          discharge={selectedDischarge}
+          onClose={() => setSelectedDischarge(null)}
+        />
+      )}
     </div>
   );
 }
@@ -857,6 +1005,7 @@ function TerminalBedsPanel({
   staffMap,
   flashVersions,
   worstId,
+  onSelect,
   className,
 }: {
   inFlight: Discharge[];
@@ -866,6 +1015,7 @@ function TerminalBedsPanel({
   staffMap: Map<string, Staff>;
   flashVersions?: Map<string, number>;
   worstId?: string;
+  onSelect?: (discharge: Discharge) => void;
   className?: string;
 }) {
   const KIND_ORDER = { parada: 0, caminho: 1, execucao: 2 } as const;
@@ -995,7 +1145,15 @@ function TerminalBedsPanel({
                 return (
                   <div
                     key={`${d.id}-v${version}`}
-                    className={`relative flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 ${version > 0 ? "flash-row" : ""}`}
+                    onClick={() => onSelect?.(d)}
+                    role={onSelect ? "button" : undefined}
+                    tabIndex={onSelect ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (onSelect && (e.key === "Enter" || e.key === " ")) onSelect(d);
+                    }}
+                    className={`relative flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 ${
+                      onSelect ? "cursor-pointer hover:-translate-y-0.5 hover:bg-white/[0.05]" : ""
+                    } ${version > 0 ? "flash-row" : ""}`}
                     style={{
                       borderColor: base.replace(")", " / 0.45)"),
                       background: base.replace(")", " / 0.14)"),
