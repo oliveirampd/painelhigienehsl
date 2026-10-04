@@ -270,7 +270,7 @@ function TvPage() {
         .filter((d) => isTerminal(d) && d.status === "waiting_cleaning")
         .sort(
           (a, b) =>
-            new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime(),
+            new Date(a.status_updated_at).getTime() - new Date(b.status_updated_at).getTime(),
         ),
     [filtered],
   );
@@ -487,23 +487,10 @@ function TvPage() {
     );
   }, [inFlight, enRoute, paused, completedIssues]);
 
-  // 3) Médias de tempo: "Média p/ Iniciar" = média de quanto tempo as Altas
-  // Paradas levaram até alguém começar (created_at → momento em que entrou em
-  // execução). Só entram leitos que JÁ tiveram início — quem ainda está esperando
-  // não tem "tempo até iniciar" pra contar ainda. Isso evita que o número cresça
-  // pra sempre olhando quem tá parado agora (era isso que dava valores absurdos).
-  const avgToStart = useMemo(() => {
-    const started = inFlight.filter(
-      (d) => new Date(d.status_updated_at).getTime() >= now - ONE_DAY_MS,
-    );
-    if (!started.length) return null;
-    const sum = started.reduce(
-      (acc, d) =>
-        acc + Math.max(0, elapsedMinutes(d.created_at, new Date(d.status_updated_at).getTime())),
-      0,
-    );
-    return Math.round(sum / started.length);
-  }, [inFlight, now]);
+  // Sem um timestamp explícito de entrada na fila + início da execução, created_at
+  // não é confiável (a linha é reutilizada por upsert). Até o modelo de dados guardar
+  // esse ciclo, não exibimos uma média enganosa.
+  const avgToStart = null;
 
   const avgExecution = useMemo(() => {
     if (!inFlight.length) return null;
@@ -1051,7 +1038,7 @@ function TerminalBedsPanel({
                       </span>
                       {kind === "parada" && (
                         <span className="font-mono tabular-nums text-[10px] text-white/50 shrink-0">
-                          saída {formatClockTime(d.created_at)}
+                          detectada {formatClockTime(d.status_updated_at)}
                         </span>
                       )}
                     </div>
