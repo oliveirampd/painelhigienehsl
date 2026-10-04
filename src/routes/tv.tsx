@@ -1014,20 +1014,39 @@ function TerminalBedsPanel({
                       </span>
                     )}
                     <div className="flex items-baseline justify-between gap-1">
-                      <span className="font-bold text-base lg:text-lg tabular-nums truncate">
+                      <span className="font-bold text-base lg:text-xl tabular-nums truncate">
                         {d.bed_number}
                       </span>
-                      <span className="font-mono tabular-nums text-xs shrink-0 text-white/75">
-                        {formatElapsed(d.status_updated_at, nowMs)}
-                      </span>
+                      {kind !== "parada" && (
+                        <span className="font-mono tabular-nums text-sm shrink-0 text-white/80">
+                          {formatElapsed(d.status_updated_at, nowMs)}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex-1 flex items-center justify-center py-1 text-center">
-                      <span
-                        className="text-[13px] lg:text-[15px] font-bold leading-tight line-clamp-2"
-                        style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
-                      >
-                        {name ?? "sem colaborador"}
-                      </span>
+                    <div className="flex-1 flex flex-col items-center justify-center py-1 text-center min-h-[48px]">
+                      {kind === "parada" ? (
+                        <>
+                          <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-widest text-white/55">
+                            Parada há
+                          </span>
+                          <span
+                            className="font-mono tabular-nums text-xl lg:text-2xl font-bold leading-none mt-1"
+                            style={{ color: base }}
+                          >
+                            {formatElapsed(d.status_updated_at, nowMs)}
+                          </span>
+                          <span className="mt-1 text-[10px] lg:text-[11px] text-white/55 leading-tight line-clamp-1">
+                            {d.unit || "Unidade não informada"}
+                          </span>
+                        </>
+                      ) : (
+                        <span
+                          className="text-[13px] lg:text-[15px] font-bold leading-tight line-clamp-2"
+                          style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
+                        >
+                          {name ?? "sem colaborador"}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
