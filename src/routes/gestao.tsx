@@ -252,6 +252,32 @@ function GestaoPage() {
                 </table>
               </div>
             </section>
+
+            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+              <div className="mb-3">
+                <h2 className="font-bold">Áreas comuns — menor recorrência recente</h2>
+                <p className="text-xs text-white/40">
+                  Áreas com menos registros concluídos na amostra recente do Listo. É um sinal para investigação, não uma classificação automática de falha.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {data.generalAreas.slice(0, 9).map((area) => (
+                  <div key={`${area.unit}|${area.area}`} className="rounded-lg border border-white/10 bg-black/10 p-3">
+                    <div className="truncate text-sm font-semibold" title={area.area}>{area.area}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-white/35" title={area.unit}>{area.unit}</div>
+                    <div className="mt-2 flex items-end justify-between">
+                      <div>
+                        <div className="text-2xl font-bold tabular-nums">{area.completed7d}</div>
+                        <div className="text-[10px] uppercase tracking-wide text-white/35">registros concluídos</div>
+                      </div>
+                      <div className="text-right text-xs text-white/40">
+                        {area.activeDays} dia(s)<br />com registro
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           </>
         ) : (
           <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/40">
@@ -317,12 +343,14 @@ function ShiftCard({
         <Mini label="Execução" value={summary.avgExecutionMin == null ? "—" : `${summary.avgExecutionMin}m`} />
         <Mini label="Meta execução" value={summary.withinTargetPct == null ? "—" : `${summary.withinTargetPct}%`} />
       </div>
-      {summary.peakHour != null && (
-        <div className="mt-3 text-xs text-white/45">
-          Pico do turno: <span className="font-semibold text-white/70">{String(summary.peakHour).padStart(2, "0")}:00</span>
-          {" · "}{summary.peakCount} altas na faixa
-        </div>
-      )}
+      <div className="mt-3 rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-xs leading-relaxed text-white/45">
+        Resumo automático: {summary.total} altas registradas, {summary.completed} concluídas
+        {summary.avgExecutionMin == null ? "" : `, execução média de ${summary.avgExecutionMin} min`}
+        {summary.withinTargetPct == null ? "" : ` e ${summary.withinTargetPct}% dentro da meta de execução`}.
+        {summary.peakHour == null
+          ? ""
+          : ` Pico às ${String(summary.peakHour).padStart(2, "0")}:00, com ${summary.peakCount} altas na faixa.`}
+      </div>
     </div>
   );
 }
