@@ -71,6 +71,7 @@ export type OperationsAnalytics = {
   forecast: Array<{ hour: number; expected: number }>;
   generalAreas: GeneralAreaTrend[];
   totalSample: number;
+  samplePartial: boolean;
 };
 
 export type DischargeTimeline = {
@@ -86,7 +87,12 @@ export type DischargeTimeline = {
 };
 
 let analyticsCache: { expiresAt: number; value: OperationsAnalytics } | null = null;
-let answersCache: { expiresAt: number; startMs: number; rows: ListoAnswer[] } | null = null;
+let answersCache: {
+  expiresAt: number;
+  startMs: number;
+  rows: ListoAnswer[];
+  partial: boolean;
+} | null = null;
 
 function parseBRT(value: string | null | undefined): Date | null {
   if (!value) return null;
@@ -193,28 +199,55 @@ async function login(): Promise<string> {
   return token;
 }
 
-async function fetchAnswers(days: number): Promise<ListoAnswer[]> {
+async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partial: boolean }> {
   const startMs = Date.now() - days * DAY_MS;
   if (answersCache && answersCache.expiresAt > Date.now() && answersCache.startMs <= startMs) {
-    return answersCache.rows;
+    return { rows: answersCache.rows, partial: answersCache.partial };
   }
+
   const token = await login();
-  const end = new Date();
-  const start = new Date(startMs);
+  const nowMs = Date.now();
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
-  const rows: ListoAnswer[] = [];
   const pageSize = 500;
-  for (let page = 1; page <= 80; page++) {
-    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-    const res = await fetch(url, { headers: { authorization: `Bearer ${token}`, accept: "application/json" } });
-    if (!res.ok) throw new Error("Falha ao consultar histórico operacional");
-    const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
-    const pageRows = Array.isArray(body) ? body : body.data ?? [];
-    rows.push(...pageRows);
-    if (pageRows.length < pageSize) break;
+  // 8 dias x no máximo 6 páginas = 48 subrequests (+ login), mantendo a coleta
+  // abaixo de limites comuns de Workers e distribuindo a amostra entre os dias.
+  const maxPagesPerWindow = 6;
+  const byId = new Map<number, ListoAnswer>();
+  let partial = false;
+
+  for (let windowIndex = 0; windowIndex < days; windowIndex++) {
+    const windowEndMs = nowMs - windowIndex * DAY_MS;
+    const windowStartMs = Math.max(startMs, windowEndMs - DAY_MS);
+    const start = new Date(windowStartMs);
+    const end = new Date(windowEndMs);
+    let reachedCap = false;
+
+    for (let page = 1; page <= maxPagesPerWindow; page++) {
+      const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Falha ao consultar histórico operacional");
+      const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
+      const pageRows = Array.isArray(body) ? body : body.data ?? [];
+      for (const row of pageRows) byId.set(row.id, row);
+      if (pageRows.length < pageSize) {
+        reachedCap = false;
+        break;
+      }
+      reachedCap = page === maxPagesPerWindow;
+    }
+    if (reachedCap) partial = true;
   }
-  answersCache = { expiresAt: Date.now() + 3 * 60 * 1000, startMs, rows };
-  return rows;
+
+  const rows = Array.from(byId.values());
+  answersCache = {
+    expiresAt: Date.now() + 3 * 60 * 1000,
+    startMs,
+    rows,
+    partial,
+  };
+  return { rows, partial };
 }
 
 function validDiffMinutes(start: Date | null, end: Date | null, maxHours = 12): number | null {
@@ -315,7 +348,8 @@ function summarizeShift(rows: ListoAnswer[], window: { label: string; start: Dat
 
 export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   if (analyticsCache && analyticsCache.expiresAt > Date.now()) return analyticsCache.value;
-  const raw = await fetchAnswers(8);
+  const history = await fetchAnswers(8);
+  const raw = history.rows;
   const rows = raw.filter(isTerminalBed);
   const now = new Date();
 
@@ -455,14 +489,15 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     forecast,
     generalAreas,
     totalSample: rows.length,
+    samplePartial: history.partial,
   };
   analyticsCache = { expiresAt: Date.now() + 5 * 60 * 1000, value };
   return value;
 }
 
 export async function loadDischargeTimeline(answerId: number): Promise<DischargeTimeline | null> {
-  const rows = await fetchAnswers(2);
-  const a = rows.find((row) => row.id === answerId && isTerminalBed(row));
+  const history = await fetchAnswers(2);
+  const a = history.rows.find((row) => row.id === answerId && isTerminalBed(row));
   if (!a) return null;
   const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
   const status =
