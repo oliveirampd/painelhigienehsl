@@ -516,12 +516,31 @@ function TvPage() {
     if (queueDelta15 >= 2) {
       items.push(`Fila cresceu +${queueDelta15} nos últimos 15 min`);
     }
+    if (paused.length > 0 && availableStaff === 0) {
+      items.push("Nenhum colaborador livre enquanto há altas aguardando");
+    } else if (paused.length > availableStaff && availableStaff > 0) {
+      items.push(`Fila (${paused.length}) está maior que a equipe livre (${availableStaff})`);
+    }
     if (completedIssues.length > 0) {
       items.push(`${completedIssues.length} leito(s) pausado(s) aguardando resolução`);
     }
     if (!items.length) items.push("Sem exceções relevantes neste momento");
     return items.slice(0, 3);
-  }, [paused, oldestPausedMin, criticalBlock, queueDelta15, completedIssues.length]);
+  }, [paused, oldestPausedMin, criticalBlock, queueDelta15, availableStaff, completedIssues.length]);
+
+  useEffect(() => {
+    if (operationState !== "critical") return;
+    const key = `${paused.length}|${criticalBlock?.block ?? "-"}|${queueDelta15}`;
+    const last = localStorage.getItem("tv:lastOperationalAlert");
+    if (last === key) return;
+    localStorage.setItem("tv:lastOperationalAlert", key);
+    toast.warning(
+      criticalBlock
+        ? `Operação crítica: ${paused.length} altas paradas · Bloco ${criticalBlock.block} concentra ${criticalBlock.count}`
+        : `Operação crítica: ${paused.length} altas paradas`,
+      { duration: 10000 },
+    );
+  }, [operationState, paused.length, criticalBlock, queueDelta15]);
 
   // --- Extras (desktop/TV) ---
 
