@@ -17,6 +17,7 @@ import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
 import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
+import { PanelNav } from "@/components/PanelNav";
 import { useHospitalData } from "@/hooks/useHospitalData";
 
 export const Route = createFileRoute("/diaria")({
@@ -66,6 +67,20 @@ function periodoAtualBRT(): Periodo {
   if (minutos >= 6 * 60 + 20 && minutos < 13 * 60 + 40) return "manha";
   if (minutos >= 13 * 60 + 40 && minutos < 22 * 60) return "tarde";
   return "noite";
+}
+
+function progressoTurnoBRT(): number {
+  const wall = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const nowMin = wall.getUTCHours() * 60 + wall.getUTCMinutes();
+  const start =
+    nowMin >= 6 * 60 + 20 && nowMin < 13 * 60 + 40
+      ? 6 * 60 + 20
+      : nowMin >= 13 * 60 + 40 && nowMin < 22 * 60
+        ? 13 * 60 + 40
+        : 22 * 60;
+  const end = start === 6 * 60 + 20 ? 13 * 60 + 40 : start === 13 * 60 + 40 ? 22 * 60 : 24 * 60 + 6 * 60 + 20;
+  const adjustedNow = start === 22 * 60 && nowMin < 6 * 60 + 20 ? nowMin + 24 * 60 : nowMin;
+  return Math.max(0, Math.min(1, (adjustedNow - start) / (end - start)));
 }
 
 // Extrai o código numérico do leito a partir do texto da alta (ex: "Leito 0711" -> "711"),
@@ -207,6 +222,18 @@ function DiariaPage() {
   );
   const faltamHigiene = bedsElegiveisConcorrente.filter((b) => !byBed.get(b.n)?.concorrente).length;
   const faltamCamareira = ACTIVE_BEDS.filter((b) => !byBed.get(b.n)?.camareira).length;
+  const coberturaHigiene =
+    bedsElegiveisConcorrente.length > 0
+      ? Math.round(((bedsElegiveisConcorrente.length - faltamHigiene) / bedsElegiveisConcorrente.length) * 100)
+      : 0;
+  const coberturaCamareira =
+    ACTIVE_BEDS.length > 0
+      ? Math.round(((ACTIVE_BEDS.length - faltamCamareira) / ACTIVE_BEDS.length) * 100)
+      : 0;
+  const progressoTurno = progressoTurnoBRT();
+  const ritmoEsperado = Math.round(progressoTurno * 100);
+  const desvioRitmo = coberturaHigiene - ritmoEsperado;
+  const ritmoStatus = desvioRitmo < -15 ? "attention" : desvioRitmo > 10 ? "ahead" : "ok";
 
   const grupos = BLOCK_ORDER.map((block) => {
     const beds = ACTIVE_BEDS.filter((b) => b.b === block);
@@ -227,19 +254,32 @@ function DiariaPage() {
     return { block, floors, beds, concorrenteRealizadas, camareiraRealizadas, floorStats };
   }).filter((g) => g.beds.length > 0);
 
+  const floorCoverage = grupos
+    .flatMap((g) =>
+      g.floors.map((floor) => {
+        const stats = g.floorStats.get(floor) ?? {
+          total: 0,
+          concorrenteFeitas: 0,
+          camareiraFeitas: 0,
+        };
+        const pct =
+          stats.total > 0 ? Math.round((stats.concorrenteFeitas / stats.total) * 100) : 100;
+        return { block: g.block, floor, pct, pending: Math.max(0, stats.total - stats.concorrenteFeitas) };
+      }),
+    )
+    .sort((a, b) => a.pct - b.pct || b.pending - a.pending);
+  const floorsAtencao = floorCoverage.filter(
+    (x) => x.pending > 0 && progressoTurno > 0.6 && x.pct < ritmoEsperado - 20,
+  );
+
   return (
     <div className="dark h-screen w-full flex flex-col overflow-hidden font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/tv"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-xs uppercase text-white/60 transition-colors hover:bg-white/10"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" /> Terminal
-          </Link>
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base lg:text-2xl font-bold tracking-tight">
             Higiene Diária — Leitos
           </h1>
+          <PanelNav />
         </div>
         <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
           <span className="flex items-center gap-1.5 uppercase text-white/50">
@@ -299,6 +339,105 @@ function DiariaPage() {
           value={ACTIVE_BEDS.length}
           color="oklch(0.7 0.02 260)"
         />{" "}
+      </div>
+
+      <div className="flex-none px-4 lg:px-6 pb-2">
+        <div
+          className={`grid gap-3 rounded-xl border px-3 py-2.5 lg:grid-cols-[1.1fr_1fr] ${
+            ritmoStatus === "attention"
+              ? "border-amber-400/30 bg-amber-400/[0.06]"
+              : ritmoStatus === "ahead"
+                ? "border-emerald-400/20 bg-emerald-400/[0.045]"
+                : "border-white/10 bg-white/[0.035]"
+          }`}
+        >
+          <div>
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-white/35">Cobertura do turno</div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-3xl font-bold tabular-nums">{coberturaHigiene}%</span>
+                  <span className="text-xs text-white/40">concorrente</span>
+                  {periodo === "tarde" && (
+                    <>
+                      <span className="text-white/20">·</span>
+                      <span className="text-lg font-semibold tabular-nums">{coberturaCamareira}%</span>
+                      <span className="text-xs text-white/40">camareira</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="text-right text-xs text-white/45">
+                Turno percorrido: <strong className="text-white/70">{ritmoEsperado}%</strong>
+                <div className="mt-0.5">
+                  {ritmoStatus === "attention"
+                    ? "ritmo abaixo do esperado"
+                    : ritmoStatus === "ahead"
+                      ? "ritmo adiantado"
+                      : "ritmo compatível"}
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full transition-[width]"
+                style={{
+                  width: `${coberturaHigiene}%`,
+                  background:
+                    ritmoStatus === "attention"
+                      ? "oklch(0.78 0.2 60)"
+                      : "oklch(0.72 0.16 235)",
+                }}
+              />
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-white/35">
+              Andares que merecem atenção
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
+                <span
+                  key={`${x.block}-${x.floor}`}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[11px]"
+                >
+                  <strong>Bloco {x.block} · {x.floor}º</strong>
+                  <span className={x.pct < ritmoEsperado - 20 ? "text-amber-200" : "text-white/45"}>
+                    {x.pct}%
+                  </span>
+                  <span className="text-white/30">· {x.pending} faltam</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-none px-4 lg:px-6 pb-2">
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {floorCoverage.map((x) => {
+            const tone =
+              x.pct >= 90
+                ? "oklch(0.72 0.16 155)"
+                : x.pct >= Math.max(55, ritmoEsperado - 15)
+                  ? "oklch(0.72 0.16 235)"
+                  : "oklch(0.78 0.2 60)";
+            return (
+              <div
+                key={`heat-${x.block}-${x.floor}`}
+                className="min-w-[78px] rounded-md border px-2 py-1.5"
+                style={{ borderColor: tone.replace(")", " / 0.32)"), background: tone.replace(")", " / 0.08)") }}
+                title={`Bloco ${x.block} ${x.floor}º · ${x.pct}% de cobertura concorrente`}
+              >
+                <div className="text-[9px] uppercase tracking-wide text-white/35">Bloco {x.block}</div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-mono text-xs">{x.floor}º</span>
+                  <strong className="text-sm tabular-nums" style={{ color: tone }}>{x.pct}%</strong>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium uppercase text-white/60">
@@ -409,16 +548,6 @@ function DiariaPage() {
           onClose={() => setSelectedBed(null)}
         />
       )}
-      <Link
-        to="/terminal-geral"
-        title="Ver limpeza terminal de áreas comuns"
-        className="fixed right-0 top-1/2 z-50 -translate-y-1/2 flex flex-col items-center gap-1 rounded-l-xl border border-r-0 border-white/15 bg-[oklch(0.2_0.02_265_/_0.85)] px-1.5 py-3 text-white/60 backdrop-blur transition-colors hover:bg-[oklch(0.28_0.03_265_/_0.9)] hover:text-white"
-      >
-        <ChevronRight className="h-5 w-5" />
-        <span className="text-[9px] uppercase tracking-widest [writing-mode:vertical-rl]">
-          Geral
-        </span>
-      </Link>
     </div>
   );
 }
