@@ -1,3 +1,5 @@
+import { TERMINAL_GERAL_AREAS } from "@/lib/terminalGeralAreas";
+
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -48,6 +50,14 @@ export type ShiftSummary = {
   peakCount: number;
 };
 
+export type GeneralAreaTrend = {
+  area: string;
+  unit: string;
+  completed7d: number;
+  activeDays: number;
+  lastCompletedAt: string | null;
+};
+
 export type OperationsAnalytics = {
   generatedAt: string;
   days: AnalyticsDay[];
@@ -59,6 +69,7 @@ export type OperationsAnalytics = {
   currentShift: ShiftSummary;
   previousShift: ShiftSummary;
   forecast: Array<{ hour: number; expected: number }>;
+  generalAreas: GeneralAreaTrend[];
   totalSample: number;
 };
 
@@ -123,6 +134,23 @@ function isTerminalBed(a: ListoAnswer): boolean {
   const inspection = (a.inspectionName || "").toLowerCase();
   if (route.includes("desmontagem") || inspection.includes("desmontagem")) return false;
   return route.includes("limpeza terminal") || inspection.includes("terminal");
+}
+
+function isTerminalGeneral(a: ListoAnswer): boolean {
+  const location = (a.locationName || "").trim().toLowerCase();
+  if (!location || location.startsWith("leito")) return false;
+  const route = (a.routeName || "").toLowerCase();
+  const inspection = (a.inspectionName || "").toLowerCase();
+  return route.includes("terminal geral") || inspection.includes("terminal geral");
+}
+
+function normalizeKey(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function blockOf(a: ListoAnswer): string {
@@ -367,6 +395,53 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     return { hour, expected: Math.round((historical / distinctDates) * 10) / 10 };
   });
 
+  const generalHistory = raw.filter(isTerminalGeneral);
+  const generalMap = new Map<
+    string,
+    { area: string; unit: string; completed7d: number; days: Set<string>; lastCompletedAt: string | null }
+  >();
+  for (const seed of TERMINAL_GERAL_AREAS) {
+    const key = `${normalizeKey(seed.unit)}|${normalizeKey(seed.area)}`;
+    generalMap.set(key, {
+      area: seed.area,
+      unit: seed.unit,
+      completed7d: 0,
+      days: new Set<string>(),
+      lastCompletedAt: null,
+    });
+  }
+  for (const a of generalHistory) {
+    const area = (a.locationName || "").trim();
+    if (!area) continue;
+    const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
+    const key = `${normalizeKey(unit)}|${normalizeKey(area)}`;
+    const cur = generalMap.get(key) ?? {
+      area,
+      unit,
+      completed7d: 0,
+      days: new Set<string>(),
+      lastCompletedAt: null,
+    };
+    const end = parseBRT(a.endTime);
+    if (end) {
+      cur.completed7d += 1;
+      cur.days.add(brtParts(end).date);
+      if (!cur.lastCompletedAt || end > new Date(cur.lastCompletedAt)) {
+        cur.lastCompletedAt = end.toISOString();
+      }
+    }
+    generalMap.set(key, cur);
+  }
+  const generalAreas: GeneralAreaTrend[] = Array.from(generalMap.values())
+    .map((x) => ({
+      area: x.area,
+      unit: x.unit,
+      completed7d: x.completed7d,
+      activeDays: x.days.size,
+      lastCompletedAt: x.lastCompletedAt,
+    }))
+    .sort((a, b) => a.completed7d - b.completed7d || a.activeDays - b.activeDays || a.area.localeCompare(b.area));
+
   const value: OperationsAnalytics = {
     generatedAt: new Date().toISOString(),
     days,
@@ -378,6 +453,7 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     currentShift: summarizeShift(rows, shiftWindow(Date.now(), 0)),
     previousShift: summarizeShift(rows, shiftWindow(Date.now(), -1)),
     forecast,
+    generalAreas,
     totalSample: rows.length,
   };
   analyticsCache = { expiresAt: Date.now() + 5 * 60 * 1000, value };
