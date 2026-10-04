@@ -216,9 +216,9 @@ function DiariaPage() {
 
   // Leitos que ainda não tiveram nenhum registro (concluído ou em execução) desse
   // tipo de rotina neste turno. Higiene concorrente ignora as unidades excluídas
-  // (mesma regra usada no resto da tela); camareira considera todos os leitos.
+  // e os leitos que estão num ciclo de alta terminal; camareira considera todos os leitos.
   const bedsElegiveisConcorrente = ACTIVE_BEDS.filter(
-    (b) => !EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(b.n)),
+    (b) => !EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(b.n)) && !altaByBed.has(b.n),
   );
   const faltamHigiene = bedsElegiveisConcorrente.filter((b) => !byBed.get(b.n)?.concorrente).length;
   const faltamCamareira = ACTIVE_BEDS.filter((b) => !byBed.get(b.n)?.camareira).length;
