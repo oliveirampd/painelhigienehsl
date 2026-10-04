@@ -306,7 +306,7 @@ function TerminalGeralPage() {
                                 .filter((e) => e.floorLabel === setor)
                                 .sort((a, b) => a.area.localeCompare(b.area))
                                 .map((e) => (
-                                  <AreaCard key={`${e.block}-${e.floorLabel}-${e.area}`} event={e} now={now} />
+                                  <AreaCard key={`${e.block}-${e.floorLabel}-${e.area}`} event={e} now={now} shiftRemaining={shift.remainingMin} onSelect={() => setSelectedArea(e)} />
                                 ))}
                             </div>
                           </div>
