@@ -108,6 +108,13 @@ function GestaoPage() {
 
         {data ? (
           <>
+            {data.samplePartial && (
+              <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
+                A amostra histórica atingiu o limite de paginação em pelo menos uma janela diária.
+                Os indicadores continuam úteis como tendência, mas podem não representar 100% dos registros daquele período.
+              </div>
+            )}
+
             <section className="grid gap-3 lg:grid-cols-2">
               <ShiftCard title="Turno atual" summary={data.currentShift} emphasis />
               <ShiftCard title="Último turno" summary={data.previousShift} />
