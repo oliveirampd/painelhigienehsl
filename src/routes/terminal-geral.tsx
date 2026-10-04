@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, QrCode, X } from "lucide-react";
 import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
+import { getOperationsAnalytics, type OperationsAnalytics } from "@/lib/analytics.functions";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
@@ -75,6 +76,7 @@ function TerminalGeralPage() {
   const [clock, setClock] = useState("");
   const [now, setNow] = useState(Date.now());
   const [selectedArea, setSelectedArea] = useState<TerminalGeralEvent | null>(null);
+  const [historicalAreas, setHistoricalAreas] = useState<OperationsAnalytics["generalAreas"]>([]);
   const mainRef = useCarouselScroll<HTMLElement>();
 
   useEffect(() => {
@@ -110,6 +112,29 @@ function TerminalGeralPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    async function loadHistory() {
+      try {
+        const analytics = await getOperationsAnalytics();
+        if (alive) setHistoricalAreas(analytics.generalAreas);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    void loadHistory();
+    const id = setInterval(() => void loadHistory(), 5 * 60 * 1000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const historyByArea = useMemo(
+    () => new Map(historicalAreas.map((x) => [`${x.unit}|${x.area}`, x])),
+    [historicalAreas],
+  );
+
   const emAndamento = events.filter((e) => e.status === "in_progress");
   const pendentes = events.filter((e) => e.status === "pendente");
   const concluidas = events.filter((e) => e.status === "completed");
@@ -136,8 +161,13 @@ function TerminalGeralPage() {
     const hottestBlocks = new Set(blockAttention.filter((b) => b.pending >= 2).slice(0, 2).map((b) => b.block));
     return events
       .filter((e) => e.status === "pendente" && (hottestBlocks.has(e.block as any) || shift.progress > 0.85))
+      .sort((a, b) => {
+        const ah = historyByArea.get(`${a.unit}|${a.area}`)?.completed7d ?? Number.MAX_SAFE_INTEGER;
+        const bh = historyByArea.get(`${b.unit}|${b.area}`)?.completed7d ?? Number.MAX_SAFE_INTEGER;
+        return ah - bh;
+      })
       .slice(0, 6);
-  }, [events, blockAttention, shift.progress]);
+  }, [events, blockAttention, shift.progress, historyByArea]);
 
   useEffect(() => {
     if (!events.length || typeof window === "undefined") return;
@@ -241,6 +271,11 @@ function TerminalGeralPage() {
                   >
                     <strong>{e.area}</strong>
                     <span className="ml-1 text-white/35">· {e.block === "outro" ? e.outroGrupo : `Bloco ${e.block} ${e.floor ?? ""}º`}</span>
+                    {historyByArea.get(`${e.unit}|${e.area}`) && (
+                      <span className="ml-1 text-white/30">
+                        · {historyByArea.get(`${e.unit}|${e.area}`)!.completed7d} registros/7d
+                      </span>
+                    )}
                   </button>
                 ))
               ) : (
@@ -343,12 +378,26 @@ function TerminalGeralPage() {
       </main>
 
       <UpdatesModal />
-      {selectedArea && <AreaDetailModal event={selectedArea} onClose={() => setSelectedArea(null)} />}
+      {selectedArea && (
+        <AreaDetailModal
+          event={selectedArea}
+          history={historyByArea.get(`${selectedArea.unit}|${selectedArea.area}`)}
+          onClose={() => setSelectedArea(null)}
+        />
+      )}
     </div>
   );
 }
 
-function AreaDetailModal({ event: e, onClose }: { event: TerminalGeralEvent; onClose: () => void }) {
+function AreaDetailModal({
+  event: e,
+  history,
+  onClose,
+}: {
+  event: TerminalGeralEvent;
+  history?: OperationsAnalytics["generalAreas"][number];
+  onClose: () => void;
+}) {
   const url =
     typeof window === "undefined"
       ? ""
@@ -375,6 +424,12 @@ function AreaDetailModal({ event: e, onClose }: { event: TerminalGeralEvent; onC
             <div><span className="text-white/40">Colaborador:</span> {e.staff || "—"}</div>
             {e.at && <div><span className="text-white/40">Horário:</span> {new Date(e.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}</div>}
             {e.reason && <div><span className="text-white/40">Observação:</span> {e.reason}</div>}
+            {history && (
+              <div>
+                <span className="text-white/40">Recorrência recente:</span>{" "}
+                <strong>{history.completed7d} registros concluídos</strong> em {history.activeDays} dia(s) da amostra
+              </div>
+            )}
             <div className="rounded-lg border border-white/10 bg-black/10 p-2 text-xs text-white/45">
               Este QR abre diretamente esta área no painel para consulta rápida no local.
             </div>
