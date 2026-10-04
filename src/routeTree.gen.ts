@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ControlRouteImport } from './routes/control'
 import { Route as DiariaRouteImport } from './routes/diaria'
+import { Route as GestaoRouteImport } from './routes/gestao'
 import { Route as TerminalGeralRouteImport } from './routes/terminal-geral'
 import { Route as TvRouteImport } from './routes/tv'
 import { Route as ApiPublicHooksSyncListo360RouteImport } from './routes/api/public/hooks/sync-listo360'
@@ -30,6 +31,11 @@ const ControlRoute = ControlRouteImport.update({
 const DiariaRoute = DiariaRouteImport.update({
   id: '/diaria',
   path: '/diaria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestaoRoute = GestaoRouteImport.update({
+  id: '/gestao',
+  path: '/gestao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TerminalGeralRoute = TerminalGeralRouteImport.update({
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
   '/diaria': typeof DiariaRoute
+  '/gestao': typeof GestaoRoute
   '/terminal-geral': typeof TerminalGeralRoute
   '/tv': typeof TvRoute
   '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
   '/diaria': typeof DiariaRoute
+  '/gestao': typeof GestaoRoute
   '/terminal-geral': typeof TerminalGeralRoute
   '/tv': typeof TvRoute
   '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/control': typeof ControlRoute
   '/diaria': typeof DiariaRoute
+  '/gestao': typeof GestaoRoute
   '/terminal-geral': typeof TerminalGeralRoute
   '/tv': typeof TvRoute
   '/api/public/hooks/sync-listo360': typeof ApiPublicHooksSyncListo360Route
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/'
     | '/control'
     | '/diaria'
+    | '/gestao'
     | '/terminal-geral'
     | '/tv'
     | '/api/public/hooks/sync-listo360'
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/'
     | '/control'
     | '/diaria'
+    | '/gestao'
     | '/terminal-geral'
     | '/tv'
     | '/api/public/hooks/sync-listo360'
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/'
     | '/control'
     | '/diaria'
+    | '/gestao'
     | '/terminal-geral'
     | '/tv'
     | '/api/public/hooks/sync-listo360'
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ControlRoute: typeof ControlRoute
   DiariaRoute: typeof DiariaRoute
+  GestaoRoute: typeof GestaoRoute
   TerminalGeralRoute: typeof TerminalGeralRoute
   TvRoute: typeof TvRoute
   ApiPublicHooksSyncListo360Route: typeof ApiPublicHooksSyncListo360Route
@@ -144,6 +157,13 @@ declare module '@tanstack/react-router' {
       path: '/diaria'
       fullPath: '/diaria'
       preLoaderRoute: typeof DiariaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestao': {
+      id: '/gestao'
+      path: '/gestao'
+      fullPath: '/gestao'
+      preLoaderRoute: typeof GestaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terminal-geral': {
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ControlRoute: ControlRoute,
   DiariaRoute: DiariaRoute,
+  GestaoRoute: GestaoRoute,
   TerminalGeralRoute: TerminalGeralRoute,
   TvRoute: TvRoute,
   ApiPublicHooksSyncListo360Route: ApiPublicHooksSyncListo360Route,
