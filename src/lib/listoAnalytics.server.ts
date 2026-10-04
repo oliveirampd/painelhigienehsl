@@ -1,0 +1,405 @@
+const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
+const ESTABLISHMENT_ID = 1;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type ListoAnswer = {
+  id: number;
+  sectorName: string | null;
+  sectorDescription: string | null;
+  locationName: string | null;
+  routeName: string | null;
+  inspectionName: string | null;
+  userName: string | null;
+  answerComment: { comment?: string | null } | string | null;
+  startTime: string | null;
+  endTime: string | null;
+  date: string | null;
+  statusAnswer: { id: number; name?: string | null; displayName?: string | null } | null;
+};
+
+export type AnalyticsDay = {
+  date: string;
+  total: number;
+  completed: number;
+  avgWaitMin: number | null;
+  avgExecutionMin: number | null;
+  withinTargetPct: number | null;
+};
+
+export type AnalyticsBlock = {
+  block: string;
+  total: number;
+  completed: number;
+  avgWaitMin: number | null;
+  avgExecutionMin: number | null;
+  withinTargetPct: number | null;
+};
+
+export type ShiftSummary = {
+  label: string;
+  start: string;
+  end: string;
+  total: number;
+  completed: number;
+  avgWaitMin: number | null;
+  avgExecutionMin: number | null;
+  withinTargetPct: number | null;
+  peakHour: number | null;
+  peakCount: number;
+};
+
+export type OperationsAnalytics = {
+  generatedAt: string;
+  days: AnalyticsDay[];
+  blocks: AnalyticsBlock[];
+  hourly: Array<{ hour: number; count: number }>;
+  weekdayHour: Array<{ weekday: number; hour: number; count: number }>;
+  peakHour: number | null;
+  peakCount: number;
+  currentShift: ShiftSummary;
+  previousShift: ShiftSummary;
+  forecast: Array<{ hour: number; expected: number }>;
+  totalSample: number;
+};
+
+export type DischargeTimeline = {
+  answerId: number;
+  bed: string;
+  unit: string;
+  staff: string | null;
+  detectedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  status: string;
+  reason: string | null;
+};
+
+let analyticsCache: { expiresAt: number; value: OperationsAnalytics } | null = null;
+let answersCache: { expiresAt: number; startMs: number; rows: ListoAnswer[] } | null = null;
+
+function parseBRT(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value);
+  const d = new Date(hasTz ? value : `${value}-03:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function brtParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+    weekday: "short",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const weekdayMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    hour: Number(get("hour")),
+    weekday: weekdayMap[get("weekday")] ?? 0,
+  };
+}
+
+function extractComment(c: ListoAnswer["answerComment"]): string | null {
+  if (!c) return null;
+  return typeof c === "string" ? c : c.comment ?? null;
+}
+
+function isTerminalBed(a: ListoAnswer): boolean {
+  const location = (a.locationName || "").toLowerCase();
+  if (!location.startsWith("leito")) return false;
+  const route = (a.routeName || "").toLowerCase();
+  const inspection = (a.inspectionName || "").toLowerCase();
+  if (route.includes("desmontagem") || inspection.includes("desmontagem")) return false;
+  return route.includes("limpeza terminal") || inspection.includes("terminal");
+}
+
+function blockOf(a: ListoAnswer): string {
+  const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ");
+  return unit.toUpperCase().match(/BLOCO\s+([A-Z])/)?.[1] ?? "Outro";
+}
+
+function bedCode(a: ListoAnswer): string {
+  return (a.locationName || "").match(/\d+/)?.[0]?.replace(/^0+/, "") || "";
+}
+
+function targetMinutes(a: ListoAnswer): number {
+  const block = blockOf(a);
+  const suites = new Set([
+    "1852","1752","1652","1552","1452","1260","1160","1060","960","860","760",
+    "1855","1755","1655","1555","1455","1261","1161","1061","961","861","761",
+    "1264","1164","1064","964","864","764","1267","1167","1067","967","884","784",
+    "877","777","878","778",
+  ]);
+  const bed = bedCode(a);
+  if (block === "C") return 50;
+  if (block === "B") return 45;
+  if (block === "D" || block === "E") return suites.has(bed) ? 135 : 75;
+  return 75;
+}
+
+async function login(): Promise<string> {
+  const res = await fetch(`${LISTO_BASE}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email: process.env["LISTO360_EMAIL"],
+      password: process.env["LISTO360_PASSWORD"],
+    }),
+  });
+  if (!res.ok) throw new Error("Falha ao autenticar na origem dos dados");
+  const data = (await res.json()) as { token?: string; accessToken?: string };
+  const token = data.token || data.accessToken;
+  if (!token) throw new Error("Falha ao autenticar na origem dos dados");
+  return token;
+}
+
+async function fetchAnswers(days: number): Promise<ListoAnswer[]> {
+  const startMs = Date.now() - days * DAY_MS;
+  if (answersCache && answersCache.expiresAt > Date.now() && answersCache.startMs <= startMs) {
+    return answersCache.rows;
+  }
+  const token = await login();
+  const end = new Date();
+  const start = new Date(startMs);
+  const fmt = (d: Date) => d.toISOString().slice(0, 19);
+  const rows: ListoAnswer[] = [];
+  const pageSize = 500;
+  for (let page = 1; page <= 80; page++) {
+    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
+    const res = await fetch(url, { headers: { authorization: `Bearer ${token}`, accept: "application/json" } });
+    if (!res.ok) throw new Error("Falha ao consultar histórico operacional");
+    const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
+    const pageRows = Array.isArray(body) ? body : body.data ?? [];
+    rows.push(...pageRows);
+    if (pageRows.length < pageSize) break;
+  }
+  answersCache = { expiresAt: Date.now() + 3 * 60 * 1000, startMs, rows };
+  return rows;
+}
+
+function validDiffMinutes(start: Date | null, end: Date | null, maxHours = 12): number | null {
+  if (!start || !end) return null;
+  const diff = Math.round((end.getTime() - start.getTime()) / 60000);
+  if (diff < 0 || diff > maxHours * 60) return null;
+  return diff;
+}
+
+function avg(values: Array<number | null>): number | null {
+  const clean = values.filter((v): v is number => v != null && Number.isFinite(v));
+  if (!clean.length) return null;
+  return Math.round(clean.reduce((a, b) => a + b, 0) / clean.length);
+}
+
+function pct(done: number, total: number): number | null {
+  return total ? Math.round((done / total) * 100) : null;
+}
+
+function shiftWindow(nowMs: number, offset = 0): { label: string; start: Date; end: Date } {
+  const wall = new Date(nowMs - 3 * 60 * 60 * 1000);
+  const min = wall.getUTCHours() * 60 + wall.getUTCMinutes();
+  let startHour = 22;
+  let startMinute = 0;
+  let label = "Noite";
+  let dayOffset = min < 6 * 60 + 20 ? -1 : 0;
+  let lengthMin = 8 * 60 + 20;
+
+  if (min >= 6 * 60 + 20 && min < 13 * 60 + 40) {
+    startHour = 6; startMinute = 20; label = "Manhã"; dayOffset = 0; lengthMin = 7 * 60 + 20;
+  } else if (min >= 13 * 60 + 40 && min < 22 * 60) {
+    startHour = 13; startMinute = 40; label = "Tarde"; dayOffset = 0; lengthMin = 8 * 60 + 20;
+  }
+
+  const startWall = Date.UTC(
+    wall.getUTCFullYear(),
+    wall.getUTCMonth(),
+    wall.getUTCDate() + dayOffset,
+    startHour,
+    startMinute,
+  );
+  let start = new Date(startWall + 3 * 60 * 60 * 1000);
+  let end = new Date(start.getTime() + lengthMin * 60 * 1000);
+
+  if (offset < 0) {
+    for (let i = 0; i > offset; i--) {
+      const prevEnd = start;
+      const probe = new Date(start.getTime() - 60 * 1000);
+      const p = shiftWindow(probe.getTime(), 0);
+      start = p.start;
+      end = prevEnd;
+      label = p.label;
+    }
+  }
+  return { label, start, end };
+}
+
+function summarizeShift(rows: ListoAnswer[], window: { label: string; start: Date; end: Date }): ShiftSummary {
+  const selected = rows.filter((a) => {
+    const detected = parseBRT(a.date) ?? parseBRT(a.startTime) ?? parseBRT(a.endTime);
+    return detected && detected >= window.start && detected < window.end;
+  });
+  const completed = selected.filter((a) => !!parseBRT(a.endTime));
+  const execution = completed.map((a) => validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6));
+  const waits = selected.map((a) => validDiffMinutes(parseBRT(a.date), parseBRT(a.startTime), 12));
+  const within = completed.filter((a) => {
+    const duration = validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6);
+    return duration != null && duration <= targetMinutes(a);
+  }).length;
+  const hourCounts = new Map<number, number>();
+  for (const a of selected) {
+    const at = parseBRT(a.date) ?? parseBRT(a.startTime);
+    if (!at) continue;
+    const h = brtParts(at).hour;
+    hourCounts.set(h, (hourCounts.get(h) ?? 0) + 1);
+  }
+  let peakHour: number | null = null;
+  let peakCount = 0;
+  for (const [hour, count] of hourCounts) {
+    if (count > peakCount) {
+      peakHour = hour;
+      peakCount = count;
+    }
+  }
+  return {
+    label: window.label,
+    start: window.start.toISOString(),
+    end: window.end.toISOString(),
+    total: selected.length,
+    completed: completed.length,
+    avgWaitMin: avg(waits),
+    avgExecutionMin: avg(execution),
+    withinTargetPct: pct(within, completed.length),
+    peakHour,
+    peakCount,
+  };
+}
+
+export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
+  if (analyticsCache && analyticsCache.expiresAt > Date.now()) return analyticsCache.value;
+  const raw = await fetchAnswers(8);
+  const rows = raw.filter(isTerminalBed);
+  const now = new Date();
+
+  const dateKeys: string[] = [];
+  for (let i = 6; i >= 0; i--) dateKeys.push(brtParts(new Date(now.getTime() - i * DAY_MS)).date);
+
+  const days: AnalyticsDay[] = dateKeys.map((date) => {
+    const selected = rows.filter((a) => {
+      const at = parseBRT(a.date) ?? parseBRT(a.startTime) ?? parseBRT(a.endTime);
+      return at ? brtParts(at).date === date : false;
+    });
+    const completed = selected.filter((a) => !!parseBRT(a.endTime));
+    const within = completed.filter((a) => {
+      const duration = validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6);
+      return duration != null && duration <= targetMinutes(a);
+    }).length;
+    return {
+      date,
+      total: selected.length,
+      completed: completed.length,
+      avgWaitMin: avg(selected.map((a) => validDiffMinutes(parseBRT(a.date), parseBRT(a.startTime), 12))),
+      avgExecutionMin: avg(completed.map((a) => validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6))),
+      withinTargetPct: pct(within, completed.length),
+    };
+  });
+
+  const blockMap = new Map<string, ListoAnswer[]>();
+  for (const a of rows) {
+    const block = blockOf(a);
+    const list = blockMap.get(block) ?? [];
+    list.push(a);
+    blockMap.set(block, list);
+  }
+  const blocks: AnalyticsBlock[] = Array.from(blockMap.entries())
+    .map(([block, selected]) => {
+      const completed = selected.filter((a) => !!parseBRT(a.endTime));
+      const within = completed.filter((a) => {
+        const duration = validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6);
+        return duration != null && duration <= targetMinutes(a);
+      }).length;
+      return {
+        block,
+        total: selected.length,
+        completed: completed.length,
+        avgWaitMin: avg(selected.map((a) => validDiffMinutes(parseBRT(a.date), parseBRT(a.startTime), 12))),
+        avgExecutionMin: avg(completed.map((a) => validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6))),
+        withinTargetPct: pct(within, completed.length),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const hourCounts = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+  const weekdayMap = new Map<string, number>();
+  for (const a of rows) {
+    const at = parseBRT(a.date) ?? parseBRT(a.startTime);
+    if (!at) continue;
+    const p = brtParts(at);
+    hourCounts[p.hour].count += 1;
+    const key = `${p.weekday}|${p.hour}`;
+    weekdayMap.set(key, (weekdayMap.get(key) ?? 0) + 1);
+  }
+  const weekdayHour = Array.from({ length: 7 * 24 }, (_, i) => {
+    const weekday = Math.floor(i / 24);
+    const hour = i % 24;
+    return { weekday, hour, count: weekdayMap.get(`${weekday}|${hour}`) ?? 0 };
+  });
+  const peak = hourCounts.reduce((best, h) => (h.count > best.count ? h : best), hourCounts[0]);
+
+  const distinctDates = Math.max(1, new Set(rows.map((a) => {
+    const at = parseBRT(a.date) ?? parseBRT(a.startTime);
+    return at ? brtParts(at).date : "";
+  }).filter(Boolean)).size);
+  const currentHour = brtParts(now).hour;
+  const forecast = [1, 2, 3].map((ahead) => {
+    const hour = (currentHour + ahead) % 24;
+    const historical = hourCounts[hour]?.count ?? 0;
+    return { hour, expected: Math.round((historical / distinctDates) * 10) / 10 };
+  });
+
+  const value: OperationsAnalytics = {
+    generatedAt: new Date().toISOString(),
+    days,
+    blocks,
+    hourly: hourCounts,
+    weekdayHour,
+    peakHour: peak.count ? peak.hour : null,
+    peakCount: peak.count,
+    currentShift: summarizeShift(rows, shiftWindow(Date.now(), 0)),
+    previousShift: summarizeShift(rows, shiftWindow(Date.now(), -1)),
+    forecast,
+    totalSample: rows.length,
+  };
+  analyticsCache = { expiresAt: Date.now() + 5 * 60 * 1000, value };
+  return value;
+}
+
+export async function loadDischargeTimeline(answerId: number): Promise<DischargeTimeline | null> {
+  const rows = await fetchAnswers(2);
+  const a = rows.find((row) => row.id === answerId && isTerminalBed(row));
+  if (!a) return null;
+  const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
+  const status =
+    a.endTime ? "Concluída" : a.startTime ? "Em execução" : a.userName ? "A caminho" : "Aguardando";
+  return {
+    answerId: a.id,
+    bed: a.locationName || `Leito ${a.id}`,
+    unit,
+    staff: a.userName?.trim() || null,
+    detectedAt: parseBRT(a.date)?.toISOString() ?? null,
+    startedAt: parseBRT(a.startTime)?.toISOString() ?? null,
+    completedAt: parseBRT(a.endTime)?.toISOString() ?? null,
+    status,
+    reason: extractComment(a.answerComment),
+  };
+}
