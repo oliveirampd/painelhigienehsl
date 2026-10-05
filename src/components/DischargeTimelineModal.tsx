@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, MapPin, Route, TimerReset, UserRound, X } from "lucide-react";
 
-import { getDischargeTimeline, type DischargeTimeline } from "@/lib/analytics.functions";
+import {
+  getLastCompletedDischarge,
+  type LastCompletedDischarge,
+} from "@/lib/lastDischarge.functions";
 import {
   DISCHARGE_STATUS_LABELS,
   formatClockTime,
@@ -38,20 +41,20 @@ export function DischargeTimelineModal({
   nowMs: number;
   onClose: () => void;
 }) {
-  const [timeline, setTimeline] = useState<DischargeTimeline | null>(null);
+  const [lastCompleted, setLastCompleted] = useState<LastCompletedDischarge | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    setTimeline(null);
+    setLastCompleted(null);
     setError(false);
-    const answerId = discharge.last_answer_id;
-    if (!answerId) return;
     setLoading(true);
-    getDischargeTimeline({ data: { answerId } })
+    getLastCompletedDischarge({
+      data: { unit: discharge.unit, bedNumber: discharge.bed_number },
+    })
       .then((result) => {
-        if (alive) setTimeline(result);
+        if (alive) setLastCompleted(result);
       })
       .catch((err) => {
         console.error(err);
@@ -63,7 +66,7 @@ export function DischargeTimelineModal({
     return () => {
       alive = false;
     };
-  }, [discharge.last_answer_id]);
+  }, [discharge.unit, discharge.bed_number]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -73,11 +76,9 @@ export function DischargeTimelineModal({
     return () => document.removeEventListener("keydown", close);
   }, [onClose]);
 
-  const effectiveStaff = staffName || timeline?.staff || null;
-  const detectedAt = timeline?.detectedAt ?? null;
-  const startedAt =
-    timeline?.startedAt ??
-    (discharge.status === "in_progress" ? discharge.status_updated_at : null);
+  const effectiveStaff = staffName || null;
+  const detectedAt = null;
+  const startedAt = discharge.status === "in_progress" ? discharge.status_updated_at : null;
 
   const timeToStart = useMemo(() => diffMinutes(detectedAt, startedAt), [detectedAt, startedAt]);
   const executionMinutes = useMemo(() => {
@@ -114,7 +115,7 @@ export function DischargeTimelineModal({
             <h3 className="mt-1 text-2xl font-bold">{discharge.bed_number}</h3>
             <div className="mt-1 flex items-start gap-1.5 text-sm text-white/45">
               <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{timeline?.unit ?? discharge.unit}</span>
+              <span>{discharge.unit}</span>
             </div>
           </div>
           <button
@@ -174,63 +175,40 @@ export function DischargeTimelineModal({
         </div>
 
         <section className="mt-4 rounded-xl border border-white/10 p-3">
-          <h4 className="font-semibold">3 Altas anteriores deste leito</h4>
+          <h4 className="font-semibold">Última Alta concluída neste leito</h4>
           <p className="mt-1 text-xs text-white/60">
-            Concluídas antes desta Alta, na mesma unidade. Consulta dos últimos 30 dias; horários de
-            Brasília.
+            Um único registro por unidade + leito, substituído quando uma conclusão mais recente é
+            sincronizada. Horários de Brasília.
           </p>
           {loading ? (
             <p className="mt-2 text-sm">Carregando histórico…</p>
           ) : error ? (
             <p className="mt-2 text-sm text-amber-100">
-              Não foi possível consultar o histórico agora.
+              A última Alta ainda não está disponível para este leito.
             </p>
-          ) : !timeline ? (
+          ) : !lastCompleted ? (
             <p className="mt-2 text-sm text-white/60">
-              Registro atual não localizado no histórico consultado.
-            </p>
-          ) : !timeline.previous.length ? (
-            <p className="mt-2 text-sm text-white/60">
-              Nenhuma Alta anterior concluída encontrada nesta janela.
+              Ainda não há uma Alta concluída registrada para este leito.
             </p>
           ) : (
-            timeline.previous.map((row) => (
-              <article key={row.key} className="mt-3 rounded-lg bg-black/10 p-3 text-sm">
-                <div className="font-semibold">
-                  {new Date(row.startedAt).toLocaleDateString("pt-BR", {
-                    timeZone: "America/Sao_Paulo",
-                  })}{" "}
-                  · {row.staff || "Colaborador não informado"}
-                </div>
-                <div className="mt-1 grid grid-cols-2 gap-2">
-                  <span>Início: {formatClockTime(row.startedAt)}</span>
-                  <span>
-                    Fim:{" "}
-                    {row.completedAt
-                      ? new Date(row.completedAt).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          timeZone: "America/Sao_Paulo",
-                        })
-                      : "—"}
-                  </span>
-                  <span>Duração: {durationLabel(row.executionMin)}</span>
-                </div>
-                <div className="mt-1 break-words text-xs text-white/60">
-                  IDs Listo: {row.answerIds.join(", ")}
-                  {row.executionMin == null
-                    ? " · duração ausente ou fora da faixa válida (0–6h)"
-                    : ""}
-                </div>
-              </article>
-            ))
-          )}
-          {timeline?.samplePartial && (
-            <p className="mt-2 text-xs text-amber-100">
-              Histórico parcial: pode haver Altas anteriores não retornadas pela origem.
-            </p>
+            <article className="mt-3 rounded-lg bg-black/10 p-3 text-sm">
+              <div className="font-semibold">
+                {new Date(lastCompleted.completedAt).toLocaleDateString("pt-BR", {
+                  timeZone: "America/Sao_Paulo",
+                })}{" "}
+                · {lastCompleted.staffName || "Colaborador não informado"}
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <span>
+                  Início: {lastCompleted.startedAt ? formatClockTime(lastCompleted.startedAt) : "—"}
+                </span>
+                <span>Fim: {formatClockTime(lastCompleted.completedAt)}</span>
+                <span>Duração: {durationLabel(lastCompleted.durationMinutes)}</span>
+              </div>
+              <div className="mt-2 break-words text-xs text-white/60">
+                Registro Listo #{lastCompleted.sourceAnswerId}
+              </div>
+            </article>
           )}
         </section>
         <div className="mt-4 space-y-2">
@@ -262,17 +240,15 @@ export function DischargeTimelineModal({
           )}
         </div>
 
-        {(timeline?.reason || discharge.pause_reason) && (
+        {discharge.pause_reason && (
           <div className="mt-4 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2">
             <div className="text-[10px] uppercase tracking-wide text-amber-100/45">Observação</div>
-            <div className="mt-1 text-sm text-amber-50/80">
-              {timeline?.reason ?? discharge.pause_reason}
-            </div>
+            <div className="mt-1 text-sm text-amber-50/80">{discharge.pause_reason}</div>
           </div>
         )}
 
         {loading && (
-          <div className="mt-4 text-xs text-white/35">Atualizando dados de origem do Listo…</div>
+          <div className="mt-4 text-xs text-white/35">Consultando a última Alta registrada…</div>
         )}
       </div>
     </div>
@@ -326,3 +302,4 @@ function EventRow({
     </div>
   );
 }
+

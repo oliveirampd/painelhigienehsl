@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
+import { operationalBedKey } from "@/lib/operationalScope";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
@@ -80,6 +81,10 @@ function extractComment(c: ListoAnswer["answerComment"]): string | null {
   if (!c) return null;
   if (typeof c === "string") return c;
   return c.comment ?? null;
+}
+
+function unitOf(a: ListoAnswer): string {
+  return [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
 }
 
 async function login(): Promise<string> {
@@ -187,7 +192,7 @@ async function handle() {
     function dedupByBed(list: ListoAnswer[]): ListoAnswer[] {
       const byBed = new Map<string, ListoAnswer>();
       for (const a of list) {
-        const bedKey = (a.locationName || `leito-${a.id}`).trim().toLowerCase();
+        const bedKey = operationalBedKey(unitOf(a), a.locationName || `leito-${a.id}`);
         const prev = byBed.get(bedKey);
         if (!prev || refTime(a) > refTime(prev)) {
           byBed.set(bedKey, a);
@@ -249,9 +254,8 @@ async function handle() {
       const rawStatus = mapStatus(a);
       const assigned = a.userName ? (staffByName.get(a.userName.trim()) ?? null) : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
-      const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-      const bedSlug = bed.toLowerCase().replace(/\s+/g, "-");
-      const externalId = `listo:${kind}:bed:${bedSlug}`;
+      const unit = unitOf(a);
+      const externalId = `listo:${kind}:bed:${operationalBedKey(unit, bed)}`;
 
       let statusUpdatedAt: string;
       let debugInfo: string | null = null;
@@ -358,6 +362,84 @@ async function handle() {
       if (error) throw error;
     }
 
+    // Mantém somente a última Alta realmente concluída de cada unidade + leito.
+    // A tabela é um snapshot substituível: o volume máximo é a quantidade de
+    // leitos distintos, não a quantidade histórica de Altas.
+    let lastCompletedUpdated = 0;
+    let lastCompletedError: string | null = null;
+    try {
+      const latestByBed = new Map<
+        string,
+        {
+          bed_key: string;
+          unit: string;
+          bed_number: string;
+          source_answer_id: number;
+          staff_name: string | null;
+          started_at: string | null;
+          completed_at: string;
+          duration_minutes: number | null;
+          recorded_at: string;
+        }
+      >();
+
+      for (const answer of bedAnswers) {
+        if (mapStatus(answer) !== "completed") continue;
+        const completedAt = parseBRT(answer.endTime);
+        if (!completedAt || completedAt.getTime() > Date.now()) continue;
+
+        const startedAt = parseBRT(answer.startTime);
+        const durationMinutes = startedAt
+          ? Math.round((completedAt.getTime() - startedAt.getTime()) / 60000)
+          : null;
+        const bed = (answer.locationName || `Leito ${answer.id}`).trim();
+        const unit = unitOf(answer);
+        const bedKey = operationalBedKey(unit, bed);
+        const candidate = {
+          bed_key: bedKey,
+          unit,
+          bed_number: bed,
+          source_answer_id: answer.id,
+          staff_name: answer.userName?.trim() || null,
+          started_at: startedAt?.toISOString() ?? null,
+          completed_at: completedAt.toISOString(),
+          duration_minutes:
+            durationMinutes != null && durationMinutes >= 0 ? durationMinutes : null,
+          recorded_at: new Date().toISOString(),
+        };
+        const previous = latestByBed.get(bedKey);
+        if (!previous || candidate.completed_at > previous.completed_at) {
+          latestByBed.set(bedKey, candidate);
+        }
+      }
+
+      if (latestByBed.size) {
+        const { data: stored, error: storedError } = await supabase
+          .from("last_completed_discharges")
+          .select("bed_key, completed_at");
+        if (storedError) throw storedError;
+
+        const storedByBed = new Map((stored ?? []).map((row) => [row.bed_key, row.completed_at]));
+        const updates = Array.from(latestByBed.values()).filter((row) => {
+          const storedCompletedAt = storedByBed.get(row.bed_key);
+          return !storedCompletedAt || row.completed_at > storedCompletedAt;
+        });
+
+        if (updates.length) {
+          const { error: updateError } = await supabase
+            .from("last_completed_discharges")
+            .upsert(updates, { onConflict: "bed_key" });
+          if (updateError) throw updateError;
+          lastCompletedUpdated = updates.length;
+        }
+      }
+    } catch (historyError) {
+      // A TV continua sincronizando mesmo se o snapshot auxiliar estiver
+      // temporariamente indisponível.
+      lastCompletedError = (historyError as Error).message;
+      console.error("[sync-listo360:last-completed]", historyError);
+    }
+
     // Limpa registros órfãos: leitos que não vieram mais nesta sincronização
     // (inclui registros antigos, de antes da deduplicação, com external_id por id).
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
@@ -406,6 +488,8 @@ async function handle() {
       desmontagem: dismantleAnswersDedup.length,
       staff: staffNames.length,
       removidos_orfaos: staleIds.length,
+      ultimas_altas_atualizadas: lastCompletedUpdated,
+      erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,
       at: new Date().toISOString(),
     });
@@ -414,3 +498,4 @@ async function handle() {
     return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }
 }
+

@@ -1,6 +1,21 @@
 /** Shared scope for TV and historical bed activity. Codes refer to units/floors. */
 export const EXCLUDED_UNITS = ["3D", "3C", "12C", "5B", "9C", "13C"] as const;
 
+function normalizeOperationalPart(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+/** Stable identity used by the TV sync and the one-row-per-bed snapshot. */
+export function operationalBedKey(unit: string, bed: string): string {
+  return `${normalizeOperationalPart(unit)}|${normalizeOperationalPart(bed)}`;
+}
+
 export function isExcludedUnit(unit: string): boolean {
   const text = unit
     .normalize("NFD")
@@ -19,3 +34,4 @@ export function isExcludedUnit(unit: string): boolean {
     new RegExp(`(^|[^A-Z0-9])0*${code}([^A-Z0-9]|$)`).test(text),
   );
 }
+

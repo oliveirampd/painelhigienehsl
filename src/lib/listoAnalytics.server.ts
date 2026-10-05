@@ -129,20 +129,6 @@ export type OperationsAnalytics = {
   samplePartial: boolean;
 };
 
-export type DischargeTimeline = {
-  answerId: number;
-  bed: string;
-  unit: string;
-  staff: string | null;
-  detectedAt: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  status: string;
-  reason: string | null;
-  previous: AnalyticsCycleRow[];
-  samplePartial: boolean;
-};
-
 let analyticsCache: { expiresAt: number; value: OperationsAnalytics } | null = null;
 let answersCache: {
   expiresAt: number;
@@ -184,11 +170,6 @@ function brtParts(date: Date) {
     hour: Number(get("hour")),
     weekday: weekdayMap[get("weekday")] ?? 0,
   };
-}
-
-function extractComment(c: ListoAnswer["answerComment"]): string | null {
-  if (!c) return null;
-  return typeof c === "string" ? c : (c.comment ?? null);
 }
 
 function isTerminalBed(a: ListoAnswer): boolean {
@@ -840,44 +821,3 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   return value;
 }
 
-export async function loadDischargeTimeline(answerId: number): Promise<DischargeTimeline | null> {
-  const history = await fetchAnswers(30);
-  const a = history.rows.find((row) => row.id === answerId && isTerminalBed(row));
-  if (!a) return null;
-  const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-  const status = [4, 7].includes(a.statusAnswer?.id ?? 0)
-    ? "Pausada"
-    : a.statusAnswer?.id === 5
-      ? "Manutenção"
-      : a.endTime
-        ? "Concluída"
-        : a.startTime
-          ? "Em execução"
-          : a.userName
-            ? "A caminho"
-            : "Aguardando";
-  return {
-    answerId: a.id,
-    bed: a.locationName || `Leito ${a.id}`,
-    unit,
-    staff: a.userName?.trim() || null,
-    detectedAt: parseBRT(a.date)?.toISOString() ?? null,
-    startedAt: parseBRT(a.startTime)?.toISOString() ?? null,
-    completedAt: parseBRT(a.endTime)?.toISOString() ?? null,
-    status,
-    reason: extractComment(a.answerComment),
-    samplePartial: history.partial,
-    previous: buildTerminalCycles(history.rows)
-      .filter(
-        (c) =>
-          normalizeKey(c.bed) === normalizeKey(a.locationName || "") &&
-          normalizeKey(c.unit) === normalizeKey(unit) &&
-          !c.answerIds.includes(answerId) &&
-          c.completedAt &&
-          c.completedAt < (parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()),
-      )
-      .sort((x, y) => y.completedAt!.getTime() - x.completedAt!.getTime())
-      .slice(0, 3)
-      .map(cycleRow),
-  };
-}

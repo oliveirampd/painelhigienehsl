@@ -20,6 +20,16 @@ for (const unit of [
   assert.equal(scope.isExcludedUnit(unit), true, unit);
 assert.equal(scope.isExcludedUnit("Bloco D 08º Andar"), false);
 assert.equal(scope.isExcludedUnit("Bloco C 19º Andar"), false);
+assert.equal(
+  scope.operationalBedKey("Bloco D 08º Andar", "Leito 801"),
+  scope.operationalBedKey("bloco d 08 andar", "LEITO 801"),
+  "unit + bed identity ignores accents, case and spacing",
+);
+assert.notEqual(
+  scope.operationalBedKey("Bloco D 08º Andar", "Leito 801"),
+  scope.operationalBedKey("Bloco E 08º Andar", "Leito 801"),
+  "the same bed label in another unit has a different snapshot",
+);
 const moduleCode = compile("src/lib/listoAnalytics.server.ts")
   .replace('"@/lib/operationalScope"', JSON.stringify(scopeUrl))
   .replace(
@@ -85,3 +95,4 @@ assert.equal(conflicted[0].staff, "Atribuição divergente");
 console.log(
   "Analytics: exclusion, deduplication, completion, attribution, denominator and source audit checks passed.",
 );
+

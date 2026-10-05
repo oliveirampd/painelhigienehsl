@@ -474,11 +474,12 @@ function TvPage() {
       const cur = stats.get(block) ?? { count: 0, oldest: 0 };
       stats.set(block, { count: cur.count + 1, oldest: Math.max(cur.oldest, minutes) });
     }
-    return Array.from(stats.entries())
-      .map(([block, value]) => ({ block, ...value }))
-      .sort((a, b) => b.count - a.count || b.oldest - a.oldest)[0] ?? null;
+    return (
+      Array.from(stats.entries())
+        .map(([block, value]) => ({ block, ...value }))
+        .sort((a, b) => b.count - a.count || b.oldest - a.oldest)[0] ?? null
+    );
   }, [paused, now]);
-
 
   const operationState =
     paused.length >= 5 || queueDelta15 >= 3 || oldestPausedMin >= 45
@@ -696,24 +697,32 @@ function TvPage() {
               />
             )}
             <div>
-              <div className="text-[9px] uppercase tracking-widest text-white/40">Situação da operação</div>
+              <div className="text-[9px] uppercase tracking-widest text-white/40">
+                Situação da operação
+              </div>
               <div className="text-sm font-bold uppercase">
-                {operationState === "critical" ? "Crítica" : operationState === "attention" ? "Atenção" : "Normal"}
+                {operationState === "critical"
+                  ? "Crítica"
+                  : operationState === "attention"
+                    ? "Atenção"
+                    : "Normal"}
               </div>
             </div>
           </div>
           <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/60">
             {operationAttention.map((item) => (
-              <span key={item} className="truncate">• {item}</span>
+              <span key={item} className="truncate">
+                • {item}
+              </span>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] lg:text-xs">
             <span className="text-white/45">
-              Fila 15m: <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
+              Fila 15m:{" "}
+              <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
                 {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
               </strong>
             </span>
-
           </div>
         </div>
       </div>
@@ -826,6 +835,7 @@ function TvPage() {
           tone="red"
           showReason
           showComplete
+          hideCount
           empty="Nenhum leito pausado hoje."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
@@ -865,7 +875,9 @@ function TvPage() {
         <span className="text-white/20">·</span>
         <span>
           Execução média agora:{" "}
-          <span className="text-white/70 font-semibold">{avgExecution == null ? "—" : `${avgExecution}m`}</span>
+          <span className="text-white/70 font-semibold">
+            {avgExecution == null ? "—" : `${avgExecution}m`}
+          </span>
         </span>
       </div>
       {selectedDischarge && (
@@ -1018,8 +1030,6 @@ function TerminalBedsPanel({
       elapsedMinutes(b.d.status_updated_at, nowMs) - elapsedMinutes(a.d.status_updated_at, nowMs)
     );
   });
-  const total = cards.length;
-
   const paradasPorBloco = useMemo(() => {
     let de = 0;
     let b = 0;
@@ -1040,12 +1050,11 @@ function TerminalBedsPanel({
       className={`h-[520px] lg:h-full rounded-xl border border-white/15 bg-white/[0.035] overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
     >
       <div className="flex-none px-4 py-2 border-b border-white/10">
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex items-baseline gap-2">
           <h2 className="text-base font-bold flex items-center gap-2">
             <BrushCleaning className="w-4 h-4 text-white/60" />
             Leitos em Higienização
           </h2>
-          <span className="text-[11px] text-white/50 shrink-0">{total}</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-1.5">
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] lg:text-xs font-medium text-white/55">
@@ -1219,6 +1228,7 @@ function BedsPanel({
   className,
   worstId,
   caption,
+  hideCount,
 }: {
   title: string;
   icon?: React.ReactNode;
@@ -1233,6 +1243,7 @@ function BedsPanel({
   className?: string;
   worstId?: string;
   caption?: string;
+  hideCount?: boolean;
 }) {
   return (
     <section
@@ -1244,7 +1255,7 @@ function BedsPanel({
             {icon}
             {title}
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
+          {!hideCount && <span className="text-[11px] text-white/50">{rows.length}</span>}
         </div>
         {caption && (
           <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>
@@ -1698,3 +1709,4 @@ function AutoScroll({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
