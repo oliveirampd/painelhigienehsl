@@ -18,7 +18,9 @@ import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useHospitalData } from "@/hooks/useHospitalData";
+import { usePanelTheme } from "@/hooks/usePanelTheme";
 
 export const Route = createFileRoute("/diaria")({
   head: () => ({
@@ -115,6 +117,7 @@ const isAltaTerminal = (externalId: string | null) =>
 
 function DiariaPage() {
   const mainRef = useCarouselScroll<HTMLElement>();
+  const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const { discharges } = useHospitalData();
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,7 +276,7 @@ function DiariaPage() {
   );
 
   return (
-    <div className="dark min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] lg:h-screen lg:overflow-hidden">
+    <div className={`${themeClass} min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base lg:text-2xl font-bold tracking-tight">
@@ -292,6 +295,7 @@ function DiariaPage() {
           <span className="hidden sm:inline font-mono text-white/35">
             atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
           </span>
+          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
           <span className="text-lg lg:text-2xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
