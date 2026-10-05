@@ -120,12 +120,25 @@ function GestaoPage() {
               <ShiftCard title="Último turno" summary={data.previousShift} />
             </section>
 
+            <section className="rounded-xl border border-sky-400/15 bg-sky-400/[0.035] px-3 py-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-sky-100/45">
+                Qualidade dos dados
+              </div>
+              <div className="mt-1 text-sm text-white/65">
+                A Gestão conta um ciclo apenas uma vez usando <strong className="text-white/85">leito + minuto de início registrado pelo Listo</strong>.
+                Nesta amostra, {data.rawTerminalRecords} linhas brutas foram consolidadas em {data.totalSample} ciclos únicos.
+              </div>
+              <div className="mt-1 text-xs text-white/35">
+                Tempos “Registro → início” usam o horário de origem do Listo; eles não são apresentados como horário clínico de alta.
+              </div>
+            </section>
+
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric
                 icon={<Activity className="h-4 w-4" />}
-                label="Amostra analisada"
+                label="Ciclos únicos analisados"
                 value={String(data.totalSample)}
-                detail="altas terminais recentes"
+                detail={`${data.rawTerminalRecords} linhas brutas deduplicadas`}
               />
               <Metric
                 icon={<Clock3 className="h-4 w-4" />}
@@ -168,21 +181,21 @@ function GestaoPage() {
                       {String(x.hour).padStart(2, "0")}:00–{String((x.hour + 1) % 24).padStart(2, "0")}:00
                     </div>
                     <div className="mt-1 text-3xl font-bold tabular-nums">{x.expected}</div>
-                    <div className="text-xs text-white/40">altas esperadas pela média recente</div>
+                    <div className="text-xs text-white/40">ciclos iniciados pela média recente</div>
                   </div>
                 ))}
               </div>
             </section>
 
             <section className="grid gap-4 xl:grid-cols-2">
-              <ChartCard title="Volume de altas — últimos 7 dias">
+              <ChartCard title="Ciclos de higiene terminal — últimos 7 dias">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={data.days}>
                     <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: "rgba(255,255,255,.5)", fontSize: 11 }} />
                     <YAxis tick={{ fill: "rgba(255,255,255,.5)", fontSize: 11 }} allowDecimals={false} />
                     <Tooltip contentStyle={{ background: "#171923", border: "1px solid rgba(255,255,255,.15)" }} />
-                    <Bar dataKey="total" name="Altas" fill="oklch(0.74 0.18 230)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="total" name="Ciclos iniciados" fill="oklch(0.74 0.18 230)" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="completed" name="Concluídas" fill="oklch(0.72 0.17 155)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -344,19 +357,19 @@ function ShiftCard({
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Mini label="Altas" value={summary.total} />
+        <Mini label="Ciclos iniciados" value={summary.total} />
         <Mini label="Concluídas" value={summary.completed} />
         <Mini label="Reg. → início" value={summary.avgWaitMin == null ? "—" : `${summary.avgWaitMin}m`} />
         <Mini label="Execução" value={summary.avgExecutionMin == null ? "—" : `${summary.avgExecutionMin}m`} />
         <Mini label="Meta execução" value={summary.withinTargetPct == null ? "—" : `${summary.withinTargetPct}%`} />
       </div>
       <div className="mt-3 rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-xs leading-relaxed text-white/45">
-        Resumo automático: {summary.total} altas registradas, {summary.completed} concluídas
+        Resumo automático: {summary.total} ciclos iniciados, {summary.completed} concluídos
         {summary.avgExecutionMin == null ? "" : `, execução média de ${summary.avgExecutionMin} min`}
         {summary.withinTargetPct == null ? "" : ` e ${summary.withinTargetPct}% dentro da meta de execução`}.
         {summary.peakHour == null
           ? ""
-          : ` Pico às ${String(summary.peakHour).padStart(2, "0")}:00, com ${summary.peakCount} altas na faixa.`}
+          : ` Pico às ${String(summary.peakHour).padStart(2, "0")}:00, com ${summary.peakCount} ciclos iniciados na faixa.`}
       </div>
     </div>
   );
