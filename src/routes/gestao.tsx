@@ -22,11 +22,13 @@ import {
 } from "recharts";
 
 import { PanelNav } from "@/components/PanelNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   getOperationsAnalytics,
   type OperationsAnalytics,
   type ShiftSummary,
 } from "@/lib/analytics.functions";
+import { usePanelTheme } from "@/hooks/usePanelTheme";
 
 export const Route = createFileRoute("/gestao")({
   head: () => ({
@@ -44,6 +46,7 @@ export const Route = createFileRoute("/gestao")({
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 function GestaoPage() {
+  const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const [data, setData] = useState<OperationsAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +76,7 @@ function GestaoPage() {
   );
 
   return (
-    <div className="dark min-h-screen bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
+    <div className={`${themeClass} min-h-screen bg-background text-foreground`}>
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[oklch(0.145_0.02_265_/_0.94)] px-4 py-3 backdrop-blur lg:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -89,6 +92,7 @@ function GestaoPage() {
             <div className="min-w-0 flex-1 sm:flex-none">
               <PanelNav />
             </div>
+            <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
             <button
               type="button"
               onClick={() => void load()}
