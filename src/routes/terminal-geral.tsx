@@ -202,7 +202,7 @@ function TerminalGeralPage() {
   ).sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <div className="dark h-screen w-full flex flex-col overflow-hidden font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
+    <div className="dark min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] lg:h-screen lg:overflow-hidden">
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-sm lg:text-2xl font-bold tracking-tight">Limpeza Terminal Geral — Áreas Comuns</h1>
@@ -255,7 +255,7 @@ function TerminalGeralPage() {
               />
             </div>
             <div className="mt-1 text-[10px] text-white/30">
-              Cadência atual: 1 ciclo por área no turno. Áreas concluídas voltam a ser esperadas no próximo turno.
+              A cobertura considera os registros exibidos para a janela operacional atual.
             </div>
           </div>
           <div>
@@ -288,6 +288,29 @@ function TerminalGeralPage() {
         </div>
       </div>
 
+      <div className="flex-none px-4 pb-2 lg:px-6">
+        <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {blockAttention.map((b) => {
+            const completed = Math.max(0, b.total - b.pending);
+            const pct = b.total ? Math.round((completed / b.total) * 100) : 0;
+            return (
+              <div
+                key={b.block}
+                className="min-w-[116px] rounded-lg border border-white/10 bg-white/[0.025] px-2.5 py-2"
+              >
+                <div className="text-[9px] uppercase tracking-widest text-white/30">
+                  {b.block === "outro" ? "Outras áreas" : `Bloco ${b.block}`}
+                </div>
+                <div className="mt-0.5 flex items-baseline justify-between gap-2">
+                  <strong className="text-lg tabular-nums">{pct}%</strong>
+                  <span className="text-[10px] text-white/35">{b.pending} pend.</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {(erro || loading) && (
         <div className="flex-none px-4 lg:px-6 pb-2 text-xs text-white/50">
           {erro && <span className="text-[oklch(0.7_0.18_25)]">{erro}</span>}
@@ -295,7 +318,7 @@ function TerminalGeralPage() {
         </div>
       )}
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
+      <main ref={mainRef} className="min-h-[46vh] flex-1 overflow-y-auto px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6">
         {events.length === 0 && !loading && !erro && (
           <p className="text-sm text-white/40 pt-6">Nenhuma área de Limpeza Terminal Geral encontrada.</p>
         )}
@@ -410,7 +433,7 @@ function AreaDetailModal({
       <div className="w-full max-w-md rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 lg:rounded-2xl" onClick={(ev) => ev.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-white/35">Área comum</div>
+            <div className="text-[10px] uppercase tracking-widest text-white/35">Área comum · consulta</div>
             <h3 className="mt-1 text-xl font-bold">{e.area}</h3>
             <p className="mt-0.5 text-xs text-white/45">{e.unit}</p>
           </div>
@@ -431,7 +454,7 @@ function AreaDetailModal({
               </div>
             )}
             <div className="rounded-lg border border-white/10 bg-black/10 p-2 text-xs text-white/45">
-              Este QR abre diretamente esta área no painel para consulta rápida no local.
+              QR de consulta: abre diretamente esta área no painel. Não registra nem conclui atividade no Listo.
             </div>
           </div>
           {qr && (
@@ -492,7 +515,7 @@ function AreaCard({
       )}
       {e.status === "completed" && (
         <div className="flex items-center justify-between gap-2 text-[10px] text-white/35">
-          <span>próxima janela: próximo turno</span>
+          <span>concluída nesta janela</span>
           <QrCode className="h-3 w-3 shrink-0 text-white/25" />
         </div>
       )}
