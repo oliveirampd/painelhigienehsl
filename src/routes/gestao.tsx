@@ -85,12 +85,14 @@ function GestaoPage() {
               Histórico recente do Listo · atualização a cada 5 minutos
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <PanelNav />
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <PanelNav />
+            </div>
             <button
               type="button"
               onClick={() => void load()}
-              className="inline-flex items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1.5 text-xs text-white/60 hover:bg-white/10"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               Atualizar
@@ -144,7 +146,7 @@ function GestaoPage() {
                 icon={<Clock3 className="h-4 w-4" />}
                 label="Horário de maior volume"
                 value={data.peakHour == null ? "—" : `${String(data.peakHour).padStart(2, "0")}:00`}
-                detail={data.peakCount ? `${data.peakCount} registros na amostra` : "sem dados"}
+                detail={data.peakCount ? `${data.peakCount} ciclos na faixa` : "sem dados"}
               />
               <Metric
                 icon={<Gauge className="h-4 w-4" />}
