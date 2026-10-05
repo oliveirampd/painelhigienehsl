@@ -70,6 +70,15 @@ function GestaoPage() {
     return () => clearInterval(id);
   }, []);
 
+  const chartGrid = isDark ? "rgba(255,255,255,.08)" : "rgba(30,45,65,.12)";
+  const chartTick = isDark ? "rgba(255,255,255,.55)" : "rgba(25,42,62,.68)";
+  const tooltipStyle = {
+    background: isDark ? "#171923" : "#ffffff",
+    border: isDark ? "1px solid rgba(255,255,255,.15)" : "1px solid rgba(30,45,65,.18)",
+    color: isDark ? "#f8fafc" : "#172033",
+    borderRadius: 8,
+  };
+
   const maxHeat = useMemo(
     () => Math.max(1, ...(data?.weekdayHour.map((x) => x.count) ?? [1])),
     [data],
@@ -197,10 +206,10 @@ function GestaoPage() {
               <ChartCard title="Ciclos de higiene terminal — últimos 7 dias">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={data.days}>
-                    <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: "rgba(255,255,255,.5)", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "rgba(255,255,255,.5)", fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip contentStyle={{ background: "#171923", border: "1px solid rgba(255,255,255,.15)" }} />
+                    <CartesianGrid stroke={chartGrid} vertical={false} />
+                    <XAxis dataKey="date" tick={{ fill: chartTick, fontSize: 11 }} />
+                    <YAxis tick={{ fill: chartTick, fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip contentStyle={tooltipStyle} />
                     <Bar dataKey="total" name="Ciclos iniciados" fill="oklch(0.74 0.18 230)" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="completed" name="Concluídas" fill="oklch(0.72 0.17 155)" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -210,10 +219,10 @@ function GestaoPage() {
               <ChartCard title="Tempo médio por dia">
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={data.days}>
-                    <CartesianGrid stroke="rgba(255,255,255,.08)" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: "rgba(255,255,255,.5)", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "rgba(255,255,255,.5)", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "#171923", border: "1px solid rgba(255,255,255,.15)" }} />
+                    <CartesianGrid stroke={chartGrid} vertical={false} />
+                    <XAxis dataKey="date" tick={{ fill: chartTick, fontSize: 11 }} />
+                    <YAxis tick={{ fill: chartTick, fontSize: 11 }} />
+                    <Tooltip contentStyle={tooltipStyle} />
                     <Line type="monotone" dataKey="avgWaitMin" name="Registro → início" stroke="oklch(0.78 0.2 60)" strokeWidth={2} connectNulls />
                     <Line type="monotone" dataKey="avgExecutionMin" name="Execução" stroke="oklch(0.72 0.17 155)" strokeWidth={2} connectNulls />
                   </LineChart>
