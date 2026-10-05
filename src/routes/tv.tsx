@@ -648,12 +648,8 @@ function TvPage() {
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
-        className="absolute top-0 left-0 right-0 h-px"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent 0%, oklch(0.6 0.15 245 / 0.7) 25%, oklch(0.65 0.18 155 / 0.6) 50%, oklch(0.65 0.19 60 / 0.6) 75%, transparent 100%)",
-          boxShadow: "0 0 16px 1px oklch(0.6 0.15 245 / 0.35)",
-        }}
+        className="absolute top-0 left-0 right-0 h-[2px]"
+        style={{ backgroundColor: "oklch(0.62 0.18 235)" }}
       />
       <header className="flex-none flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 lg:py-2 border-b border-white/15">
         <div className="flex flex-wrap items-center gap-3">
@@ -1445,10 +1441,10 @@ function StaffPanel({
                     style={{
                       background:
                         kind === "desmontando"
-                          ? "oklch(0.37 0.18 300 / 0.32)"
+                          ? "oklch(0.68 0.20 300 / 0.13)"
                           : kind === "em_alta"
-                            ? "oklch(0.34 0.17 245 / 0.32)"
-                            : "oklch(0.25 0.02 265 / 0.4)",
+                            ? "oklch(0.66 0.19 245 / 0.13)"
+                            : "oklch(0.65 0.03 255 / 0.10)",
                       borderColor:
                         kind === "desmontando"
                           ? "oklch(0.68 0.2 300 / 0.5)"
@@ -1470,7 +1466,7 @@ function StaffPanel({
                           <span
                             className="font-mono tabular-nums text-xs"
                             style={{
-                              color: overTarget ? "oklch(0.75 0.19 25)" : "rgba(255,255,255,0.7)",
+                              color: overTarget ? "oklch(0.62 0.22 25)" : "currentColor",
                             }}
                           >
                             {formatElapsed(start, nowMs)}
@@ -1527,7 +1523,7 @@ const TIME_ALTAS_LABELS: Record<TimeAltasKind, string> = {
 
 const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text: string }> = {
   cafe: {
-    bg: "oklch(0.42 0.18 55 / 0.35)",
+    bg: "oklch(0.78 0.20 65 / 0.15)",
     border: "oklch(0.72 0.21 55 / 0.55)",
     text: "oklch(0.82 0.21 55)",
   },
@@ -1542,29 +1538,29 @@ const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text
     text: "oklch(0.82 0.21 55)",
   },
   em_alta: {
-    bg: "oklch(0.37 0.15 230 / 0.32)",
+    bg: "oklch(0.66 0.19 235 / 0.14)",
     border: "oklch(0.63 0.19 230 / 0.55)",
     text: "oklch(0.78 0.19 230)",
   },
   a_caminho: {
-    bg: "oklch(0.37 0.14 230 / 0.22)",
+    bg: "oklch(0.68 0.17 235 / 0.11)",
     border: "oklch(0.63 0.17 230 / 0.4)",
     text: "oklch(0.78 0.17 230)",
   },
   desmontando: {
-    bg: "oklch(0.37 0.16 300 / 0.32)",
+    bg: "oklch(0.68 0.20 300 / 0.14)",
     border: "oklch(0.66 0.2 300 / 0.55)",
     text: "oklch(0.8 0.2 300)",
   },
   sem_alta: {
-    bg: "oklch(0.37 0.17 25 / 0.32)",
+    bg: "oklch(0.68 0.21 25 / 0.13)",
     border: "oklch(0.63 0.21 25 / 0.55)",
     text: "oklch(0.78 0.21 25)",
   },
   deslogou: {
-    bg: "oklch(0.22 0.005 0 / 0.4)",
-    border: "oklch(0.32 0.005 0 / 0.5)",
-    text: "rgba(255,255,255,0.35)",
+    bg: "oklch(0.70 0.01 255 / 0.10)",
+    border: "oklch(0.58 0.02 255 / 0.35)",
+    text: "oklch(0.46 0.02 255)",
   },
 };
 
@@ -1612,7 +1608,7 @@ function BreaksPanel({
                     key={s.id}
                     className="flex items-center justify-between rounded-md px-3 py-2 border"
                     style={{
-                      background: over ? "oklch(0.45 0.2 25 / 0.4)" : style.bg,
+                      background: over ? "oklch(0.68 0.22 25 / 0.16)" : style.bg,
                       borderColor: over ? "oklch(0.65 0.22 25 / 0.6)" : style.border,
                     }}
                   >
