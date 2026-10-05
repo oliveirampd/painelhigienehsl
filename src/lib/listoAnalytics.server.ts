@@ -1,3 +1,4 @@
+import { isExcludedUnit } from "@/lib/operationalScope";
 import { TERMINAL_GERAL_AREAS } from "@/lib/terminalGeralAreas";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
@@ -26,6 +27,8 @@ export type AnalyticsDay = {
   avgWaitMin: number | null;
   avgExecutionMin: number | null;
   withinTargetPct: number | null;
+  waitSamples: number;
+  executionSamples: number;
 };
 
 export type AnalyticsBlock = {
@@ -68,6 +71,8 @@ type TerminalCycle = {
   completedAt: Date | null;
   staff: string | null;
   targetMin: number;
+  answerIds: number[];
+  kind: "alta" | "desmontagem";
 };
 
 export type AnalyticsCycleRow = {
@@ -80,10 +85,33 @@ export type AnalyticsCycleRow = {
   completedAt: string | null;
   waitMin: number | null;
   executionMin: number | null;
+  answerIds: number[];
+};
+
+export type StaffProductivity = {
+  name: string;
+  altas: number;
+  completed: number;
+  dismantles: number;
+  dismantlesCompleted: number;
+  avgExecutionMin: number | null;
+  medianExecutionMin: number | null;
+  executionSamples: number;
+  avgDismantleMin: number | null;
+  dismantleSamples: number;
+  avgRegistrationMin: number | null;
+  registrationSamples: number;
+  withinTargetPct: number | null;
+  activeDays: number;
+  lastActivity: string;
 };
 
 export type OperationsAnalytics = {
   generatedAt: string;
+  periodStart: string;
+  periodEnd: string;
+  excludedRecords: number;
+  staffProductivity: StaffProductivity[];
   days: AnalyticsDay[];
   blocks: AnalyticsBlock[];
   hourly: Array<{ hour: number; count: number }>;
@@ -94,6 +122,7 @@ export type OperationsAnalytics = {
   previousShift: ShiftSummary;
   forecast: Array<{ hour: number; expected: number }>;
   generalAreas: GeneralAreaTrend[];
+  staffActivity: Array<AnalyticsCycleRow & { kind: "alta" | "desmontagem" }>;
   totalSample: number;
   rawTerminalRecords: number;
   recentCycles: AnalyticsCycleRow[];
@@ -110,6 +139,8 @@ export type DischargeTimeline = {
   completedAt: string | null;
   status: string;
   reason: string | null;
+  previous: AnalyticsCycleRow[];
+  samplePartial: boolean;
 };
 
 let analyticsCache: { expiresAt: number; value: OperationsAnalytics } | null = null;
@@ -118,6 +149,7 @@ let answersCache: {
   startMs: number;
   rows: ListoAnswer[];
   partial: boolean;
+  fetchedAt: string;
 } | null = null;
 
 function parseBRT(value: string | null | undefined): Date | null {
@@ -156,10 +188,11 @@ function brtParts(date: Date) {
 
 function extractComment(c: ListoAnswer["answerComment"]): string | null {
   if (!c) return null;
-  return typeof c === "string" ? c : c.comment ?? null;
+  return typeof c === "string" ? c : (c.comment ?? null);
 }
 
 function isTerminalBed(a: ListoAnswer): boolean {
+  if (isExcludedUnit([a.sectorName, a.sectorDescription].filter(Boolean).join(" · "))) return false;
   const location = (a.locationName || "").toLowerCase();
   if (!location.startsWith("leito")) return false;
   const route = (a.routeName || "").toLowerCase();
@@ -197,10 +230,44 @@ function bedCode(a: ListoAnswer): string {
 function targetMinutes(a: ListoAnswer): number {
   const block = blockOf(a);
   const suites = new Set([
-    "1852","1752","1652","1552","1452","1260","1160","1060","960","860","760",
-    "1855","1755","1655","1555","1455","1261","1161","1061","961","861","761",
-    "1264","1164","1064","964","864","764","1267","1167","1067","967","884","784",
-    "877","777","878","778",
+    "1852",
+    "1752",
+    "1652",
+    "1552",
+    "1452",
+    "1260",
+    "1160",
+    "1060",
+    "960",
+    "860",
+    "760",
+    "1855",
+    "1755",
+    "1655",
+    "1555",
+    "1455",
+    "1261",
+    "1161",
+    "1061",
+    "961",
+    "861",
+    "761",
+    "1264",
+    "1164",
+    "1064",
+    "964",
+    "864",
+    "764",
+    "1267",
+    "1167",
+    "1067",
+    "967",
+    "884",
+    "784",
+    "877",
+    "777",
+    "878",
+    "778",
   ]);
   const bed = bedCode(a);
   if (block === "C") return 50;
@@ -227,22 +294,37 @@ function maxDate(a: Date | null, b: Date | null): Date | null {
  * startTime. A identidade do ciclo é leito + minuto de início registrado pelo
  * Listo; linhas duplicadas desse mesmo ciclo são consolidadas.
  */
-function buildTerminalCycles(rows: ListoAnswer[]): TerminalCycle[] {
+function isDismantleBed(a: ListoAnswer): boolean {
+  return (
+    !isExcludedUnit([a.sectorName, a.sectorDescription].filter(Boolean).join(" · ")) &&
+    (a.locationName || "").toLowerCase().startsWith("leito") &&
+    /desmontagem/i.test(`${a.routeName} ${a.inspectionName}`)
+  );
+}
+
+function confirmedEnd(a: ListoAnswer, start: Date): Date | null {
+  if ([4, 5, 7].includes(a.statusAnswer?.id ?? 0)) return null;
+  const end = parseBRT(a.endTime);
+  return end && end >= start && end.getTime() <= Date.now() ? end : null;
+}
+
+export function buildTerminalCycles(
+  rows: ListoAnswer[],
+  kind: "alta" | "desmontagem" = "alta",
+): TerminalCycle[] {
   const grouped = new Map<string, TerminalCycle>();
-
+  const blockedCompletion = new Set<string>();
   for (const a of rows) {
-    if (!isTerminalBed(a)) continue;
+    if (!(kind === "alta" ? isTerminalBed(a) : isDismantleBed(a))) continue;
     const startedAt = parseBRT(a.startTime);
-    if (!startedAt) continue;
-
-    const bed = (a.locationName || `Leito ${a.id}`).trim();
-    const startMinute = Math.floor(startedAt.getTime() / 60000);
-    const key = `${normalizeKey(bed)}|${startMinute}`;
-    const detectedAt = parseBRT(a.date);
-    const completedAt = parseBRT(a.endTime);
+    if (!startedAt || startedAt.getTime() > Date.now()) continue;
+    const bed = (a.locationName || "").trim();
     const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
+    const key = `${kind}|${normalizeKey(unit)}|${normalizeKey(bed)}|${Math.floor(startedAt.getTime() / 60000)}`;
+    const detectedAt = parseBRT(a.date);
+    const completedAt = confirmedEnd(a, startedAt);
     const staff = a.userName?.trim() || null;
-
+    if ([4, 5, 7].includes(a.statusAnswer?.id ?? 0)) blockedCompletion.add(key);
     const current = grouped.get(key);
     if (!current) {
       grouped.set(key, {
@@ -255,19 +337,82 @@ function buildTerminalCycles(rows: ListoAnswer[]): TerminalCycle[] {
         completedAt,
         staff,
         targetMin: targetMinutes(a),
+        answerIds: [a.id],
+        kind,
       });
-      continue;
+    } else {
+      current.answerIds.push(a.id);
+      current.detectedAt = minDate(current.detectedAt, detectedAt);
+      current.completedAt = maxDate(current.completedAt, completedAt);
+      // Different names in one execution must not be credited to an arbitrary employee.
+      if (staff && current.staff && normalizeKey(staff) !== normalizeKey(current.staff))
+        current.staff = "Atribuição divergente";
+      else if (!current.staff && staff) current.staff = staff;
     }
-
-    current.detectedAt = minDate(current.detectedAt, detectedAt);
-    current.completedAt = maxDate(current.completedAt, completedAt);
-    if (!current.staff && staff) current.staff = staff;
-    if (current.unit === "—" && unit !== "—") current.unit = unit;
   }
+  for (const key of blockedCompletion) grouped.get(key)!.completedAt = null;
+  return [...grouped.values()].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+}
 
-  return Array.from(grouped.values()).sort(
-    (a, b) => a.startedAt.getTime() - b.startedAt.getTime(),
-  );
+function cycleRow(cycle: TerminalCycle): AnalyticsCycleRow {
+  return {
+    key: cycle.key,
+    bed: cycle.bed,
+    unit: cycle.unit,
+    block: cycle.block,
+    staff: cycle.staff,
+    startedAt: cycle.startedAt.toISOString(),
+    completedAt: cycle.completedAt?.toISOString() ?? null,
+    waitMin: validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12),
+    executionMin: validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
+    answerIds: cycle.answerIds,
+  };
+}
+
+function staffSummary(cycles: TerminalCycle[]): StaffProductivity[] {
+  const groups = new Map<string, TerminalCycle[]>();
+  for (const cycle of cycles) {
+    const key = normalizeKey(cycle.staff || "Sem colaborador informado");
+    groups.set(key, [...(groups.get(key) ?? []), cycle]);
+  }
+  return [...groups.values()]
+    .map((rows) => {
+      const altas = rows.filter((x) => x.kind === "alta");
+      const dismantles = rows.filter((x) => x.kind === "desmontagem");
+      const execution = altas
+        .map((x) => validDiffMinutes(x.startedAt, x.completedAt, 6))
+        .filter((x): x is number => x != null)
+        .sort((a, b) => a - b);
+      const dismantleTimes = dismantles.map((x) => validDiffMinutes(x.startedAt, x.completedAt, 6));
+      const waits = altas.map((x) => validDiffMinutes(x.detectedAt, x.startedAt, 12));
+      const within = altas.filter((x) => {
+        const d = validDiffMinutes(x.startedAt, x.completedAt, 6);
+        return d != null && d <= x.targetMin;
+      }).length;
+      const mid = Math.floor(execution.length / 2);
+      return {
+        name: rows[0].staff || "Sem colaborador informado",
+        altas: altas.length,
+        completed: altas.filter((x) => x.completedAt).length,
+        dismantles: dismantles.length,
+        dismantlesCompleted: dismantles.filter((x) => x.completedAt).length,
+        avgExecutionMin: avg(execution),
+        medianExecutionMin: execution.length
+          ? (execution[mid] + execution[Math.floor((execution.length - 1) / 2)]) / 2
+          : null,
+        executionSamples: execution.length,
+        avgDismantleMin: avg(dismantleTimes),
+        dismantleSamples: dismantleTimes.filter((x) => x != null).length,
+        avgRegistrationMin: avg(waits),
+        registrationSamples: waits.filter((x) => x != null).length,
+        withinTargetPct: pct(within, execution.length),
+        activeDays: new Set(rows.map((x) => brtParts(x.startedAt).date)).size,
+        lastActivity: new Date(
+          Math.max(...rows.map((x) => (x.completedAt ?? x.startedAt).getTime())),
+        ).toISOString(),
+      };
+    })
+    .sort((a, b) => b.completed - a.completed || a.name.localeCompare(b.name));
 }
 
 function summarizeCycles(
@@ -286,9 +431,7 @@ function summarizeCycles(
   const execution = completed.map((cycle) =>
     validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
   );
-  const waits = selected.map((cycle) =>
-    validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12),
-  );
+  const waits = selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12));
   const within = completed.filter((cycle) => {
     const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
     return duration != null && duration <= cycle.targetMin;
@@ -316,7 +459,7 @@ function summarizeCycles(
     completed: completed.length,
     avgWaitMin: avg(waits),
     avgExecutionMin: avg(execution),
-    withinTargetPct: pct(within, completed.length),
+    withinTargetPct: pct(within, execution.filter((x) => x != null).length),
     peakHour,
     peakCount,
   };
@@ -338,19 +481,26 @@ async function login(): Promise<string> {
   return token;
 }
 
-async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partial: boolean }> {
-  const startMs = Date.now() - days * DAY_MS;
+async function fetchAnswers(
+  days: number,
+): Promise<{ rows: ListoAnswer[]; partial: boolean; fetchedAt: string }> {
+  const today = brtParts(new Date()).date;
+  const startMs = new Date(`${today}T00:00:00-03:00`).getTime() - (days - 1) * DAY_MS;
   if (answersCache && answersCache.expiresAt > Date.now() && answersCache.startMs <= startMs) {
-    return { rows: answersCache.rows, partial: answersCache.partial };
+    return {
+      rows: answersCache.rows,
+      partial: answersCache.partial,
+      fetchedAt: answersCache.fetchedAt,
+    };
   }
 
   const token = await login();
   const nowMs = Date.now();
-  const fmt = (d: Date) => d.toISOString().slice(0, 19);
+  const fmt = (d: Date) => new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 19);
   const pageSize = 500;
   // Mantém folga ampla no limite de subrequests do Worker. Se uma janela diária
   // vier muito carregada, marcamos a amostra como parcial em vez de derrubar a tela.
-  const maxPagesPerWindow = 3;
+  const maxPagesPerWindow = Math.min(3, Math.floor(35 / days));
   const byId = new Map<number, ListoAnswer>();
   let partial = false;
 
@@ -372,7 +522,7 @@ async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partia
           break;
         }
         const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
-        const pageRows = Array.isArray(body) ? body : body.data ?? [];
+        const pageRows = Array.isArray(body) ? body : (body.data ?? []);
         for (const row of pageRows) byId.set(row.id, row);
         if (pageRows.length < pageSize) {
           reachedCap = false;
@@ -389,7 +539,7 @@ async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partia
 
   const rows = Array.from(byId.values());
   if (rows.length === 0 && answersCache?.rows.length) {
-    return { rows: answersCache.rows, partial: true };
+    return { rows: answersCache.rows, partial: true, fetchedAt: answersCache.fetchedAt };
   }
   if (rows.length === 0) {
     throw new Error("Histórico operacional indisponível na origem");
@@ -399,14 +549,15 @@ async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partia
     startMs,
     rows,
     partial,
+    fetchedAt: new Date(nowMs).toISOString(),
   };
-  return { rows, partial };
+  return { rows, partial, fetchedAt: answersCache.fetchedAt };
 }
 
 function validDiffMinutes(start: Date | null, end: Date | null, maxHours = 12): number | null {
   if (!start || !end) return null;
   const diff = Math.round((end.getTime() - start.getTime()) / 60000);
-  if (diff < 0 || diff > maxHours * 60) return null;
+  if (end < start || end.getTime() - start.getTime() > maxHours * 3600000) return null;
   return diff;
 }
 
@@ -430,9 +581,17 @@ function shiftWindow(nowMs: number, offset = 0): { label: string; start: Date; e
   let lengthMin = 8 * 60 + 20;
 
   if (min >= 6 * 60 + 20 && min < 13 * 60 + 40) {
-    startHour = 6; startMinute = 20; label = "Manhã"; dayOffset = 0; lengthMin = 7 * 60 + 20;
+    startHour = 6;
+    startMinute = 20;
+    label = "Manhã";
+    dayOffset = 0;
+    lengthMin = 7 * 60 + 20;
   } else if (min >= 13 * 60 + 40 && min < 22 * 60) {
-    startHour = 13; startMinute = 40; label = "Tarde"; dayOffset = 0; lengthMin = 8 * 60 + 20;
+    startHour = 13;
+    startMinute = 40;
+    label = "Tarde";
+    dayOffset = 0;
+    lengthMin = 8 * 60 + 20;
   }
 
   const startWall = Date.UTC(
@@ -462,9 +621,14 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   if (analyticsCache && analyticsCache.expiresAt > Date.now()) return analyticsCache.value;
   const history = await fetchAnswers(7);
   const raw = history.rows;
-  const rawTerminal = raw.filter(isTerminalBed);
-  const now = new Date();
-  const sevenDaysAgo = now.getTime() - 7 * DAY_MS;
+
+  const now = new Date(history.fetchedAt);
+  const sevenDaysAgo = new Date(`${brtParts(now).date}T00:00:00-03:00`).getTime() - 6 * DAY_MS;
+  const inPeriod = (a: ListoAnswer) => {
+    const anchor = parseBRT(a.startTime) ?? parseBRT(a.date);
+    return anchor != null && anchor.getTime() >= sevenDaysAgo && anchor <= now;
+  };
+  const rawTerminal = raw.filter((a) => isTerminalBed(a) && inPeriod(a));
   const cycles = buildTerminalCycles(rawTerminal).filter(
     (cycle) => cycle.startedAt.getTime() >= sevenDaysAgo,
   );
@@ -485,9 +649,21 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
       date,
       total: selected.length,
       completed: completed.length,
-      avgWaitMin: avg(selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12))),
-      avgExecutionMin: avg(completed.map((cycle) => validDiffMinutes(cycle.startedAt, cycle.completedAt, 6))),
-      withinTargetPct: pct(within, completed.length),
+      avgWaitMin: avg(
+        selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12)),
+      ),
+      avgExecutionMin: avg(
+        completed.map((cycle) => validDiffMinutes(cycle.startedAt, cycle.completedAt, 6)),
+      ),
+      withinTargetPct: pct(
+        within,
+        completed.filter((c) => validDiffMinutes(c.startedAt, c.completedAt, 6) != null).length,
+      ),
+      waitSamples: selected.filter((c) => validDiffMinutes(c.detectedAt, c.startedAt, 12) != null)
+        .length,
+      executionSamples: completed.filter(
+        (c) => validDiffMinutes(c.startedAt, c.completedAt, 6) != null,
+      ).length,
     };
   });
 
@@ -508,9 +684,16 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
         block,
         total: selected.length,
         completed: completed.length,
-        avgWaitMin: avg(selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12))),
-        avgExecutionMin: avg(completed.map((cycle) => validDiffMinutes(cycle.startedAt, cycle.completedAt, 6))),
-        withinTargetPct: pct(within, completed.length),
+        avgWaitMin: avg(
+          selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12)),
+        ),
+        avgExecutionMin: avg(
+          completed.map((cycle) => validDiffMinutes(cycle.startedAt, cycle.completedAt, 6)),
+        ),
+        withinTargetPct: pct(
+          within,
+          completed.filter((c) => validDiffMinutes(c.startedAt, c.completedAt, 6) != null).length,
+        ),
       };
     })
     .sort((a, b) => b.total - a.total);
@@ -538,13 +721,19 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   const forecast = [1, 2, 3].map((ahead) => {
     const hour = (currentHour + ahead) % 24;
     const historical = hourCounts[hour]?.count ?? 0;
-    return { hour, expected: Math.round((historical / distinctDates) * 10) / 10 };
+    return { hour, expected: Math.round((historical / dateKeys.length) * 10) / 10 };
   });
 
   const generalHistory = raw.filter(isTerminalGeneral);
   const generalMap = new Map<
     string,
-    { area: string; unit: string; completed7d: number; days: Set<string>; lastCompletedAt: string | null }
+    {
+      area: string;
+      unit: string;
+      completed7d: number;
+      days: Set<string>;
+      lastCompletedAt: string | null;
+    }
   >();
   const seenGeneralCycles = new Set<string>();
   for (const seed of TERMINAL_GERAL_AREAS) {
@@ -593,13 +782,23 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
       activeDays: x.days.size,
       lastCompletedAt: x.lastCompletedAt,
     }))
-    .sort((a, b) => a.completed7d - b.completed7d || a.activeDays - b.activeDays || a.area.localeCompare(b.area));
+    .sort(
+      (a, b) =>
+        a.completed7d - b.completed7d ||
+        a.activeDays - b.activeDays ||
+        a.area.localeCompare(b.area),
+    );
+
+  const staffActivity = [
+    ...cycles,
+    ...buildTerminalCycles(raw, "desmontagem").filter((c) => c.startedAt.getTime() >= sevenDaysAgo),
+  ];
 
   const recentCycles: AnalyticsCycleRow[] = cycles
     .slice()
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
-    .slice(0, 30)
     .map((cycle) => ({
+      answerIds: cycle.answerIds,
       key: cycle.key,
       bed: cycle.bed,
       unit: cycle.unit,
@@ -613,14 +812,23 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 
   const value: OperationsAnalytics = {
     generatedAt: new Date().toISOString(),
+    periodStart: new Date(sevenDaysAgo).toISOString(),
+    periodEnd: now.toISOString(),
+    excludedRecords: raw.filter(
+      (a) =>
+        inPeriod(a) &&
+        isExcludedUnit([a.sectorName, a.sectorDescription].filter(Boolean).join(" · ")),
+    ).length,
+    staffProductivity: staffSummary(staffActivity),
+    staffActivity: staffActivity.map((c) => ({ ...cycleRow(c), kind: c.kind })),
     days,
     blocks,
     hourly: hourCounts,
     weekdayHour,
     peakHour: peak.count ? peak.hour : null,
     peakCount: peak.count,
-    currentShift: summarizeCycles(cycles, shiftWindow(Date.now(), 0)),
-    previousShift: summarizeCycles(cycles, shiftWindow(Date.now(), -1)),
+    currentShift: summarizeCycles(cycles, shiftWindow(now.getTime(), 0)),
+    previousShift: summarizeCycles(cycles, shiftWindow(now.getTime(), -1)),
     forecast,
     generalAreas,
     totalSample: cycles.length,
@@ -633,12 +841,21 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 }
 
 export async function loadDischargeTimeline(answerId: number): Promise<DischargeTimeline | null> {
-  const history = await fetchAnswers(2);
+  const history = await fetchAnswers(30);
   const a = history.rows.find((row) => row.id === answerId && isTerminalBed(row));
   if (!a) return null;
   const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
-  const status =
-    a.endTime ? "Concluída" : a.startTime ? "Em execução" : a.userName ? "A caminho" : "Aguardando";
+  const status = [4, 7].includes(a.statusAnswer?.id ?? 0)
+    ? "Pausada"
+    : a.statusAnswer?.id === 5
+      ? "Manutenção"
+      : a.endTime
+        ? "Concluída"
+        : a.startTime
+          ? "Em execução"
+          : a.userName
+            ? "A caminho"
+            : "Aguardando";
   return {
     answerId: a.id,
     bed: a.locationName || `Leito ${a.id}`,
@@ -649,5 +866,18 @@ export async function loadDischargeTimeline(answerId: number): Promise<Discharge
     completedAt: parseBRT(a.endTime)?.toISOString() ?? null,
     status,
     reason: extractComment(a.answerComment),
+    samplePartial: history.partial,
+    previous: buildTerminalCycles(history.rows)
+      .filter(
+        (c) =>
+          normalizeKey(c.bed) === normalizeKey(a.locationName || "") &&
+          normalizeKey(c.unit) === normalizeKey(unit) &&
+          !c.answerIds.includes(answerId) &&
+          c.completedAt &&
+          c.completedAt < (parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()),
+      )
+      .sort((x, y) => y.completedAt!.getTime() - x.completedAt!.getTime())
+      .slice(0, 3)
+      .map(cycleRow),
   };
 }

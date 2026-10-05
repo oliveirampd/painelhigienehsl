@@ -1,14 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Activity,
-  BarChart3,
-  Clock3,
-  Gauge,
-  RefreshCw,
-  Sparkles,
-  TimerReset,
-} from "lucide-react";
+import { Activity, BarChart3, Clock3, Gauge, RefreshCw, Sparkles, TimerReset } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -131,8 +123,9 @@ function GestaoPage() {
           <>
             {data.samplePartial && (
               <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
-                A amostra histórica atingiu o limite de paginação em pelo menos uma janela diária.
-                Os indicadores continuam úteis como tendência, mas podem não representar 100% dos registros daquele período.
+                A consulta está parcial por limite de paginação, falha na origem ou uso de cache. Os
+                totais não representam necessariamente todos os registros do período; não use esta
+                amostra como fechamento.
               </div>
             )}
 
@@ -146,18 +139,32 @@ function GestaoPage() {
                 Qualidade dos dados
               </div>
               <div className="mt-1 text-sm text-white/65">
-                A Gestão conta um ciclo apenas uma vez usando <strong className="text-white/85">leito + minuto de início registrado pelo Listo</strong>.
-                Nesta amostra, {data.rawTerminalRecords} linhas brutas foram consolidadas em {data.totalSample} ciclos únicos.
+                A Gestão conta uma alta apenas uma vez usando{" "}
+                <strong className="text-white/85">
+                  unidade + leito + minuto de início registrado pelo Listo
+                </strong>
+                . Nesta amostra, {data.rawTerminalRecords} linhas elegíveis foram consolidadas em{" "}
+                {data.totalSample} Altas. {data.excludedRecords} registros de unidades excluídas
+                ficaram fora da análise de leitos.
               </div>
               <div className="mt-1 text-xs text-white/35">
-                Tempos “Registro → início” usam o horário de origem do Listo; eles não são apresentados como horário clínico de alta.
+                Período:{" "}
+                {new Date(data.periodStart).toLocaleString("pt-BR", {
+                  timeZone: "America/Sao_Paulo",
+                })}{" "}
+                até{" "}
+                {new Date(data.periodEnd).toLocaleString("pt-BR", {
+                  timeZone: "America/Sao_Paulo",
+                })}
+                . Unidades excluídas: 3D, 3C, 12C, 5B, 9C e 13C. Tempos “Registro → início” usam o
+                horário de origem do Listo; eles não são apresentados como horário clínico de alta.
               </div>
             </section>
 
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric
                 icon={<Activity className="h-4 w-4" />}
-                label="Ciclos únicos analisados"
+                label="Altas únicas analisadas"
                 value={String(data.totalSample)}
                 detail={`${data.rawTerminalRecords} linhas brutas deduplicadas`}
               />
@@ -165,7 +172,7 @@ function GestaoPage() {
                 icon={<Clock3 className="h-4 w-4" />}
                 label="Horário de maior volume"
                 value={data.peakHour == null ? "—" : `${String(data.peakHour).padStart(2, "0")}:00`}
-                detail={data.peakCount ? `${data.peakCount} ciclos na faixa` : "sem dados"}
+                detail={data.peakCount ? `${data.peakCount} altas na faixa` : "sem dados"}
               />
               <Metric
                 icon={<Gauge className="h-4 w-4" />}
@@ -180,7 +187,9 @@ function GestaoPage() {
               <Metric
                 icon={<TimerReset className="h-4 w-4" />}
                 label="Registro → início"
-                value={data.currentShift.avgWaitMin == null ? "—" : `${data.currentShift.avgWaitMin} min`}
+                value={
+                  data.currentShift.avgWaitMin == null ? "—" : `${data.currentShift.avgWaitMin} min`
+                }
                 detail="usa horário registrado pelo Listo"
               />
             </section>
@@ -197,42 +206,82 @@ function GestaoPage() {
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {data.forecast.map((x) => (
-                  <div key={x.hour} className="rounded-lg border border-white/10 bg-black/10 px-3 py-3">
+                  <div
+                    key={x.hour}
+                    className="rounded-lg border border-white/10 bg-black/10 px-3 py-3"
+                  >
                     <div className="text-xs uppercase tracking-wide text-white/40">
-                      {String(x.hour).padStart(2, "0")}:00–{String((x.hour + 1) % 24).padStart(2, "0")}:00
+                      {String(x.hour).padStart(2, "0")}:00–
+                      {String((x.hour + 1) % 24).padStart(2, "0")}:00
                     </div>
                     <div className="mt-1 text-3xl font-bold tabular-nums">{x.expected}</div>
-                    <div className="text-xs text-white/40">ciclos iniciados pela média recente</div>
+                    <div className="text-xs text-white/40">altas iniciadas pela média recente</div>
                   </div>
                 ))}
               </div>
             </section>
 
             <section className="grid gap-4 xl:grid-cols-2">
-              <ChartCard title="Ciclos de higiene terminal — últimos 7 dias">
+              <ChartCard title="Altas de higiene terminal — últimos 7 dias">
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={data.days}>
                     <CartesianGrid stroke={chartGrid} vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: chartTick, fontSize: 11 }} />
                     <YAxis tick={{ fill: chartTick, fontSize: 11 }} allowDecimals={false} />
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Bar dataKey="total" name="Ciclos iniciados" fill="oklch(0.74 0.18 230)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="completed" name="Concluídas" fill="oklch(0.72 0.17 155)" radius={[4, 4, 0, 0]} />
+                    <Bar
+                      dataKey="total"
+                      name="Altas iniciadas"
+                      fill="oklch(0.74 0.18 230)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="completed"
+                      name="Concluídas"
+                      fill="oklch(0.72 0.17 155)"
+                      radius={[4, 4, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Tempo médio por dia">
+              <ChartCard title="Tempos das Altas por dia — minutos">
+                <p className="mb-3 text-xs text-white/60">
+                  Laranja: registro Listo → início, agrupado pelo dia de início. Verde: início →
+                  fim, agrupado pelo dia de conclusão. Não mede a saída do paciente nem o
+                  deslocamento. Dias sem duração válida ficam sem ponto.
+                </p>
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={data.days}>
                     <CartesianGrid stroke={chartGrid} vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: chartTick, fontSize: 11 }} />
-                    <YAxis tick={{ fill: chartTick, fontSize: 11 }} />
+                    <YAxis tick={{ fill: chartTick, fontSize: 11 }} unit=" min" width={65} />
                     <Tooltip contentStyle={tooltipStyle} />
-                    <Line type="monotone" dataKey="avgWaitMin" name="Registro → início" stroke="oklch(0.78 0.2 60)" strokeWidth={2} connectNulls />
-                    <Line type="monotone" dataKey="avgExecutionMin" name="Execução" stroke="oklch(0.72 0.17 155)" strokeWidth={2} connectNulls />
+                    <Line
+                      type="monotone"
+                      dataKey="avgWaitMin"
+                      name="Registro → início"
+                      stroke="oklch(0.78 0.2 60)"
+                      strokeWidth={2}
+                      connectNulls={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="avgExecutionMin"
+                      name="Execução"
+                      stroke="oklch(0.72 0.17 155)"
+                      strokeWidth={2}
+                      connectNulls={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-white/60">
+                  {data.days.map((d) => (
+                    <span key={d.date}>
+                      {d.date.slice(5)}: registro n={d.waitSamples}; execução n={d.executionSamples}
+                    </span>
+                  ))}
+                </div>
               </ChartCard>
             </section>
 
@@ -248,7 +297,9 @@ function GestaoPage() {
                   <div className="grid grid-cols-[46px_repeat(24,minmax(24px,1fr))] gap-1 text-[9px] text-white/35">
                     <span />
                     {Array.from({ length: 24 }, (_, h) => (
-                      <span key={h} className="text-center">{h}</span>
+                      <span key={h} className="text-center">
+                        {h}
+                      </span>
                     ))}
                     {WEEKDAYS.map((day, weekday) => (
                       <HeatRow
@@ -286,8 +337,13 @@ function GestaoPage() {
                             className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1"
                             style={{
                               color: BLOCK_COLOR[b.block] ?? "currentColor",
-                              borderColor: (BLOCK_COLOR[b.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.45)"),
-                              backgroundColor: (BLOCK_COLOR[b.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.10)"),
+                              borderColor: (BLOCK_COLOR[b.block] ?? "oklch(0.6 0.03 255)").replace(
+                                ")",
+                                " / 0.45)",
+                              ),
+                              backgroundColor: (
+                                BLOCK_COLOR[b.block] ?? "oklch(0.6 0.03 255)"
+                              ).replace(")", " / 0.10)"),
                             }}
                           >
                             Bloco {b.block}
@@ -295,9 +351,15 @@ function GestaoPage() {
                         </td>
                         <td className="py-2 tabular-nums">{b.total}</td>
                         <td className="py-2 tabular-nums">{b.completed}</td>
-                        <td className="py-2 tabular-nums">{b.avgWaitMin == null ? "—" : `${b.avgWaitMin} min`}</td>
-                        <td className="py-2 tabular-nums">{b.avgExecutionMin == null ? "—" : `${b.avgExecutionMin} min`}</td>
-                        <td className="py-2 tabular-nums">{b.withinTargetPct == null ? "—" : `${b.withinTargetPct}%`}</td>
+                        <td className="py-2 tabular-nums">
+                          {b.avgWaitMin == null ? "—" : `${b.avgWaitMin} min`}
+                        </td>
+                        <td className="py-2 tabular-nums">
+                          {b.avgExecutionMin == null ? "—" : `${b.avgExecutionMin} min`}
+                        </td>
+                        <td className="py-2 tabular-nums">
+                          {b.withinTargetPct == null ? "—" : `${b.withinTargetPct}%`}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -308,19 +370,21 @@ function GestaoPage() {
             <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
               <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                 <div>
-                  <h2 className="font-bold">Auditoria dos ciclos recentes</h2>
+                  <h2 className="font-bold">Auditoria dos altas recentes</h2>
                   <p className="text-xs text-white/40">
-                    Os mesmos ciclos únicos usados nos indicadores acima. Esta tabela permite conferir leito por leito.
+                    Os mesmos altas únicas usados nos indicadores acima. Esta tabela permite
+                    conferir leito por leito.
                   </p>
                 </div>
                 <span className="text-[10px] uppercase tracking-widest text-white/30">
-                  últimos {Math.min(30, data.recentCycles.length)}
+                  {data.recentCycles.length} Altas no período
                 </span>
               </div>
               <div className="max-h-[420px] overflow-auto rounded-lg border border-white/[0.06]">
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="sticky top-0 bg-[oklch(0.18_0.025_265)] text-left text-[10px] uppercase tracking-wide text-white/35">
                     <tr>
+                      <th className="px-3 py-2">IDs Listo</th>
                       <th className="px-3 py-2">Leito</th>
                       <th className="px-3 py-2">Bloco</th>
                       <th className="px-3 py-2">Início</th>
@@ -333,7 +397,10 @@ function GestaoPage() {
                   <tbody>
                     {data.recentCycles.map((cycle) => (
                       <tr key={cycle.key} className="border-t border-white/[0.05]">
-                        <td className="px-3 py-2 font-semibold">{cycle.bed}</td>
+                        <td className="px-3 py-2 text-xs">{cycle.answerIds.join(", ")}</td>
+                        <td className="px-3 py-2 font-semibold" title={cycle.unit}>
+                          {cycle.bed}
+                        </td>
                         <td className="px-3 py-2">
                           {cycle.block === "Outro" ? (
                             <span className="text-white/45">—</span>
@@ -342,8 +409,12 @@ function GestaoPage() {
                               className="inline-flex min-w-7 justify-center rounded-md border px-1.5 py-0.5 font-semibold"
                               style={{
                                 color: BLOCK_COLOR[cycle.block] ?? "currentColor",
-                                borderColor: (BLOCK_COLOR[cycle.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.45)"),
-                                backgroundColor: (BLOCK_COLOR[cycle.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.10)"),
+                                borderColor: (
+                                  BLOCK_COLOR[cycle.block] ?? "oklch(0.6 0.03 255)"
+                                ).replace(")", " / 0.45)"),
+                                backgroundColor: (
+                                  BLOCK_COLOR[cycle.block] ?? "oklch(0.6 0.03 255)"
+                                ).replace(")", " / 0.10)"),
                               }}
                             >
                               {cycle.block}
@@ -374,7 +445,10 @@ function GestaoPage() {
                         <td className="px-3 py-2 tabular-nums text-white/65">
                           {cycle.waitMin == null ? "—" : `${cycle.waitMin} min`}
                         </td>
-                        <td className="max-w-[220px] truncate px-3 py-2 text-white/60" title={cycle.staff ?? ""}>
+                        <td
+                          className="max-w-[220px] truncate px-3 py-2 text-white/60"
+                          title={cycle.staff ?? ""}
+                        >
                           {cycle.staff ?? "—"}
                         </td>
                       </tr>
@@ -385,29 +459,95 @@ function GestaoPage() {
             </section>
 
             <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
-              <div className="mb-3">
-                <h2 className="font-bold">Áreas comuns — menor recorrência recente</h2>
-                <p className="text-xs text-white/40">
-                  Áreas com menos registros concluídos na amostra recente do Listo. É um sinal para investigação, não uma classificação automática de falha.
-                </p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {data.generalAreas.slice(0, 9).map((area) => (
-                  <div key={`${area.unit}|${area.area}`} className="rounded-lg border border-white/10 bg-black/10 p-3">
-                    <div className="truncate text-sm font-semibold" title={area.area}>{area.area}</div>
-                    <div className="mt-0.5 truncate text-[11px] text-white/35" title={area.unit}>{area.unit}</div>
-                    <div className="mt-2 flex items-end justify-between">
+              <h2 className="font-bold">Produtividade de colaboradores</h2>
+              <p className="mt-1 text-xs text-white/60">
+                Mesmo período e exclusões das Altas. Volumes de execuções únicas iniciadas;
+                conclusões pertencem a essas execuções. Sem ranking de velocidade: blocos e tipos de
+                leito têm complexidades diferentes.
+              </p>
+              <p className="mt-2 text-xs text-amber-100">
+                A caminho → início: indisponível no histórico Listo. O horário de registro não
+                comprova quando o colaborador foi alocado. Tempos inválidos ou ausentes não entram
+                na média: execução até 6h; registro até 12h. Pausados e manutenção não contam como
+                concluídos. Nomes divergentes ficam em grupo separado.
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {data.staffProductivity.map((person) => (
+                  <article
+                    key={person.name}
+                    className="min-w-0 rounded-lg border border-white/10 bg-black/10 p-3"
+                  >
+                    <h3 className="break-words font-semibold">{person.name}</h3>
+                    <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                       <div>
-                        <div className="text-2xl font-bold tabular-nums">{area.completed7d}</div>
-                        <div className="text-[10px] uppercase tracking-wide text-white/35">registros concluídos</div>
+                        <dt className="text-xs text-white/60">Altas iniciadas / concluídas</dt>
+                        <dd className="font-bold">
+                          {person.altas} / {person.completed}
+                        </dd>
                       </div>
-                      <div className="text-right text-xs text-white/40">
-                        {area.activeDays} dia(s)<br />com registro
+                      <div>
+                        <dt className="text-xs text-white/60">Desmontagens / concluídas</dt>
+                        <dd className="font-bold">
+                          {person.dismantles} / {person.dismantlesCompleted}
+                        </dd>
                       </div>
-                    </div>
-                  </div>
+                      <div>
+                        <dt className="text-xs text-white/60">Execução média / mediana</dt>
+                        <dd>
+                          {person.avgExecutionMin ?? "—"} / {person.medianExecutionMin ?? "—"} min
+                        </dd>
+                        <small className="text-white/60">n={person.executionSamples}</small>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-white/60">Desmontagem média</dt>
+                        <dd>{person.avgDismantleMin ?? "—"} min</dd>
+                        <small className="text-white/60">n={person.dismantleSamples}</small>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-white/60">Registro → início médio</dt>
+                        <dd>{person.avgRegistrationMin ?? "—"} min</dd>
+                        <small className="text-white/60">n={person.registrationSamples}</small>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-white/60">Dentro da meta do leito</dt>
+                        <dd>
+                          {person.withinTargetPct == null ? "—" : `${person.withinTargetPct}%`}
+                        </dd>
+                        <small className="text-white/60">
+                          base: {person.executionSamples} durações válidas
+                        </small>
+                      </div>
+                    </dl>
+                    <p className="mt-3 text-xs text-white/60">
+                      {person.activeDays} dia(s) com atividade · última:{" "}
+                      {new Date(person.lastActivity).toLocaleString("pt-BR", {
+                        timeZone: "America/Sao_Paulo",
+                      })}
+                    </p>
+                    <details className="mt-2 text-xs">
+                      <summary className="cursor-pointer text-white/60">
+                        Conferir atividades e IDs de origem
+                      </summary>
+                      <ul className="mt-2 space-y-1">
+                        {data.staffActivity
+                          .filter((x) => (x.staff || "Sem colaborador informado") === person.name)
+                          .map((x) => (
+                            <li className="break-words" key={x.key}>
+                              {x.kind === "alta" ? "Alta" : "Desmontagem"} · {x.bed} · {x.unit} ·{" "}
+                              {new Date(x.startedAt).toLocaleString("pt-BR", {
+                                timeZone: "America/Sao_Paulo",
+                              })}{" "}
+                              · IDs {x.answerIds.join(", ")}
+                            </li>
+                          ))}
+                      </ul>
+                    </details>
+                  </article>
                 ))}
               </div>
+              {!data.staffProductivity.length && (
+                <p className="mt-3 text-sm text-white/60">Nenhuma execução elegível no período.</p>
+              )}
             </section>
           </>
         ) : (
@@ -462,25 +602,48 @@ function ShiftCard({
           <h2 className="mt-0.5 text-lg font-bold">{summary.label}</h2>
         </div>
         <div className="text-right text-xs text-white/35">
-          {new Date(summary.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+          {new Date(summary.start).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "America/Sao_Paulo",
+          })}
           {" → "}
-          {new Date(summary.end).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+          {new Date(summary.end).toLocaleTimeString("pt-BR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "America/Sao_Paulo",
+          })}
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Mini label="Ciclos iniciados" value={summary.total} />
+        <Mini label="Altas iniciadas" value={summary.total} />
         <Mini label="Conclusões no turno" value={summary.completed} />
-        <Mini label="Reg. → início" value={summary.avgWaitMin == null ? "—" : `${summary.avgWaitMin}m`} />
-        <Mini label="Execução" value={summary.avgExecutionMin == null ? "—" : `${summary.avgExecutionMin}m`} />
-        <Mini label="Meta execução" value={summary.withinTargetPct == null ? "—" : `${summary.withinTargetPct}%`} />
+        <Mini
+          label="Reg. → início"
+          value={summary.avgWaitMin == null ? "—" : `${summary.avgWaitMin}m`}
+        />
+        <Mini
+          label="Execução"
+          value={summary.avgExecutionMin == null ? "—" : `${summary.avgExecutionMin}m`}
+        />
+        <Mini
+          label="Meta execução"
+          value={summary.withinTargetPct == null ? "—" : `${summary.withinTargetPct}%`}
+        />
       </div>
       <div className="mt-3 rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-xs leading-relaxed text-white/45">
-        Resumo automático: {summary.total} ciclos iniciados e {summary.completed} conclusões dentro da janela do turno
-        {summary.avgExecutionMin == null ? "" : `, execução média de ${summary.avgExecutionMin} min`}
-        {summary.withinTargetPct == null ? "" : ` e ${summary.withinTargetPct}% dentro da meta de execução`}.
+        Resumo automático: {summary.total} altas iniciadas e {summary.completed} conclusões dentro
+        da janela do turno
+        {summary.avgExecutionMin == null
+          ? ""
+          : `, execução média de ${summary.avgExecutionMin} min`}
+        {summary.withinTargetPct == null
+          ? ""
+          : ` e ${summary.withinTargetPct}% dentro da meta de execução`}
+        .
         {summary.peakHour == null
           ? ""
-          : ` Pico às ${String(summary.peakHour).padStart(2, "0")}:00, com ${summary.peakCount} ciclos iniciados na faixa.`}
+          : ` Pico às ${String(summary.peakHour).padStart(2, "0")}:00, com ${summary.peakCount} altas iniciadas na faixa.`}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { isExcludedUnit } from "@/lib/operationalScope";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -48,23 +49,7 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-// Unidades excluídas, no formato { andar, bloco } — ex: 5º Andar, Bloco B.
-// Cobre textos como "Bloco B 05º Andar" ou "Bloco B 5º Andar · Ala X".
-const EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
-  { floor: 3, block: "D" },
-  { floor: 3, block: "C" },
-  { floor: 12, block: "C" },
-  { floor: 5, block: "B" },
-];
-
-function isExcluded(d: Discharge): boolean {
-  const u = (d.unit || "").toUpperCase();
-  const m = u.match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
-  if (!m) return false;
-  const block = m[1];
-  const floor = parseInt(m[2], 10);
-  return EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
-}
+const isExcluded = (d: Discharge) => isExcludedUnit(d.unit || "");
 
 const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

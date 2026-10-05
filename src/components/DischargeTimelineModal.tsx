@@ -39,10 +39,13 @@ export function DischargeTimelineModal({
   onClose: () => void;
 }) {
   const [timeline, setTimeline] = useState<DischargeTimeline | null>(null);
+  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    setTimeline(null);
+    setError(false);
     const answerId = discharge.last_answer_id;
     if (!answerId) return;
     setLoading(true);
@@ -50,7 +53,10 @@ export function DischargeTimelineModal({
       .then((result) => {
         if (alive) setTimeline(result);
       })
-      .catch((err) => console.error(err))
+      .catch((err) => {
+        console.error(err);
+        if (alive) setError(true);
+      })
       .finally(() => {
         if (alive) setLoading(false);
       });
@@ -59,16 +65,21 @@ export function DischargeTimelineModal({
     };
   }, [discharge.last_answer_id]);
 
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [onClose]);
+
   const effectiveStaff = staffName || timeline?.staff || null;
   const detectedAt = timeline?.detectedAt ?? null;
   const startedAt =
     timeline?.startedAt ??
     (discharge.status === "in_progress" ? discharge.status_updated_at : null);
 
-  const timeToStart = useMemo(
-    () => diffMinutes(detectedAt, startedAt),
-    [detectedAt, startedAt],
-  );
+  const timeToStart = useMemo(() => diffMinutes(detectedAt, startedAt), [detectedAt, startedAt]);
   const executionMinutes = useMemo(() => {
     if (!startedAt || discharge.status !== "in_progress") return null;
     return diffMinutes(startedAt, new Date(nowMs).toISOString());
@@ -89,6 +100,9 @@ export function DischargeTimelineModal({
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Visão operacional do leito"
         className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 shadow-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -106,6 +120,7 @@ export function DischargeTimelineModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Fechar detalhes do leito"
             className="rounded-full p-1.5 text-white/45 hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
@@ -158,6 +173,66 @@ export function DischargeTimelineModal({
           />
         </div>
 
+        <section className="mt-4 rounded-xl border border-white/10 p-3">
+          <h4 className="font-semibold">3 Altas anteriores deste leito</h4>
+          <p className="mt-1 text-xs text-white/60">
+            Concluídas antes desta Alta, na mesma unidade. Consulta dos últimos 30 dias; horários de
+            Brasília.
+          </p>
+          {loading ? (
+            <p className="mt-2 text-sm">Carregando histórico…</p>
+          ) : error ? (
+            <p className="mt-2 text-sm text-amber-100">
+              Não foi possível consultar o histórico agora.
+            </p>
+          ) : !timeline ? (
+            <p className="mt-2 text-sm text-white/60">
+              Registro atual não localizado no histórico consultado.
+            </p>
+          ) : !timeline.previous.length ? (
+            <p className="mt-2 text-sm text-white/60">
+              Nenhuma Alta anterior concluída encontrada nesta janela.
+            </p>
+          ) : (
+            timeline.previous.map((row) => (
+              <article key={row.key} className="mt-3 rounded-lg bg-black/10 p-3 text-sm">
+                <div className="font-semibold">
+                  {new Date(row.startedAt).toLocaleDateString("pt-BR", {
+                    timeZone: "America/Sao_Paulo",
+                  })}{" "}
+                  · {row.staff || "Colaborador não informado"}
+                </div>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  <span>Início: {formatClockTime(row.startedAt)}</span>
+                  <span>
+                    Fim:{" "}
+                    {row.completedAt
+                      ? new Date(row.completedAt).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: "America/Sao_Paulo",
+                        })
+                      : "—"}
+                  </span>
+                  <span>Duração: {durationLabel(row.executionMin)}</span>
+                </div>
+                <div className="mt-1 break-words text-xs text-white/60">
+                  IDs Listo: {row.answerIds.join(", ")}
+                  {row.executionMin == null
+                    ? " · duração ausente ou fora da faixa válida (0–6h)"
+                    : ""}
+                </div>
+              </article>
+            ))
+          )}
+          {timeline?.samplePartial && (
+            <p className="mt-2 text-xs text-amber-100">
+              Histórico parcial: pode haver Altas anteriores não retornadas pela origem.
+            </p>
+          )}
+        </section>
         <div className="mt-4 space-y-2">
           <EventRow
             icon={<Clock3 className="h-4 w-4" />}
@@ -189,9 +264,7 @@ export function DischargeTimelineModal({
 
         {(timeline?.reason || discharge.pause_reason) && (
           <div className="mt-4 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-amber-100/45">
-              Observação
-            </div>
+            <div className="text-[10px] uppercase tracking-wide text-amber-100/45">Observação</div>
             <div className="mt-1 text-sm text-amber-50/80">
               {timeline?.reason ?? discharge.pause_reason}
             </div>
