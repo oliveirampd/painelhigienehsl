@@ -1528,12 +1528,12 @@ const TIME_ALTAS_STYLE: Record<TimeAltasKind, { bg: string; border: string; text
     text: "oklch(0.82 0.21 55)",
   },
   almoco: {
-    bg: "oklch(0.42 0.18 55 / 0.35)",
+    bg: "oklch(0.78 0.20 65 / 0.15)",
     border: "oklch(0.72 0.21 55 / 0.55)",
     text: "oklch(0.82 0.21 55)",
   },
   jantar: {
-    bg: "oklch(0.42 0.18 55 / 0.35)",
+    bg: "oklch(0.78 0.20 65 / 0.15)",
     border: "oklch(0.72 0.21 55 / 0.55)",
     text: "oklch(0.82 0.21 55)",
   },
