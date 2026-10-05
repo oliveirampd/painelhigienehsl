@@ -552,6 +552,7 @@ function DiariaPage() {
                             floor={floor}
                             events={byBed.get(b.n)}
                             altaStatus={altaByBed.get(b.n)}
+                            isDark={isDark}
                             onSelect={() => setSelectedBed({ bed: b.n, events: byBed.get(b.n) })}
                           />
                         ))}
@@ -676,12 +677,10 @@ function Legenda({ color, text }: { color: string; text: string }) {
 function LegendaSplit({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span
-        className="h-2 w-2 rounded-full"
-        style={{
-          background: "linear-gradient(90deg, oklch(0.72 0.16 235) 50%, oklch(0.75 0.17 55) 50%)",
-        }}
-      />
+      <span className="flex h-2 w-3 overflow-hidden rounded-sm">
+        <span className="h-full w-1/2" style={{ background: CONCORRENTE_COLOR }} />
+        <span className="h-full w-1/2" style={{ background: CAMAREIRA_COLOR }} />
+      </span>
       {text}
     </span>
   );
@@ -807,6 +806,7 @@ function BedTile({
   floor,
   events,
   altaStatus,
+  isDark,
   onSelect,
 }: {
   bed: string;
@@ -814,6 +814,7 @@ function BedTile({
   floor: number;
   events: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent } | undefined;
   altaStatus?: "waiting_cleaning" | "in_progress";
+  isDark: boolean;
   onSelect?: () => void;
 }) {
   const c = events?.concorrente;
@@ -871,14 +872,18 @@ function BedTile({
         : null;
 
   const background = altaColor
-    ? altaColor.replace(")", " / 0.3)")
+    ? altaColor.replace(")", isDark ? " / 0.24)" : " / 0.12)")
     : both
-      ? `linear-gradient(90deg, ${CONCORRENTE_COLOR.replace(")", " / 0.28)")} 50%, ${CAMAREIRA_COLOR.replace(")", " / 0.28)")} 50%)`
+      ? isDark
+        ? "oklch(0.22 0.025 260)"
+        : "oklch(1 0 0)"
       : hasC
-        ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.22)" : " / 0.14)")
+        ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.18)" : " / 0.10)")
         : hasK
-          ? CAMAREIRA_COLOR.replace(")", activeK ? " / 0.22)" : " / 0.14)")
-          : SEM_ROTINA_COLOR.replace(")", " / 0.14)");
+          ? CAMAREIRA_COLOR.replace(")", activeK ? " / 0.18)" : " / 0.10)")
+          : isDark
+            ? SEM_ROTINA_COLOR.replace(")", " / 0.12)")
+            : "oklch(0.965 0.006 250)";
 
   const borderColor = altaColor
     ? altaColor.replace(")", " / 0.8)")
@@ -890,11 +895,15 @@ function BedTile({
           ? CAMAREIRA_COLOR.replace(")", " / 0.65)")
           : SEM_ROTINA_COLOR.replace(")", " / 0.65)");
 
-  const textColor = altaColor
-    ? "oklch(0.98 0.005 260)"
-    : hasC || hasK
+  const textColor = isDark
+    ? altaColor || hasC || hasK
       ? "oklch(0.97 0.005 260)"
-      : SEM_ROTINA_COLOR;
+      : "oklch(0.74 0.02 255)"
+    : "oklch(0.20 0.025 255)";
+
+  const splitShadow = both
+    ? `inset 4px 0 0 ${CONCORRENTE_COLOR}, inset -4px 0 0 ${CAMAREIRA_COLOR}`
+    : undefined;
 
   return (
     <div className="flex flex-col items-center gap-0.5">
@@ -928,18 +937,29 @@ function BedTile({
           borderColor,
           background,
           color: textColor,
-          boxShadow: anyActive
-            ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.55)")}`
-            : undefined,
+          boxShadow: [
+            splitShadow,
+            anyActive
+              ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.45)")}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(", ") || undefined,
         }}
       >
         <span className="font-semibold tabular-nums leading-none">{bed}</span>
         <span className="mt-1 flex h-4 items-center justify-center gap-1">
           {altaStatus === "waiting_cleaning" && (
-            <span className="h-2 w-2 rounded-full" style={{ background: "white" }} />
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: isDark ? "white" : "oklch(0.25 0.03 255)" }}
+            />
           )}
           {altaStatus === "in_progress" && (
-            <BrushCleaning className="h-3.5 w-3.5 animate-sweep" style={{ color: "white" }} />
+            <BrushCleaning
+              className="h-3.5 w-3.5 animate-sweep"
+              style={{ color: isDark ? "white" : "oklch(0.25 0.03 255)" }}
+            />
           )}
           {!altaColor && activeK && (
             <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />
