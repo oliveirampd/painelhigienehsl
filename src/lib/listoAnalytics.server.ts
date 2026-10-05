@@ -58,6 +58,18 @@ export type GeneralAreaTrend = {
   lastCompletedAt: string | null;
 };
 
+type TerminalCycle = {
+  key: string;
+  bed: string;
+  unit: string;
+  block: string;
+  detectedAt: Date | null;
+  startedAt: Date;
+  completedAt: Date | null;
+  staff: string | null;
+  targetMin: number;
+};
+
 export type OperationsAnalytics = {
   generatedAt: string;
   days: AnalyticsDay[];
@@ -71,6 +83,7 @@ export type OperationsAnalytics = {
   forecast: Array<{ hour: number; expected: number }>;
   generalAreas: GeneralAreaTrend[];
   totalSample: number;
+  rawTerminalRecords: number;
   samplePartial: boolean;
 };
 
@@ -181,6 +194,114 @@ function targetMinutes(a: ListoAnswer): number {
   if (block === "B") return 45;
   if (block === "D" || block === "E") return suites.has(bed) ? 135 : 75;
   return 75;
+}
+
+function minDate(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a <= b ? a : b;
+}
+
+function maxDate(a: Date | null, b: Date | null): Date | null {
+  if (!a) return b;
+  if (!b) return a;
+  return a >= b ? a : b;
+}
+
+/**
+ * O endpoint all-answers pode devolver várias linhas para a mesma execução no
+ * mesmo leito. Para gestão, uma "alta" só vira um ciclo mensurável quando há
+ * startTime. A identidade do ciclo é leito + minuto de início registrado pelo
+ * Listo; linhas duplicadas desse mesmo ciclo são consolidadas.
+ */
+function buildTerminalCycles(rows: ListoAnswer[]): TerminalCycle[] {
+  const grouped = new Map<string, TerminalCycle>();
+
+  for (const a of rows) {
+    if (!isTerminalBed(a)) continue;
+    const startedAt = parseBRT(a.startTime);
+    if (!startedAt) continue;
+
+    const bed = (a.locationName || `Leito ${a.id}`).trim();
+    const startMinute = Math.floor(startedAt.getTime() / 60000);
+    const key = `${normalizeKey(bed)}|${startMinute}`;
+    const detectedAt = parseBRT(a.date);
+    const completedAt = parseBRT(a.endTime);
+    const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
+    const staff = a.userName?.trim() || null;
+
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, {
+        key,
+        bed,
+        unit,
+        block: blockOf(a),
+        detectedAt,
+        startedAt,
+        completedAt,
+        staff,
+        targetMin: targetMinutes(a),
+      });
+      continue;
+    }
+
+    current.detectedAt = minDate(current.detectedAt, detectedAt);
+    current.completedAt = maxDate(current.completedAt, completedAt);
+    if (!current.staff && staff) current.staff = staff;
+    if (current.unit === "—" && unit !== "—") current.unit = unit;
+  }
+
+  return Array.from(grouped.values()).sort(
+    (a, b) => a.startedAt.getTime() - b.startedAt.getTime(),
+  );
+}
+
+function summarizeCycles(
+  cycles: TerminalCycle[],
+  window: { label: string; start: Date; end: Date },
+): ShiftSummary {
+  const selected = cycles.filter(
+    (cycle) => cycle.startedAt >= window.start && cycle.startedAt < window.end,
+  );
+  const completed = selected.filter((cycle) => !!cycle.completedAt);
+  const execution = completed.map((cycle) =>
+    validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
+  );
+  const waits = selected.map((cycle) =>
+    validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12),
+  );
+  const within = completed.filter((cycle) => {
+    const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
+    return duration != null && duration <= cycle.targetMin;
+  }).length;
+
+  const hourCounts = new Map<number, number>();
+  for (const cycle of selected) {
+    const h = brtParts(cycle.startedAt).hour;
+    hourCounts.set(h, (hourCounts.get(h) ?? 0) + 1);
+  }
+  let peakHour: number | null = null;
+  let peakCount = 0;
+  for (const [hour, count] of hourCounts) {
+    if (count > peakCount) {
+      peakHour = hour;
+      peakCount = count;
+    }
+  }
+
+  return {
+    label: window.label,
+    start: window.start.toISOString(),
+    end: window.end.toISOString(),
+    total: selected.length,
+    completed: completed.length,
+    avgWaitMin: avg(waits),
+    avgExecutionMin: avg(execution),
+    withinTargetPct: pct(within, completed.length),
+    peakHour,
+    peakCount,
+  };
 }
 
 async function login(): Promise<string> {
@@ -305,97 +426,56 @@ function shiftWindow(nowMs: number, offset = 0): { label: string; start: Date; e
   return { label, start, end };
 }
 
-function summarizeShift(rows: ListoAnswer[], window: { label: string; start: Date; end: Date }): ShiftSummary {
-  const selected = rows.filter((a) => {
-    const detected = parseBRT(a.date) ?? parseBRT(a.startTime) ?? parseBRT(a.endTime);
-    return detected && detected >= window.start && detected < window.end;
-  });
-  const completed = selected.filter((a) => !!parseBRT(a.endTime));
-  const execution = completed.map((a) => validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6));
-  const waits = selected.map((a) => validDiffMinutes(parseBRT(a.date), parseBRT(a.startTime), 12));
-  const within = completed.filter((a) => {
-    const duration = validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6);
-    return duration != null && duration <= targetMinutes(a);
-  }).length;
-  const hourCounts = new Map<number, number>();
-  for (const a of selected) {
-    const at = parseBRT(a.date) ?? parseBRT(a.startTime);
-    if (!at) continue;
-    const h = brtParts(at).hour;
-    hourCounts.set(h, (hourCounts.get(h) ?? 0) + 1);
-  }
-  let peakHour: number | null = null;
-  let peakCount = 0;
-  for (const [hour, count] of hourCounts) {
-    if (count > peakCount) {
-      peakHour = hour;
-      peakCount = count;
-    }
-  }
-  return {
-    label: window.label,
-    start: window.start.toISOString(),
-    end: window.end.toISOString(),
-    total: selected.length,
-    completed: completed.length,
-    avgWaitMin: avg(waits),
-    avgExecutionMin: avg(execution),
-    withinTargetPct: pct(within, completed.length),
-    peakHour,
-    peakCount,
-  };
-}
-
 export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   if (analyticsCache && analyticsCache.expiresAt > Date.now()) return analyticsCache.value;
   const history = await fetchAnswers(8);
   const raw = history.rows;
-  const rows = raw.filter(isTerminalBed);
+  const rawTerminal = raw.filter(isTerminalBed);
   const now = new Date();
+  const sevenDaysAgo = now.getTime() - 7 * DAY_MS;
+  const cycles = buildTerminalCycles(rawTerminal).filter(
+    (cycle) => cycle.startedAt.getTime() >= sevenDaysAgo,
+  );
 
   const dateKeys: string[] = [];
   for (let i = 6; i >= 0; i--) dateKeys.push(brtParts(new Date(now.getTime() - i * DAY_MS)).date);
 
   const days: AnalyticsDay[] = dateKeys.map((date) => {
-    const selected = rows.filter((a) => {
-      const at = parseBRT(a.date) ?? parseBRT(a.startTime) ?? parseBRT(a.endTime);
-      return at ? brtParts(at).date === date : false;
-    });
-    const completed = selected.filter((a) => !!parseBRT(a.endTime));
-    const within = completed.filter((a) => {
-      const duration = validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6);
-      return duration != null && duration <= targetMinutes(a);
+    const selected = cycles.filter((cycle) => brtParts(cycle.startedAt).date === date);
+    const completed = selected.filter((cycle) => !!cycle.completedAt);
+    const within = completed.filter((cycle) => {
+      const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
+      return duration != null && duration <= cycle.targetMin;
     }).length;
     return {
       date,
       total: selected.length,
       completed: completed.length,
-      avgWaitMin: avg(selected.map((a) => validDiffMinutes(parseBRT(a.date), parseBRT(a.startTime), 12))),
-      avgExecutionMin: avg(completed.map((a) => validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6))),
+      avgWaitMin: avg(selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12))),
+      avgExecutionMin: avg(completed.map((cycle) => validDiffMinutes(cycle.startedAt, cycle.completedAt, 6))),
       withinTargetPct: pct(within, completed.length),
     };
   });
 
-  const blockMap = new Map<string, ListoAnswer[]>();
-  for (const a of rows) {
-    const block = blockOf(a);
-    const list = blockMap.get(block) ?? [];
-    list.push(a);
-    blockMap.set(block, list);
+  const blockMap = new Map<string, TerminalCycle[]>();
+  for (const cycle of cycles) {
+    const list = blockMap.get(cycle.block) ?? [];
+    list.push(cycle);
+    blockMap.set(cycle.block, list);
   }
   const blocks: AnalyticsBlock[] = Array.from(blockMap.entries())
     .map(([block, selected]) => {
-      const completed = selected.filter((a) => !!parseBRT(a.endTime));
-      const within = completed.filter((a) => {
-        const duration = validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6);
-        return duration != null && duration <= targetMinutes(a);
+      const completed = selected.filter((cycle) => !!cycle.completedAt);
+      const within = completed.filter((cycle) => {
+        const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
+        return duration != null && duration <= cycle.targetMin;
       }).length;
       return {
         block,
         total: selected.length,
         completed: completed.length,
-        avgWaitMin: avg(selected.map((a) => validDiffMinutes(parseBRT(a.date), parseBRT(a.startTime), 12))),
-        avgExecutionMin: avg(completed.map((a) => validDiffMinutes(parseBRT(a.startTime), parseBRT(a.endTime), 6))),
+        avgWaitMin: avg(selected.map((cycle) => validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12))),
+        avgExecutionMin: avg(completed.map((cycle) => validDiffMinutes(cycle.startedAt, cycle.completedAt, 6))),
         withinTargetPct: pct(within, completed.length),
       };
     })
@@ -403,10 +483,8 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 
   const hourCounts = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
   const weekdayMap = new Map<string, number>();
-  for (const a of rows) {
-    const at = parseBRT(a.date) ?? parseBRT(a.startTime);
-    if (!at) continue;
-    const p = brtParts(at);
+  for (const cycle of cycles) {
+    const p = brtParts(cycle.startedAt);
     hourCounts[p.hour].count += 1;
     const key = `${p.weekday}|${p.hour}`;
     weekdayMap.set(key, (weekdayMap.get(key) ?? 0) + 1);
@@ -418,10 +496,10 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   });
   const peak = hourCounts.reduce((best, h) => (h.count > best.count ? h : best), hourCounts[0]);
 
-  const distinctDates = Math.max(1, new Set(rows.map((a) => {
-    const at = parseBRT(a.date) ?? parseBRT(a.startTime);
-    return at ? brtParts(at).date : "";
-  }).filter(Boolean)).size);
+  const distinctDates = Math.max(
+    1,
+    new Set(cycles.map((cycle) => brtParts(cycle.startedAt).date)).size,
+  );
   const currentHour = brtParts(now).hour;
   const forecast = [1, 2, 3].map((ahead) => {
     const hour = (currentHour + ahead) % 24;
@@ -434,6 +512,7 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     string,
     { area: string; unit: string; completed7d: number; days: Set<string>; lastCompletedAt: string | null }
   >();
+  const seenGeneralCycles = new Set<string>();
   for (const seed of TERMINAL_GERAL_AREAS) {
     const key = `${normalizeKey(seed.unit)}|${normalizeKey(seed.area)}`;
     generalMap.set(key, {
@@ -456,10 +535,16 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
       days: new Set<string>(),
       lastCompletedAt: null,
     };
+    const start = parseBRT(a.startTime);
     const end = parseBRT(a.endTime);
     if (end) {
-      cur.completed7d += 1;
-      cur.days.add(brtParts(end).date);
+      const anchor = start ?? end;
+      const cycleKey = `${key}|${Math.floor(anchor.getTime() / 60000)}`;
+      if (!seenGeneralCycles.has(cycleKey)) {
+        seenGeneralCycles.add(cycleKey);
+        cur.completed7d += 1;
+        cur.days.add(brtParts(end).date);
+      }
       if (!cur.lastCompletedAt || end > new Date(cur.lastCompletedAt)) {
         cur.lastCompletedAt = end.toISOString();
       }
@@ -484,11 +569,12 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     weekdayHour,
     peakHour: peak.count ? peak.hour : null,
     peakCount: peak.count,
-    currentShift: summarizeShift(rows, shiftWindow(Date.now(), 0)),
-    previousShift: summarizeShift(rows, shiftWindow(Date.now(), -1)),
+    currentShift: summarizeCycles(cycles, shiftWindow(Date.now(), 0)),
+    previousShift: summarizeCycles(cycles, shiftWindow(Date.now(), -1)),
     forecast,
     generalAreas,
-    totalSample: rows.length,
+    totalSample: cycles.length,
+    rawTerminalRecords: rawTerminal.length,
     samplePartial: history.partial,
   };
   analyticsCache = { expiresAt: Date.now() + 5 * 60 * 1000, value };
