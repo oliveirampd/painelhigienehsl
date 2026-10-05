@@ -61,42 +61,6 @@ export type Database = {
           },
         ];
       };
-      last_completed_discharges: {
-        Row: {
-          bed_key: string;
-          bed_number: string;
-          completed_at: string;
-          duration_minutes: number | null;
-          recorded_at: string;
-          source_answer_id: number;
-          staff_name: string | null;
-          started_at: string | null;
-          unit: string;
-        };
-        Insert: {
-          bed_key: string;
-          bed_number: string;
-          completed_at: string;
-          duration_minutes?: number | null;
-          recorded_at?: string;
-          source_answer_id: number;
-          staff_name?: string | null;
-          started_at?: string | null;
-          unit: string;
-        };
-        Update: {
-          bed_key?: string;
-          bed_number?: string;
-          completed_at?: string;
-          duration_minutes?: number | null;
-          recorded_at?: string;
-          source_answer_id?: number;
-          staff_name?: string | null;
-          started_at?: string | null;
-          unit?: string;
-        };
-        Relationships: [];
-      };
       staff: {
         Row: {
           created_at: string;

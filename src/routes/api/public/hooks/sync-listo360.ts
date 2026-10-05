@@ -363,23 +363,24 @@ async function handle() {
     }
 
     // Mantém somente a última Alta realmente concluída de cada unidade + leito.
-    // A tabela é um snapshot substituível: o volume máximo é a quantidade de
-    // leitos distintos, não a quantidade histórica de Altas.
+    // O snapshot usa uma linha reservada na tabela já existente. O volume máximo
+    // é a quantidade de leitos distintos, não a quantidade histórica de Altas.
     let lastCompletedUpdated = 0;
     let lastCompletedError: string | null = null;
     try {
       const latestByBed = new Map<
         string,
         {
-          bed_key: string;
+          external_id: string;
           unit: string;
           bed_number: string;
-          source_answer_id: number;
-          staff_name: string | null;
-          started_at: string | null;
+          last_answer_id: number;
+          assigned_staff_id: string | null;
+          status: "completed";
+          priority: false;
+          pause_reason: null;
+          status_updated_at: string;
           completed_at: string;
-          duration_minutes: number | null;
-          recorded_at: string;
         }
       >();
 
@@ -389,23 +390,22 @@ async function handle() {
         if (!completedAt || completedAt.getTime() > Date.now()) continue;
 
         const startedAt = parseBRT(answer.startTime);
-        const durationMinutes = startedAt
-          ? Math.round((completedAt.getTime() - startedAt.getTime()) / 60000)
-          : null;
         const bed = (answer.locationName || `Leito ${answer.id}`).trim();
         const unit = unitOf(answer);
         const bedKey = operationalBedKey(unit, bed);
         const candidate = {
-          bed_key: bedKey,
+          external_id: `snapshot:last-completed:${bedKey}`,
           unit,
           bed_number: bed,
-          source_answer_id: answer.id,
-          staff_name: answer.userName?.trim() || null,
-          started_at: startedAt?.toISOString() ?? null,
+          last_answer_id: answer.id,
+          assigned_staff_id: answer.userName
+            ? (staffByName.get(answer.userName.trim()) ?? null)
+            : null,
+          status: "completed" as const,
+          priority: false as const,
+          pause_reason: null,
+          status_updated_at: (startedAt ?? completedAt).toISOString(),
           completed_at: completedAt.toISOString(),
-          duration_minutes:
-            durationMinutes != null && durationMinutes >= 0 ? durationMinutes : null,
-          recorded_at: new Date().toISOString(),
         };
         const previous = latestByBed.get(bedKey);
         if (!previous || candidate.completed_at > previous.completed_at) {
@@ -415,20 +415,23 @@ async function handle() {
 
       if (latestByBed.size) {
         const { data: stored, error: storedError } = await supabase
-          .from("last_completed_discharges")
-          .select("bed_key, completed_at");
+          .from("discharges")
+          .select("external_id, completed_at")
+          .like("external_id", "snapshot:last-completed:%");
         if (storedError) throw storedError;
 
-        const storedByBed = new Map((stored ?? []).map((row) => [row.bed_key, row.completed_at]));
+        const storedByBed = new Map(
+          (stored ?? []).map((row) => [row.external_id, row.completed_at]),
+        );
         const updates = Array.from(latestByBed.values()).filter((row) => {
-          const storedCompletedAt = storedByBed.get(row.bed_key);
+          const storedCompletedAt = storedByBed.get(row.external_id);
           return !storedCompletedAt || row.completed_at > storedCompletedAt;
         });
 
         if (updates.length) {
           const { error: updateError } = await supabase
-            .from("last_completed_discharges")
-            .upsert(updates, { onConflict: "bed_key" });
+            .from("discharges")
+            .upsert(updates, { onConflict: "external_id" });
           if (updateError) throw updateError;
           lastCompletedUpdated = updates.length;
         }

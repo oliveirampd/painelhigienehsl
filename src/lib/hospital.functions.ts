@@ -74,7 +74,9 @@ export const updateDischarge = createServerFn({ method: "POST" })
   });
 
 export const createStaff = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => z.object({ name: z.string().trim().min(1).max(120) }).parse(data))
+  .inputValidator((data: unknown) =>
+    z.object({ name: z.string().trim().min(1).max(120) }).parse(data),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("staff").insert({ name: data.name });
@@ -124,6 +126,7 @@ export const clearCompletions = createServerFn({ method: "POST" })
       .from("discharges")
       .update({ completed_at: null })
       .not("completed_at", "is", null)
+      .or("external_id.is.null,external_id.not.like.snapshot:last-completed:%")
       .gte("completed_at", since);
     if (error) {
       console.error("[clearCompletions]", error);
@@ -131,3 +134,4 @@ export const clearCompletions = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
