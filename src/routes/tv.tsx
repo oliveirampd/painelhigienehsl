@@ -936,11 +936,11 @@ function KpiCard({
         : "oklch(0.72 0.17 155)"; // melhorou
   return (
     <div
-      className="rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
+      className="panel-kpi-card rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
       style={{
-        background: `linear-gradient(180deg, ${accent.replace(")", " / 0.26)")} 0%, oklch(0.18 0.03 265) 100%)`,
-        borderColor: accent.replace(")", " / 0.45)"),
-        boxShadow: `inset 0 0 0 1px ${accent.replace(")", " / 0.55)")}, 0 0 24px -8px ${accent.replace(")", " / 0.5)")}`,
+        ["--panel-accent" as string]: accent,
+        backgroundColor: accent.replace(")", " / 0.12)"),
+        borderColor: accent.replace(")", " / 0.42)"),
       }}
     >
       <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
@@ -970,10 +970,10 @@ function KpiCard({
 
 type Tone = "green" | "amber" | "red" | "blue";
 const toneBg: Record<Tone, string> = {
-  green: "oklch(0.32 0.13 155 / 0.2)",
-  amber: "oklch(0.48 0.19 85 / 0.3)",
-  red: "oklch(0.4 0.2 20 / 0.28)",
-  blue: "oklch(0.37 0.15 230 / 0.24)",
+  green: "oklch(0.72 0.17 155 / 0.13)",
+  amber: "oklch(0.80 0.18 80 / 0.16)",
+  red: "oklch(0.68 0.20 25 / 0.13)",
+  blue: "oklch(0.72 0.18 235 / 0.13)",
 };
 
 /**
@@ -1155,10 +1155,10 @@ function TerminalBedsPanel({
                   >
                     {isWorst && (
                       <span
-                        className="absolute -top-1.5 -right-1.5 rounded-[3px] border px-1 py-px text-[8px] font-semibold uppercase tracking-wide"
+                        className="panel-critical-badge absolute -top-1.5 -right-1.5 rounded-[3px] border px-1 py-px text-[8px] font-semibold uppercase tracking-wide"
                         style={{
                           borderColor: "oklch(0.7 0.2 25 / 0.5)",
-                          background: "oklch(0.22 0.02 265)",
+                          background: "oklch(0.98 0.01 250)",
                           color: "oklch(0.78 0.19 25)",
                         }}
                       >
@@ -1275,7 +1275,7 @@ function BedsPanel({
         ) : (
           <AutoScroll>
             <table className="w-full text-sm table-fixed">
-              <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-[oklch(0.16_0.02_265)]">
+              <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-card">
                 <tr>
                   <th className="text-left px-1.5 lg:px-4 py-1.5 w-[30%] lg:w-auto">Leito</th>
                   <th className="hidden lg:table-cell text-left px-3 py-1.5">Unidade</th>
@@ -1297,7 +1297,7 @@ function BedsPanel({
                   return (
                     <tr
                       key={`${d.id}-v${version}`}
-                      className={version > 0 ? "flash-row" : undefined}
+                      className={`panel-status-row ${version > 0 ? "flash-row" : ""}`}
                       style={{
                         background:
                           overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
