@@ -19,10 +19,12 @@ import {
 import { toast } from "sonner";
 import { updateDischarge } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
+import { usePanelTheme } from "@/hooks/usePanelTheme";
 import {
   elapsedMinutes,
   formatElapsed,
@@ -166,6 +168,7 @@ function TvPage() {
   const { discharges, staff } = useHospitalData();
   const now = useNow(15000);
   const clock = useClock();
+  const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
 
@@ -493,10 +496,6 @@ function TvPage() {
       .sort((a, b) => b.count - a.count || b.oldest - a.oldest)[0] ?? null;
   }, [paused, now]);
 
-  const availableStaff = timeAltasRows.filter((r) => r.kind === "sem_alta").length;
-  const busyStaff = timeAltasRows.filter((r) =>
-    r.kind === "em_alta" || r.kind === "a_caminho" || r.kind === "desmontando",
-  ).length;
 
   const operationState =
     paused.length >= 5 || queueDelta15 >= 3 || oldestPausedMin >= 45
@@ -516,17 +515,12 @@ function TvPage() {
     if (queueDelta15 >= 2) {
       items.push(`Fila cresceu +${queueDelta15} nos últimos 15 min`);
     }
-    if (paused.length > 0 && availableStaff === 0) {
-      items.push("Nenhum colaborador livre enquanto há altas aguardando");
-    } else if (paused.length > availableStaff && availableStaff > 0) {
-      items.push(`Fila (${paused.length}) está maior que a equipe livre (${availableStaff})`);
-    }
     if (completedIssues.length > 0) {
       items.push(`${completedIssues.length} leito(s) pausado(s) aguardando resolução`);
     }
     if (!items.length) items.push("Sem exceções relevantes neste momento");
     return items.slice(0, 3);
-  }, [paused, oldestPausedMin, criticalBlock, queueDelta15, availableStaff, completedIssues.length]);
+  }, [paused, oldestPausedMin, criticalBlock, queueDelta15, completedIssues.length]);
 
   useEffect(() => {
     if (operationState !== "critical") return;
@@ -637,8 +631,6 @@ function TvPage() {
   const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
-  const [isDark, setIsDark] = useState(true);
-
   // Só esconde a faixa de finalizados recentes neste navegador — 100% local,
   // nunca mexe no banco. A contagem do turno não usa esse marco, então nunca é
   // afetada por isso (era esse o bug: limpar aqui antes apagava completed_at no
@@ -650,16 +642,11 @@ function TvPage() {
     toast.success("Recentes limpos.");
   }
 
-  const filtros = [
-    !isDark ? "invert(1) hue-rotate(180deg)" : null,
-    isNoturno ? "brightness(0.82)" : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const filtros = isDark && isNoturno ? "brightness(0.88)" : undefined;
 
   return (
     <div
-      className="dark min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-[filter] duration-700 bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]"
+      className={`${themeClass} min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
@@ -706,18 +693,7 @@ function TvPage() {
           >
             <Eraser className="h-3 w-3" /> Recentes
           </button>
-          <button
-            onClick={() => setIsDark((v) => !v)}
-            aria-label={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
-            className="flex items-center justify-center rounded-full p-1.5 transition-colors hover:bg-white/10 active:scale-95"
-            title={isDark ? "Tema claro" : "Tema escuro"}
-          >
-            {isDark ? (
-              <Sun className="h-4 w-4 lg:h-5 lg:w-5 text-[oklch(0.85_0.08_80)]" />
-            ) : (
-              <Moon className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
-            )}
-          </button>
+          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
@@ -758,12 +734,7 @@ function TvPage() {
                 {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
               </strong>
             </span>
-            <span className="text-white/45">
-              Colab. livres: <strong className="text-white/75">{availableStaff}</strong>
-            </span>
-            <span className="text-white/45">
-              Colab. em atividade: <strong className="text-white/75">{busyStaff}</strong>
-            </span>
+
           </div>
         </div>
       </div>
