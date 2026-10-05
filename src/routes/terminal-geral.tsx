@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, QrCode, X } from "lucide-react";
+import { Clock3, X } from "lucide-react";
 import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
 import { getOperationsAnalytics, type OperationsAnalytics } from "@/lib/analytics.functions";
 import { usePanelTheme } from "@/hooks/usePanelTheme";
@@ -425,19 +425,12 @@ function AreaDetailModal({
   history?: OperationsAnalytics["generalAreas"][number];
   onClose: () => void;
 }) {
-  const url =
-    typeof window === "undefined"
-      ? ""
-      : `${window.location.origin}/terminal-geral?area=${encodeURIComponent(e.area)}&unit=${encodeURIComponent(e.unit)}`;
-  const qr = url
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&ecc=M&qzone=2&data=${encodeURIComponent(url)}`
-    : "";
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm lg:items-center lg:p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 lg:rounded-2xl" onClick={(ev) => ev.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-white/35">Área comum · consulta</div>
+            <div className="text-[10px] uppercase tracking-widest text-white/35">Área comum</div>
             <h3 className="mt-1 text-xl font-bold">{e.area}</h3>
             <p className="mt-0.5 text-xs text-white/45">{e.unit}</p>
           </div>
@@ -445,7 +438,7 @@ function AreaDetailModal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_180px]">
+        <div className="mt-4">
           <div className="space-y-2 text-sm">
             <div><span className="text-white/40">Status:</span> <strong>{STATUS_LABEL[e.status]}</strong></div>
             <div><span className="text-white/40">Colaborador:</span> {e.staff || "—"}</div>
@@ -457,15 +450,7 @@ function AreaDetailModal({
                 <strong>{history.completed7d} registros concluídos</strong> em {history.activeDays} dia(s) da amostra
               </div>
             )}
-            <div className="rounded-lg border border-white/10 bg-black/10 p-2 text-xs text-white/45">
-              QR de consulta: abre diretamente esta área no painel. Não registra nem conclui atividade no Listo.
-            </div>
           </div>
-          {qr && (
-            <div className="rounded-xl bg-white p-2">
-              <img src={qr} alt={`QR da área ${e.area}`} className="h-[164px] w-[164px]" />
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -514,7 +499,7 @@ function AreaCard({
       {e.status === "pendente" && (
         <div className="flex items-center justify-between gap-2 text-[10px] text-white/40">
           <span>{e.reason || `janela encerra em ${formatRemaining(shiftRemaining)}`}</span>
-          <QrCode className="h-3 w-3 shrink-0 text-white/25" />
+
         </div>
       )}
       {e.status === "completed" && (
