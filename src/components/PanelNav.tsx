@@ -12,7 +12,7 @@ export function PanelNav({ compact = false }: { compact?: boolean }) {
   return (
     <nav
       aria-label="Navegação do painel"
-      className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.035] p-1"
+      className="flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-white/10 bg-white/[0.035] p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {ITEMS.map(({ to, label, icon: Icon }) => (
         <Link
@@ -26,7 +26,7 @@ export function PanelNav({ compact = false }: { compact?: boolean }) {
             className:
               "text-white/50 border-transparent hover:bg-white/[0.07] hover:text-white/80",
           }}
-          className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors lg:text-xs"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors lg:text-xs"
         >
           <Icon className="h-3.5 w-3.5" />
           {!compact && <span>{label}</span>}
