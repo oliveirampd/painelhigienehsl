@@ -44,6 +44,12 @@ export const Route = createFileRoute("/diaria")({
 });
 
 const BLOCK_ORDER = ["D", "E", "C", "B"] as const;
+const BLOCK_COLOR: Record<(typeof BLOCK_ORDER)[number], string> = {
+  D: "oklch(0.66 0.20 145)",
+  E: "oklch(0.62 0.22 300)",
+  C: "oklch(0.64 0.20 245)",
+  B: "oklch(0.63 0.23 25)",
+};
 
 // Andares que existem no cadastro mas não são usados na prática — tirados da
 // contagem e da exibição por completo (não é "sem rotina", é "não existe" aqui).
@@ -422,15 +428,16 @@ function DiariaPage() {
           {floorCoverage.map((x) => {
             const tone =
               x.pct >= 90
-                ? "oklch(0.72 0.16 155)"
+                ? "oklch(0.66 0.18 150)"
                 : x.pct >= Math.max(55, ritmoEsperado - 15)
-                  ? "oklch(0.72 0.16 235)"
-                  : "oklch(0.78 0.2 60)";
+                  ? "oklch(0.62 0.18 235)"
+                  : "oklch(0.72 0.19 65)";
+            const blockTone = BLOCK_COLOR[x.block];
             return (
               <div
                 key={`heat-${x.block}-${x.floor}`}
                 className="min-w-[78px] rounded-md border px-2 py-1.5"
-                style={{ borderColor: tone.replace(")", " / 0.32)"), background: tone.replace(")", " / 0.08)") }}
+                style={{ borderColor: blockTone.replace(")", " / 0.48)"), background: blockTone.replace(")", " / 0.10)") }}
                 title={`Bloco ${x.block} ${x.floor}º · ${x.pct}% de cobertura concorrente`}
               >
                 <div className="text-[9px] uppercase tracking-wide text-white/35">Bloco {x.block}</div>
@@ -464,7 +471,13 @@ function DiariaPage() {
       >
         {grupos.map((g) => (
           <section key={g.block}>
-            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide">
+            <h2
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide"
+              style={{
+                borderLeftColor: BLOCK_COLOR[g.block],
+                backgroundColor: BLOCK_COLOR[g.block].replace(")", " / 0.10)"),
+              }}
+            >
               <span>Bloco {g.block}</span>
               <span className="text-sm lg:text-base font-normal normal-case tracking-normal text-white/40">
                 {g.beds.length} leitos
