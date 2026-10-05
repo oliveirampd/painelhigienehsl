@@ -7,8 +7,6 @@ import {
   UsersRound,
   CircleCheck,
   BadgeCheck,
-  Sun,
-  Moon,
   Eraser,
   ChevronRight,
   AlertTriangle,
