@@ -619,7 +619,7 @@ function DetailRow({
 }) {
   return (
     <div
-      className="min-w-[138px] rounded-lg border px-3 py-2 lg:min-w-0"
+      className="rounded-lg border px-3 py-2"
       style={{
         borderColor: color.replace(")", " / 0.35)"),
         background: color.replace(")", " / 0.08)"),
@@ -740,7 +740,7 @@ function Kpi({
 }) {
   return (
     <div
-      className="rounded-lg border px-3 py-2"
+      className="min-w-[138px] rounded-lg border px-3 py-2 lg:min-w-0"
       style={{
         borderColor: `${color.replace(")", " / 0.3)")}`,
         background: color.replace(")", " / 0.08)"),
