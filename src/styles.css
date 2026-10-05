@@ -276,3 +276,21 @@
   box-shadow: inset 4px 0 0 0 oklch(0.60 0.23 25);
 }
 .panel-light .animate-bed-blink { filter: none; }
+
+
+/* Textos semânticos precisam ficar fortes também no claro. */
+.panel-light [class*="text-amber-100"],
+.panel-light [class*="text-amber-200"],
+.panel-light [class*="text-amber-300"] {
+  color: oklch(0.48 0.16 65) !important;
+}
+.panel-light [class*="text-red-200"],
+.panel-light [class*="text-red-300"] {
+  color: oklch(0.50 0.21 25) !important;
+}
+.panel-light [class*="text-emerald-300"] {
+  color: oklch(0.45 0.16 150) !important;
+}
+.panel-light [class*="text-sky-100"] {
+  color: oklch(0.42 0.15 240) !important;
+}
