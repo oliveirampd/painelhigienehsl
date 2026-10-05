@@ -759,10 +759,10 @@ function TvPage() {
               </strong>
             </span>
             <span className="text-white/45">
-              Livres: <strong className="text-white/75">{availableStaff}</strong>
+              Colab. livres: <strong className="text-white/75">{availableStaff}</strong>
             </span>
             <span className="text-white/45">
-              Ocupados: <strong className="text-white/75">{busyStaff}</strong>
+              Colab. em atividade: <strong className="text-white/75">{busyStaff}</strong>
             </span>
           </div>
         </div>
@@ -921,6 +921,12 @@ function TvPage() {
       {selectedDischarge && (
         <DischargeTimelineModal
           discharge={selectedDischarge}
+          staffName={
+            selectedDischarge.assigned_staff_id
+              ? staffMap.get(selectedDischarge.assigned_staff_id)?.name
+              : null
+          }
+          nowMs={now}
           onClose={() => setSelectedDischarge(null)}
         />
       )}
