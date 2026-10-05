@@ -273,7 +273,7 @@ function DiariaPage() {
   );
 
   return (
-    <div className="dark h-screen w-full flex flex-col overflow-hidden font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)]">
+    <div className="dark min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] lg:h-screen lg:overflow-hidden">
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base lg:text-2xl font-bold tracking-tight">
@@ -296,7 +296,7 @@ function DiariaPage() {
         </div>
       </header>
 
-      <div className="flex-none grid grid-cols-2 lg:grid-cols-7 gap-2 px-4 lg:px-6 py-3">
+      <div className="flex flex-none gap-2 overflow-x-auto px-4 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:grid lg:grid-cols-7 lg:overflow-visible lg:px-6 lg:py-3">
         <Kpi
           icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
           label="Em higiene agora"
@@ -451,7 +451,13 @@ function DiariaPage() {
         {loading && <span className="normal-case">carregando…</span>}
       </div>
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto px-4 lg:px-6 pb-8 space-y-6">
+      <div className="flex-none px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/30 lg:px-6">
+        Mapa de leitos · rolagem automática na TV
+      </div>
+      <main
+        ref={mainRef}
+        className="min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
+      >
         {grupos.map((g) => (
           <section key={g.block}>
             <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide">
@@ -613,7 +619,7 @@ function DetailRow({
 }) {
   return (
     <div
-      className="rounded-lg border px-3 py-2"
+      className="min-w-[138px] rounded-lg border px-3 py-2 lg:min-w-0"
       style={{
         borderColor: color.replace(")", " / 0.35)"),
         background: color.replace(")", " / 0.08)"),
