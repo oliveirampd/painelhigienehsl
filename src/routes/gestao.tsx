@@ -276,6 +276,70 @@ function GestaoPage() {
             </section>
 
             <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="font-bold">Auditoria dos ciclos recentes</h2>
+                  <p className="text-xs text-white/40">
+                    Os mesmos ciclos únicos usados nos indicadores acima. Esta tabela permite conferir leito por leito.
+                  </p>
+                </div>
+                <span className="text-[10px] uppercase tracking-widest text-white/30">
+                  últimos {Math.min(30, data.recentCycles.length)}
+                </span>
+              </div>
+              <div className="max-h-[420px] overflow-auto rounded-lg border border-white/[0.06]">
+                <table className="w-full min-w-[860px] text-sm">
+                  <thead className="sticky top-0 bg-[oklch(0.18_0.025_265)] text-left text-[10px] uppercase tracking-wide text-white/35">
+                    <tr>
+                      <th className="px-3 py-2">Leito</th>
+                      <th className="px-3 py-2">Bloco</th>
+                      <th className="px-3 py-2">Início</th>
+                      <th className="px-3 py-2">Conclusão</th>
+                      <th className="px-3 py-2">Execução</th>
+                      <th className="px-3 py-2">Reg. → início</th>
+                      <th className="px-3 py-2">Colaborador</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.recentCycles.map((cycle) => (
+                      <tr key={cycle.key} className="border-t border-white/[0.05]">
+                        <td className="px-3 py-2 font-semibold">{cycle.bed}</td>
+                        <td className="px-3 py-2 text-white/60">{cycle.block === "Outro" ? "—" : cycle.block}</td>
+                        <td className="px-3 py-2 font-mono tabular-nums">
+                          {new Date(cycle.startedAt).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZone: "America/Sao_Paulo",
+                          })}
+                        </td>
+                        <td className="px-3 py-2 font-mono tabular-nums text-white/65">
+                          {cycle.completedAt
+                            ? new Date(cycle.completedAt).toLocaleTimeString("pt-BR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                timeZone: "America/Sao_Paulo",
+                              })
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-white/65">
+                          {cycle.executionMin == null ? "—" : `${cycle.executionMin} min`}
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-white/65">
+                          {cycle.waitMin == null ? "—" : `${cycle.waitMin} min`}
+                        </td>
+                        <td className="max-w-[220px] truncate px-3 py-2 text-white/60" title={cycle.staff ?? ""}>
+                          {cycle.staff ?? "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
               <div className="mb-3">
                 <h2 className="font-bold">Áreas comuns — menor recorrência recente</h2>
                 <p className="text-xs text-white/40">
@@ -360,13 +424,13 @@ function ShiftCard({
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Mini label="Ciclos iniciados" value={summary.total} />
-        <Mini label="Concluídas" value={summary.completed} />
+        <Mini label="Conclusões no turno" value={summary.completed} />
         <Mini label="Reg. → início" value={summary.avgWaitMin == null ? "—" : `${summary.avgWaitMin}m`} />
         <Mini label="Execução" value={summary.avgExecutionMin == null ? "—" : `${summary.avgExecutionMin}m`} />
         <Mini label="Meta execução" value={summary.withinTargetPct == null ? "—" : `${summary.withinTargetPct}%`} />
       </div>
       <div className="mt-3 rounded-lg border border-white/8 bg-black/10 px-3 py-2 text-xs leading-relaxed text-white/45">
-        Resumo automático: {summary.total} ciclos iniciados, {summary.completed} concluídos
+        Resumo automático: {summary.total} ciclos iniciados e {summary.completed} conclusões dentro da janela do turno
         {summary.avgExecutionMin == null ? "" : `, execução média de ${summary.avgExecutionMin} min`}
         {summary.withinTargetPct == null ? "" : ` e ${summary.withinTargetPct}% dentro da meta de execução`}.
         {summary.peakHour == null
