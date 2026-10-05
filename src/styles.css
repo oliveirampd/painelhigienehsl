@@ -210,69 +210,69 @@
 .animate-bed-blink { animation: bed-blink 0.9s ease-in-out infinite; }
 
 
-/* Painel — light mode real (sem filter/invert)
- * Mantém as cores operacionais semânticas, mas troca superfícies, bordas e
- * tipografia por uma paleta clara de alto contraste.
- */
+/* Painel — modo claro de alto contraste, sem gradientes. */
 .panel-light {
   color-scheme: light;
-  --background: oklch(0.975 0.008 255);
-  --foreground: oklch(0.22 0.035 260);
+  --background: oklch(0.985 0.004 250);
+  --foreground: oklch(0.19 0.025 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.035 260);
+  --card-foreground: oklch(0.19 0.025 255);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.035 260);
-  --muted: oklch(0.94 0.012 255);
-  --muted-foreground: oklch(0.45 0.035 260);
-  --border: oklch(0.84 0.018 255);
-  --input: oklch(0.90 0.015 255);
-  --ring: oklch(0.57 0.12 245);
-  background:
-    radial-gradient(circle at 20% -10%, oklch(0.93 0.05 230 / 0.45), transparent 32rem),
-    linear-gradient(180deg, oklch(0.985 0.006 255), oklch(0.955 0.012 255));
-  color: oklch(0.22 0.035 260);
+  --popover-foreground: oklch(0.19 0.025 255);
+  --muted: oklch(0.955 0.008 250);
+  --muted-foreground: oklch(0.42 0.025 255);
+  --border: oklch(0.82 0.018 250);
+  --input: oklch(0.92 0.012 250);
+  --ring: oklch(0.58 0.17 245);
+  background-color: oklch(0.985 0.004 250);
+  color: oklch(0.19 0.025 255);
 }
 
-.panel-light [class*="text-white/"] {
-  color: oklch(0.39 0.03 260) !important;
-}
-.panel-light .text-white {
-  color: oklch(0.19 0.035 260) !important;
-}
-.panel-light [class*="border-white/"] {
-  border-color: oklch(0.78 0.022 255 / 0.9) !important;
-}
-.panel-light [class*="bg-white/"] {
-  background-color: oklch(1 0 0 / 0.78) !important;
-}
-.panel-light [class*="bg-black/"] {
-  background-color: oklch(0.78 0.02 255 / 0.10) !important;
-}
+.panel-light [class*="text-white/"] { color: oklch(0.36 0.025 255) !important; }
+.panel-light .text-white { color: oklch(0.16 0.025 255) !important; }
+.panel-light [class*="border-white/"] { border-color: oklch(0.80 0.018 250) !important; }
+.panel-light [class*="bg-white/"] { background-color: oklch(1 0 0) !important; }
+.panel-light [class*="bg-black/"] { background-color: oklch(0.94 0.01 250) !important; }
+
 .panel-light header {
-  background-color: oklch(0.985 0.006 255 / 0.94);
-  box-shadow: 0 1px 0 oklch(0.80 0.02 255 / 0.8);
+  background-color: oklch(1 0 0) !important;
+  box-shadow: 0 1px 0 oklch(0.82 0.018 250);
+}
+.panel-light section,
+.panel-light .panel-surface {
+  box-shadow: 0 1px 2px oklch(0.3 0.02 250 / 0.06);
 }
 .panel-light .panel-theme-toggle {
-  border-color: oklch(0.76 0.025 255);
-  background: oklch(1 0 0 / 0.92);
-  color: oklch(0.28 0.035 260);
+  border-color: oklch(0.76 0.025 250);
+  background-color: oklch(1 0 0);
+  color: oklch(0.22 0.03 255);
 }
-.panel-light .panel-theme-toggle:hover {
-  background: oklch(0.94 0.02 250);
-}
+.panel-light .panel-theme-toggle:hover { background-color: oklch(0.95 0.015 250); }
+
 .panel-light [class*="bg-[oklch(0.145_0.02_265)]"],
+.panel-light [class*="bg-[oklch(0.16_0.02_265)]"],
 .panel-light [class*="bg-[oklch(0.18_0.025_265)]"],
 .panel-light [class*="bg-[oklch(0.19_0.02_265)]"],
 .panel-light [class*="bg-[oklch(0.2_0.02_265)]"],
 .panel-light [class*="bg-[oklch(0.22_0.025_265)]"] {
-  background-color: oklch(0.995 0.004 255) !important;
+  background-color: oklch(1 0 0) !important;
 }
 .panel-light [class*="bg-[oklch(0.145_0.02_265_/_0.94)]"] {
-  background-color: oklch(0.985 0.006 255 / 0.96) !important;
+  background-color: oklch(1 0 0 / 0.98) !important;
+}
+
+.panel-light .panel-kpi-card {
+  background-color: color-mix(in oklch, var(--panel-accent) 12%, white) !important;
+  border-color: color-mix(in oklch, var(--panel-accent) 70%, white) !important;
+  box-shadow: none !important;
+}
+.panel-light .panel-status-row {
+  color: oklch(0.19 0.025 255);
+}
+.panel-light .panel-critical-badge {
+  background-color: oklch(1 0 0) !important;
 }
 .panel-light .pulse-critical {
-  box-shadow: inset 4px 0 0 0 oklch(0.58 0.22 25);
+  box-shadow: inset 4px 0 0 0 oklch(0.60 0.23 25);
 }
-.panel-light .animate-bed-blink {
-  filter: none;
-}
+.panel-light .animate-bed-blink { filter: none; }
