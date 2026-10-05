@@ -677,7 +677,7 @@ function TvPage() {
           </h1>
           <PanelNav />
         </div>
-        <div className="flex items-center justify-between lg:justify-end gap-3 lg:gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 lg:justify-end lg:gap-4">
           <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
@@ -752,7 +752,7 @@ function TvPage() {
               <span key={item} className="truncate">• {item}</span>
             ))}
           </div>
-          <div className="flex items-center gap-3 text-[10px] lg:text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] lg:text-xs">
             <span className="text-white/45">
               Fila 15m: <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
                 {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
