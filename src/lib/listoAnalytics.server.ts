@@ -70,6 +70,18 @@ type TerminalCycle = {
   targetMin: number;
 };
 
+export type AnalyticsCycleRow = {
+  key: string;
+  bed: string;
+  unit: string;
+  block: string;
+  staff: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  waitMin: number | null;
+  executionMin: number | null;
+};
+
 export type OperationsAnalytics = {
   generatedAt: string;
   days: AnalyticsDay[];
@@ -84,6 +96,7 @@ export type OperationsAnalytics = {
   generalAreas: GeneralAreaTrend[];
   totalSample: number;
   rawTerminalRecords: number;
+  recentCycles: AnalyticsCycleRow[];
   samplePartial: boolean;
 };
 
@@ -264,7 +277,12 @@ function summarizeCycles(
   const selected = cycles.filter(
     (cycle) => cycle.startedAt >= window.start && cycle.startedAt < window.end,
   );
-  const completed = selected.filter((cycle) => !!cycle.completedAt);
+  const completed = cycles.filter(
+    (cycle) =>
+      cycle.completedAt != null &&
+      cycle.completedAt >= window.start &&
+      cycle.completedAt < window.end,
+  );
   const execution = completed.map((cycle) =>
     validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
   );
@@ -442,7 +460,9 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 
   const days: AnalyticsDay[] = dateKeys.map((date) => {
     const selected = cycles.filter((cycle) => brtParts(cycle.startedAt).date === date);
-    const completed = selected.filter((cycle) => !!cycle.completedAt);
+    const completed = cycles.filter(
+      (cycle) => cycle.completedAt != null && brtParts(cycle.completedAt).date === date,
+    );
     const within = completed.filter((cycle) => {
       const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
       return duration != null && duration <= cycle.targetMin;
@@ -561,6 +581,22 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     }))
     .sort((a, b) => a.completed7d - b.completed7d || a.activeDays - b.activeDays || a.area.localeCompare(b.area));
 
+  const recentCycles: AnalyticsCycleRow[] = cycles
+    .slice()
+    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+    .slice(0, 30)
+    .map((cycle) => ({
+      key: cycle.key,
+      bed: cycle.bed,
+      unit: cycle.unit,
+      block: cycle.block,
+      staff: cycle.staff,
+      startedAt: cycle.startedAt.toISOString(),
+      completedAt: cycle.completedAt?.toISOString() ?? null,
+      waitMin: validDiffMinutes(cycle.detectedAt, cycle.startedAt, 12),
+      executionMin: validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
+    }));
+
   const value: OperationsAnalytics = {
     generatedAt: new Date().toISOString(),
     days,
@@ -575,6 +611,7 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     generalAreas,
     totalSample: cycles.length,
     rawTerminalRecords: rawTerminal.length,
+    recentCycles,
     samplePartial: history.partial,
   };
   analyticsCache = { expiresAt: Date.now() + 5 * 60 * 1000, value };
