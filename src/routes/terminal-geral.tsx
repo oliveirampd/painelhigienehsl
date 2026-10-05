@@ -3,9 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Clock3, QrCode, X } from "lucide-react";
 import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
 import { getOperationsAnalytics, type OperationsAnalytics } from "@/lib/analytics.functions";
+import { usePanelTheme } from "@/hooks/usePanelTheme";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const Route = createFileRoute("/terminal-geral")({
   head: () => ({
@@ -69,6 +71,7 @@ function formatRemaining(totalMin: number) {
 }
 
 function TerminalGeralPage() {
+  const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const [events, setEvents] = useState<TerminalGeralEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -202,7 +205,7 @@ function TerminalGeralPage() {
   ).sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <div className="dark min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-[oklch(0.145_0.02_265)] text-[oklch(0.98_0.005_260)] lg:h-screen lg:overflow-hidden">
+    <div className={`${themeClass} min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-sm lg:text-2xl font-bold tracking-tight">Limpeza Terminal Geral — Áreas Comuns</h1>
@@ -219,6 +222,7 @@ function TerminalGeralPage() {
           <span className="hidden sm:inline font-mono text-white/35">
             atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
           </span>
+          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
           <span className="text-lg lg:text-2xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
