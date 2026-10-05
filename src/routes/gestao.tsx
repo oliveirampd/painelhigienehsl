@@ -44,6 +44,12 @@ export const Route = createFileRoute("/gestao")({
 });
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const BLOCK_COLOR: Record<string, string> = {
+  D: "oklch(0.66 0.20 145)",
+  E: "oklch(0.62 0.22 300)",
+  C: "oklch(0.64 0.20 245)",
+  B: "oklch(0.63 0.23 25)",
+};
 
 function GestaoPage() {
   const { isDark, themeClass, toggleTheme } = usePanelTheme();
@@ -275,7 +281,18 @@ function GestaoPage() {
                   <tbody>
                     {data.blocks.map((b) => (
                       <tr key={b.block} className="border-t border-white/5">
-                        <td className="py-2 font-semibold">Bloco {b.block}</td>
+                        <td className="py-2 font-semibold">
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1"
+                            style={{
+                              color: BLOCK_COLOR[b.block] ?? "currentColor",
+                              borderColor: (BLOCK_COLOR[b.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.45)"),
+                              backgroundColor: (BLOCK_COLOR[b.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.10)"),
+                            }}
+                          >
+                            Bloco {b.block}
+                          </span>
+                        </td>
                         <td className="py-2 tabular-nums">{b.total}</td>
                         <td className="py-2 tabular-nums">{b.completed}</td>
                         <td className="py-2 tabular-nums">{b.avgWaitMin == null ? "—" : `${b.avgWaitMin} min`}</td>
@@ -317,7 +334,22 @@ function GestaoPage() {
                     {data.recentCycles.map((cycle) => (
                       <tr key={cycle.key} className="border-t border-white/[0.05]">
                         <td className="px-3 py-2 font-semibold">{cycle.bed}</td>
-                        <td className="px-3 py-2 text-white/60">{cycle.block === "Outro" ? "—" : cycle.block}</td>
+                        <td className="px-3 py-2">
+                          {cycle.block === "Outro" ? (
+                            <span className="text-white/45">—</span>
+                          ) : (
+                            <span
+                              className="inline-flex min-w-7 justify-center rounded-md border px-1.5 py-0.5 font-semibold"
+                              style={{
+                                color: BLOCK_COLOR[cycle.block] ?? "currentColor",
+                                borderColor: (BLOCK_COLOR[cycle.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.45)"),
+                                backgroundColor: (BLOCK_COLOR[cycle.block] ?? "oklch(0.6 0.03 255)").replace(")", " / 0.10)"),
+                              }}
+                            >
+                              {cycle.block}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 font-mono tabular-nums">
                           {new Date(cycle.startedAt).toLocaleString("pt-BR", {
                             day: "2-digit",
