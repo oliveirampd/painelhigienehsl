@@ -23,6 +23,14 @@ export const Route = createFileRoute("/terminal-geral")({
 });
 
 const BLOCK_ORDER: TerminalGeralBlock[] = ["D", "E", "C", "B", "A"];
+const BLOCK_COLOR: Record<TerminalGeralBlock, string> = {
+  D: "oklch(0.66 0.20 145)",
+  E: "oklch(0.62 0.22 300)",
+  C: "oklch(0.64 0.20 245)",
+  B: "oklch(0.63 0.23 25)",
+  A: "oklch(0.70 0.16 80)",
+  outro: "oklch(0.58 0.04 255)",
+};
 const BLOCK_LABEL: Record<TerminalGeralBlock, string> = {
   D: "Bloco D",
   E: "Bloco E",
@@ -300,7 +308,11 @@ function TerminalGeralPage() {
             return (
               <div
                 key={b.block}
-                className="min-w-[116px] rounded-lg border border-white/10 bg-white/[0.025] px-2.5 py-2"
+                className="min-w-[116px] rounded-lg border px-2.5 py-2"
+                style={{
+                  borderColor: BLOCK_COLOR[b.block].replace(")", " / 0.45)"),
+                  backgroundColor: BLOCK_COLOR[b.block].replace(")", " / 0.10)"),
+                }}
               >
                 <div className="text-[9px] uppercase tracking-widest text-white/30">
                   {b.block === "outro" ? "Outras áreas" : `Bloco ${b.block}`}
@@ -328,7 +340,13 @@ function TerminalGeralPage() {
         )}
         {gruposComBloco.map((g) => (
           <section key={g.block}>
-            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide">
+            <h2
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide"
+              style={{
+                borderLeftColor: BLOCK_COLOR[g.block],
+                backgroundColor: BLOCK_COLOR[g.block].replace(")", " / 0.10)"),
+              }}
+            >
               <span>{BLOCK_LABEL[g.block]}</span>
               <span className="text-xs lg:text-sm font-normal normal-case tracking-normal text-white/40">
                 {g.items.length} {g.items.length === 1 ? "área" : "áreas"}
@@ -383,7 +401,13 @@ function TerminalGeralPage() {
         ))}
         {outrasPorGrupo.length > 0 && (
           <section>
-            <h2 className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 border-white/40 bg-white/[0.06] px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide">
+            <h2
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 px-3 py-2 text-lg lg:text-2xl font-black uppercase tracking-wide"
+              style={{
+                borderLeftColor: BLOCK_COLOR.outro,
+                backgroundColor: BLOCK_COLOR.outro.replace(")", " / 0.10)"),
+              }}
+            >
               <span>{BLOCK_LABEL.outro}</span>
             </h2>
             <div className="space-y-3">
@@ -505,7 +529,7 @@ function AreaCard({
       {e.status === "completed" && (
         <div className="flex items-center justify-between gap-2 text-[10px] text-white/35">
           <span>concluída nesta janela</span>
-          <QrCode className="h-3 w-3 shrink-0 text-white/25" />
+
         </div>
       )}
     </button>
