@@ -348,9 +348,9 @@ async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partia
   const nowMs = Date.now();
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
   const pageSize = 500;
-  // 8 dias x no máximo 6 páginas = 48 subrequests (+ login), mantendo a coleta
-  // abaixo de limites comuns de Workers e distribuindo a amostra entre os dias.
-  const maxPagesPerWindow = 6;
+  // Mantém folga ampla no limite de subrequests do Worker. Se uma janela diária
+  // vier muito carregada, marcamos a amostra como parcial em vez de derrubar a tela.
+  const maxPagesPerWindow = 3;
   const byId = new Map<number, ListoAnswer>();
   let partial = false;
 
@@ -363,23 +363,37 @@ async function fetchAnswers(days: number): Promise<{ rows: ListoAnswer[]; partia
 
     for (let page = 1; page <= maxPagesPerWindow; page++) {
       const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-      const res = await fetch(url, {
-        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-      });
-      if (!res.ok) throw new Error("Falha ao consultar histórico operacional");
-      const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
-      const pageRows = Array.isArray(body) ? body : body.data ?? [];
-      for (const row of pageRows) byId.set(row.id, row);
-      if (pageRows.length < pageSize) {
-        reachedCap = false;
+      try {
+        const res = await fetch(url, {
+          headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+        });
+        if (!res.ok) {
+          partial = true;
+          break;
+        }
+        const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
+        const pageRows = Array.isArray(body) ? body : body.data ?? [];
+        for (const row of pageRows) byId.set(row.id, row);
+        if (pageRows.length < pageSize) {
+          reachedCap = false;
+          break;
+        }
+        reachedCap = page === maxPagesPerWindow;
+      } catch {
+        partial = true;
         break;
       }
-      reachedCap = page === maxPagesPerWindow;
     }
     if (reachedCap) partial = true;
   }
 
   const rows = Array.from(byId.values());
+  if (rows.length === 0 && answersCache?.rows.length) {
+    return { rows: answersCache.rows, partial: true };
+  }
+  if (rows.length === 0) {
+    throw new Error("Histórico operacional indisponível na origem");
+  }
   answersCache = {
     expiresAt: Date.now() + 3 * 60 * 1000,
     startMs,
@@ -446,7 +460,7 @@ function shiftWindow(nowMs: number, offset = 0): { label: string; start: Date; e
 
 export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   if (analyticsCache && analyticsCache.expiresAt > Date.now()) return analyticsCache.value;
-  const history = await fetchAnswers(8);
+  const history = await fetchAnswers(7);
   const raw = history.rows;
   const rawTerminal = raw.filter(isTerminalBed);
   const now = new Date();
