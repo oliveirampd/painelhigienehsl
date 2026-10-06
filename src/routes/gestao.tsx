@@ -577,6 +577,309 @@ function GestaoPage() {
                 <p className="mt-3 text-sm text-white/60">Nenhuma execução elegível no período.</p>
               )}
             </section>
+
+            {dailyError && (
+              <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
+                {dailyError} As métricas de Altas acima continuam independentes.
+              </div>
+            )}
+
+            {dailyData && (
+              <>
+                <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+                        Higiene Diária
+                      </div>
+                      <h2 className="mt-1 text-lg font-bold">Cobertura no mesmo ponto do turno</h2>
+                      <p className="mt-1 max-w-3xl text-xs text-white/50">
+                        Compara o avanço atual de Concorrente e Camareira com a média dos seis dias
+                        anteriores no mesmo minuto relativo do turno. Isso é referência histórica,
+                        não SLA oficial.
+                      </p>
+                    </div>
+                    <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-wide text-white/45">
+                      {dailyData.currentShiftLabel}
+                    </span>
+                  </div>
+
+                  {dailyData.samplePartial && (
+                    <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-xs text-amber-100/80">
+                      A amostra histórica da Diária está parcial. Use os números como leitura
+                      operacional, não como fechamento oficial.
+                    </div>
+                  )}
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <Metric
+                      icon={<BrushCleaning className="h-4 w-4" />}
+                      label="Concorrente agora"
+                      value={`${dailyData.currentConcurrentPct}%`}
+                      detail={
+                        dailyData.historicalConcurrentPct == null
+                          ? "sem base histórica comparável"
+                          : `média recente neste ponto: ${dailyData.historicalConcurrentPct}%`
+                      }
+                    />
+                    <Metric
+                      icon={<BedDouble className="h-4 w-4" />}
+                      label="Camareira agora"
+                      value={`${dailyData.currentCamareiraPct}%`}
+                      detail={
+                        dailyData.historicalCamareiraPct == null
+                          ? "sem base histórica comparável"
+                          : `média recente neste ponto: ${dailyData.historicalCamareiraPct}%`
+                      }
+                    />
+                    <Metric
+                      icon={<Activity className="h-4 w-4" />}
+                      label="Rotinas únicas analisadas"
+                      value={String(dailyData.uniqueRoutines)}
+                      detail={`${dailyData.rawRecords} linhas brutas de Concorrente/Camareira`}
+                    />
+                    <Metric
+                      icon={<Clock3 className="h-4 w-4" />}
+                      label="Janela atual"
+                      value={dailyData.currentShiftLabel}
+                      detail={`${new Date(dailyData.currentShiftStart).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      })} → ${new Date(dailyData.currentShiftEnd).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      })}`}
+                    />
+                  </div>
+                </section>
+
+                <section className="grid gap-4 xl:grid-cols-2">
+                  <ChartCard title="Concorrente — avanço do turno">
+                    <p className="mb-3 text-xs text-white/50">
+                      Hoje/turno atual versus média dos seis dias anteriores no mesmo ponto.
+                    </p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={dailyData.coverageTrend}>
+                        <CartesianGrid stroke={chartGrid} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fill: chartTick, fontSize: 11 }} />
+                        <YAxis
+                          domain={[0, 100]}
+                          tick={{ fill: chartTick, fontSize: 11 }}
+                          unit="%"
+                          width={45}
+                        />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="currentConcurrentPct"
+                          name="Turno atual"
+                          stroke="oklch(0.65 0.20 240)"
+                          strokeWidth={3}
+                          connectNulls={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="historicalConcurrentPct"
+                          name="Média recente"
+                          stroke="oklch(0.66 0.06 240)"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+
+                  <ChartCard title="Camareira — avanço do turno">
+                    <p className="mb-3 text-xs text-white/50">
+                      Mesma comparação temporal, sem transformar a média histórica em meta.
+                    </p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={dailyData.coverageTrend}>
+                        <CartesianGrid stroke={chartGrid} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fill: chartTick, fontSize: 11 }} />
+                        <YAxis
+                          domain={[0, 100]}
+                          tick={{ fill: chartTick, fontSize: 11 }}
+                          unit="%"
+                          width={45}
+                        />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Line
+                          type="monotone"
+                          dataKey="currentCamareiraPct"
+                          name="Turno atual"
+                          stroke="oklch(0.72 0.18 60)"
+                          strokeWidth={3}
+                          connectNulls={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="historicalCamareiraPct"
+                          name="Média recente"
+                          stroke="oklch(0.66 0.07 60)"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </ChartCard>
+                </section>
+
+                <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                  <div>
+                    <h2 className="font-bold">Produtividade — Higiene Diária</h2>
+                    <p className="mt-1 text-xs text-white/50">
+                      Concorrente e Camareira ficam separadas das Altas. A duração só entra nas
+                      médias quando há início e conclusão válidos; volume não é usado sozinho como
+                      ranking de qualidade.
+                    </p>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {dailyData.staffProductivity.map((person) => (
+                      <article
+                        key={person.name}
+                        className="rounded-lg border border-white/10 bg-black/10 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="min-w-0 break-words font-semibold">{person.name}</h3>
+                          <span className="shrink-0 text-[10px] text-white/35">
+                            {person.activeDays} dia(s)
+                          </span>
+                        </div>
+                        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <dt className="text-[10px] uppercase text-white/40">Concorrentes</dt>
+                            <dd className="text-xl font-bold tabular-nums">{person.concorrentes}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[10px] uppercase text-white/40">Camareiras</dt>
+                            <dd className="text-xl font-bold tabular-nums">{person.camareiras}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-white/50">Média concorrente</dt>
+                            <dd>{person.avgConcurrentMin == null ? "—" : `${person.avgConcurrentMin} min`}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-white/50">Média camareira</dt>
+                            <dd>{person.avgCamareiraMin == null ? "—" : `${person.avgCamareiraMin} min`}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-white/50">Média / mediana geral</dt>
+                            <dd>
+                              {person.avgDurationMin ?? "—"} / {person.medianDurationMin ?? "—"} min
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs text-white/50">Durações válidas</dt>
+                            <dd>{person.durationSamples}</dd>
+                          </div>
+                        </dl>
+                        <p className="mt-3 text-[10px] text-white/35">
+                          Última atividade:{" "}
+                          {new Date(person.lastActivity).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZone: "America/Sao_Paulo",
+                          })}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                  {!dailyData.staffProductivity.length && (
+                    <p className="mt-3 text-sm text-white/50">
+                      Nenhuma rotina diária elegível encontrada na amostra.
+                    </p>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                  <div>
+                    <h2 className="font-bold">Fechamentos automáticos da Diária</h2>
+                    <p className="mt-1 text-xs text-white/50">
+                      Reconstituição dos últimos seis turnos concluídos com base nas rotinas únicas
+                      registradas em cada janela. Os percentuais usam o mesmo escopo de leitos da
+                      tela Diária.
+                    </p>
+                  </div>
+                  <div className="scrollbar-hidden mt-3 flex gap-3 overflow-x-auto pb-1">
+                    {dailyData.shiftClosures.map((shift) => (
+                      <article
+                        key={shift.key}
+                        className="min-w-[280px] flex-1 rounded-lg border border-white/10 bg-black/10 p-3 sm:min-w-[330px]"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wide text-white/40">
+                              {new Date(shift.start).toLocaleDateString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                timeZone: "America/Sao_Paulo",
+                              })}
+                            </div>
+                            <h3 className="font-bold">{shift.label}</h3>
+                          </div>
+                          <span className="font-mono text-[10px] text-white/40">
+                            {new Date(shift.start).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              timeZone: "America/Sao_Paulo",
+                            })}
+                            {" → "}
+                            {new Date(shift.end).toLocaleTimeString("pt-BR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              timeZone: "America/Sao_Paulo",
+                            })}
+                          </span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="rounded-md border border-sky-400/15 bg-sky-400/[0.05] p-2">
+                            <div className="text-[10px] uppercase text-white/40">Concorrente</div>
+                            <div className="text-xl font-bold">{shift.concurrentPct}%</div>
+                            <div className="text-[10px] text-white/40">
+                              {shift.concurrentDone}/{shift.concurrentEligible}
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-amber-400/15 bg-amber-400/[0.05] p-2">
+                            <div className="text-[10px] uppercase text-white/40">Camareira</div>
+                            <div className="text-xl font-bold">{shift.camareiraPct}%</div>
+                            <div className="text-[10px] text-white/40">
+                              {shift.camareiraDone}/{shift.camareiraEligible}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {shift.blocks.map((block) => (
+                            <span
+                              key={block.block}
+                              className="rounded-md border px-1.5 py-1 text-[10px]"
+                              title={`Concorrente ${block.concurrentPct}% · Camareira ${block.camareiraPct}%`}
+                              style={{
+                                color: BLOCK_COLOR[block.block] ?? "currentColor",
+                                borderColor: (
+                                  BLOCK_COLOR[block.block] ?? "oklch(0.6 0.03 255)"
+                                ).replace(")", " / 0.4)"),
+                                backgroundColor: (
+                                  BLOCK_COLOR[block.block] ?? "oklch(0.6 0.03 255)"
+                                ).replace(")", " / 0.08)"),
+                              }}
+                            >
+                              {block.block}: C {block.concurrentPct}% · M {block.camareiraPct}%
+                            </span>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </>
         ) : (
           <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/40">
