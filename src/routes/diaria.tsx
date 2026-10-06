@@ -1120,7 +1120,7 @@ function BedDetailSheet({
             ))}
             {!historyLoading && !history.length && !historyError && (
               <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/40">
-                Nenhum registro concluído encontrado nos últimos 7 dias.
+                Nenhum registro concluído encontrado na janela histórica recente.
               </div>
             )}
             {historyError && (
