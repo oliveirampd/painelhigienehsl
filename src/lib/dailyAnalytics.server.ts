@@ -510,7 +510,7 @@ function toHistoryRecord(routine: DailyRoutine): DailyHistoryRecord {
 }
 
 export async function loadDailyBedHistory(bed: string): Promise<DailyHistoryRecord[]> {
-  const history = await fetchAnswers(7);
+  const history = await fetchAnswers(14);
   return buildRoutines(history.rows)
     .filter((routine) => routine.bed === String(Number(bed)) && !!routine.completedAt)
     .sort((a, b) => b.anchorAt.getTime() - a.anchorAt.getTime())
