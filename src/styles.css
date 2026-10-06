@@ -294,3 +294,15 @@
 .panel-light [class*="text-sky-100"] {
   color: oklch(0.42 0.15 240) !important;
 }
+
+
+/* Mantém a rolagem funcional sem exibir trilhos/ponteiros visuais. */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
