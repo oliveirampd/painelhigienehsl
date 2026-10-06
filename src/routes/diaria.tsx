@@ -928,33 +928,110 @@ function DiariaPage() {
 function BedDetailSheet({
   bed,
   events,
+  altaStatus,
+  concurrentEligible,
+  periodo,
   onClose,
 }: {
   bed: string;
   events: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent } | undefined;
+  altaStatus?: "waiting_cleaning" | "in_progress";
+  concurrentEligible: boolean;
+  periodo: Periodo;
   onClose: () => void;
 }) {
   const c = events?.concorrente;
   const k = events?.camareira;
+  const [history, setHistory] = useState<DailyHistoryRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setHistoryLoading(true);
+    setHistoryError(false);
+    getDailyBedHistory({ data: { bed } })
+      .then((rows) => {
+        if (alive) setHistory(rows);
+      })
+      .catch(() => {
+        if (alive) setHistoryError(true);
+      })
+      .finally(() => {
+        if (alive) setHistoryLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [bed]);
+
+  const currentLabel = (event: DailyBedEvent | undefined, eligible = true) => {
+    if (!eligible) {
+      return altaStatus
+        ? "fora da concorrente enquanto há Alta terminal em curso"
+        : "fora do escopo da concorrente";
+    }
+    if (!event) return "sem registro neste turno";
+    return event.status === "in_progress"
+      ? `em execução desde ${formatTime(event.at)}`
+      : `concluída às ${formatTime(event.at)}`;
+  };
+
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 lg:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 lg:items-center lg:p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-t-xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-xl"
+        className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Leito {bed}</h3>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+              Situação da Diária
+            </div>
+            <h3 className="mt-0.5 text-xl font-bold">Leito {bed}</h3>
+          </div>
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-full p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="space-y-2.5">
+
+        <section className="rounded-xl border border-white/10 bg-black/10 p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+            O que falta / situação atual
+          </div>
+          <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
+            <div>
+              <div className="text-[10px] uppercase text-white/35">Concorrente</div>
+              <strong className="text-sm">{currentLabel(c, concurrentEligible)}</strong>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-white/35">Camareira</div>
+              <strong className="text-sm">{currentLabel(k)}</strong>
+              {!k && periodo !== "tarde" && (
+                <div className="mt-0.5 text-[10px] text-white/35">fora do destaque do período atual</div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-white/35">Alta terminal</div>
+              <strong className="text-sm">
+                {altaStatus === "waiting_cleaning"
+                  ? "Alta parada"
+                  : altaStatus === "in_progress"
+                    ? "em higienização terminal"
+                    : "sem Alta em curso"}
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
           <DetailRow
             icon={<BrushCleaning className="h-4 w-4" />}
             color={CONCORRENTE_COLOR}
@@ -968,6 +1045,218 @@ function BedDetailSheet({
             event={k}
           />
         </div>
+
+        <section className="mt-4">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <h4 className="font-semibold">Últimos 3 registros concluídos</h4>
+              <p className="text-[11px] text-white/40">
+                Histórico recente deste leito no Listo.
+              </p>
+            </div>
+            {historyLoading && <span className="text-[10px] text-white/35">carregando…</span>}
+          </div>
+          <div className="mt-2 space-y-2">
+            {history.map((item) => (
+              <article
+                key={item.key}
+                className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase"
+                      style={{
+                        color: item.kind === "concorrente" ? CONCORRENTE_COLOR : CAMAREIRA_COLOR,
+                        background: (
+                          item.kind === "concorrente" ? CONCORRENTE_COLOR : CAMAREIRA_COLOR
+                        ).replace(")", " / 0.12)"),
+                      }}
+                    >
+                      {item.kind === "concorrente" ? "Concorrente" : "Camareira"}
+                    </span>
+                    <strong className="text-xs">
+                      {item.startedAt
+                        ? new Date(item.startedAt).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            timeZone: "America/Sao_Paulo",
+                          })
+                        : "Data não informada"}
+                    </strong>
+                  </div>
+                  <span className="font-mono text-xs text-white/55">
+                    {item.durationMin == null ? "tempo —" : `${item.durationMin} min`}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm font-medium">
+                  {item.staff || "Colaborador não identificado"}
+                </div>
+                <div className="mt-0.5 text-[11px] text-white/45">
+                  início{" "}
+                  {item.startedAt
+                    ? new Date(item.startedAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      })
+                    : "—"}
+                  {" · "}fim{" "}
+                  {item.completedAt
+                    ? new Date(item.completedAt).toLocaleTimeString("pt-BR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      })
+                    : "—"}
+                </div>
+              </article>
+            ))}
+            {!historyLoading && !history.length && !historyError && (
+              <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/40">
+                Nenhum registro concluído encontrado nos últimos 7 dias.
+              </div>
+            )}
+            {historyError && (
+              <div className="rounded-lg border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-xs text-amber-200">
+                O histórico recente não pôde ser consultado agora. A situação do turno acima continua válida.
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function FloorDetailSheet({
+  block,
+  floor,
+  beds,
+  byBed,
+  onFocus,
+  onClose,
+}: {
+  block: (typeof BLOCK_ORDER)[number];
+  floor: number;
+  beds: Array<{ n: string; b: string }>;
+  byBed: Map<string, { concorrente?: DailyBedEvent; camareira?: DailyBedEvent }>;
+  onFocus: () => void;
+  onClose: () => void;
+}) {
+  const concurrentEligible = beds.filter((bed) => isDailyConcurrentEligibleBed(bed.n, bed.b));
+  const concurrentDone = concurrentEligible.filter((bed) => !!byBed.get(bed.n)?.concorrente).length;
+  const camareiraDone = beds.filter((bed) => !!byBed.get(bed.n)?.camareira).length;
+  const active = beds.filter((bed) => {
+    const event = byBed.get(bed.n);
+    return (
+      event?.concorrente?.status === "in_progress" || event?.camareira?.status === "in_progress"
+    );
+  }).length;
+  const completedEvents = beds
+    .flatMap((bed) => {
+      const event = byBed.get(bed.n);
+      return [event?.concorrente, event?.camareira].filter(
+        (item): item is DailyBedEvent => !!item && item.status === "completed",
+      );
+    })
+    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  const lastCompletion = completedEvents[0];
+
+  return (
+    <div
+      className="fixed inset-0 z-[65] flex items-end justify-center bg-black/60 lg:items-center lg:p-4"
+      onClick={onClose}
+    >
+      <div
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-md rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div
+              className="text-[10px] font-semibold uppercase tracking-widest"
+              style={{ color: BLOCK_COLOR[block] }}
+            >
+              Bloco {block}
+            </div>
+            <h3 className="mt-0.5 text-xl font-bold">{floor}º andar</h3>
+            <p className="text-xs text-white/40">{beds.length} leitos cadastrados neste andar</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-white/45 hover:bg-white/10 hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <FloorMetric
+            label="Concorrente"
+            value={`${concurrentDone}/${concurrentEligible.length}`}
+            detail={`${Math.max(0, concurrentEligible.length - concurrentDone)} sem registro`}
+            color={CONCORRENTE_COLOR}
+          />
+          <FloorMetric
+            label="Camareira"
+            value={`${camareiraDone}/${beds.length}`}
+            detail={`${Math.max(0, beds.length - camareiraDone)} sem registro`}
+            color={CAMAREIRA_COLOR}
+          />
+          <FloorMetric
+            label="Em execução"
+            value={String(active)}
+            detail="rotinas ativas agora"
+            color="oklch(0.68 0.18 150)"
+          />
+          <FloorMetric
+            label="Última conclusão"
+            value={lastCompletion ? formatTime(lastCompletion.at) : "—"}
+            detail={lastCompletion?.staff || "sem conclusão registrada"}
+            color={BLOCK_COLOR[block]}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={onFocus}
+          className="mt-4 w-full rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/10"
+          style={{ borderColor: BLOCK_COLOR[block].replace(")", " / 0.45)") }}
+        >
+          Mostrar somente este andar no mapa
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FloorMetric({
+  label,
+  value,
+  detail,
+  color,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <div
+      className="rounded-lg border px-3 py-2"
+      style={{
+        borderColor: color.replace(")", " / 0.28)"),
+        background: color.replace(")", " / 0.07)"),
+      }}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color }}>
+        {label}
+      </div>
+      <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
+      <div className="mt-0.5 truncate text-[10px] text-white/40" title={detail}>
+        {detail}
       </div>
     </div>
   );
@@ -1156,6 +1445,9 @@ function BedTile({
   events,
   altaStatus,
   isDark,
+  highlighted,
+  justCompleted,
+  attention,
   onSelect,
 }: {
   bed: string;
@@ -1164,6 +1456,9 @@ function BedTile({
   events: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent } | undefined;
   altaStatus?: "waiting_cleaning" | "in_progress";
   isDark: boolean;
+  highlighted?: boolean;
+  justCompleted?: boolean;
+  attention?: boolean;
   onSelect?: () => void;
 }) {
   const c = events?.concorrente;
@@ -1255,7 +1550,10 @@ function BedTile({
     : undefined;
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div
+      data-bed-code={bed}
+      className={`flex flex-col items-center gap-0.5 ${justCompleted ? "daily-bed-completed" : ""}`}
+    >
       <div className="flex h-[11px] items-center gap-1 font-mono text-[8px] leading-none tabular-nums">
         {!altaColor && hasC && (
           <span style={{ color: CONCORRENTE_COLOR }}>{formatTime(c!.at)}</span>
@@ -1290,6 +1588,11 @@ function BedTile({
             splitShadow,
             anyActive
               ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.45)")}`
+              : null,
+            highlighted ? "0 0 0 3px oklch(0.74 0.18 230 / 0.9)" : null,
+            justCompleted ? "0 0 0 2px oklch(0.72 0.18 150 / 0.8)" : null,
+            attention && !highlighted && !justCompleted
+              ? "0 0 0 1px oklch(0.78 0.20 60 / 0.55)"
               : null,
           ]
             .filter(Boolean)
@@ -1326,6 +1629,12 @@ function BedTile({
             <PatientIcon className="h-3.5 w-3.5" style={{ color: patientIconColor }} />
           )}
         </span>
+        {attention && (
+          <span
+            className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-amber-400"
+            title="Andar abaixo do ritmo do turno"
+          />
+        )}
         {repeatBadge && (
           <span
             className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-[9px] font-bold leading-[14px] text-black"
