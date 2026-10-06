@@ -1,6 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, Clock3, Gauge, RefreshCw, Sparkles, TimerReset } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  BedDouble,
+  BrushCleaning,
+  Clock3,
+  Gauge,
+  RefreshCw,
+  Sparkles,
+  TimerReset,
+} from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -21,6 +31,10 @@ import {
   type ShiftSummary,
 } from "@/lib/analytics.functions";
 import { usePanelTheme } from "@/hooks/usePanelTheme";
+import {
+  getDailyOperationsAnalytics,
+  type DailyOperationsAnalytics,
+} from "@/lib/dailyAnalytics.functions";
 
 export const Route = createFileRoute("/gestao")({
   head: () => ({
@@ -47,19 +61,33 @@ function GestaoPage() {
   const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const [data, setData] = useState<OperationsAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dailyData, setDailyData] = useState<DailyOperationsAnalytics | null>(null);
+  const [dailyError, setDailyError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
-    try {
-      setLoading(true);
-      setData(await getOperationsAnalytics());
+    setLoading(true);
+    const [terminalResult, dailyResult] = await Promise.allSettled([
+      getOperationsAnalytics(),
+      getDailyOperationsAnalytics(),
+    ]);
+
+    if (terminalResult.status === "fulfilled") {
+      setData(terminalResult.value);
       setError(null);
-    } catch (err) {
-      console.error(err);
-      setError("Não foi possível carregar a análise do Listo agora.");
-    } finally {
-      setLoading(false);
+    } else {
+      console.error(terminalResult.reason);
+      setError("Não foi possível carregar a análise das Altas agora.");
     }
+
+    if (dailyResult.status === "fulfilled") {
+      setDailyData(dailyResult.value);
+      setDailyError(null);
+    } else {
+      console.error(dailyResult.reason);
+      setDailyError("A análise histórica da Higiene Diária está indisponível agora.");
+    }
+    setLoading(false);
   }
 
   useEffect(() => {
@@ -370,9 +398,9 @@ function GestaoPage() {
             <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
               <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                 <div>
-                  <h2 className="font-bold">Auditoria dos altas recentes</h2>
+                  <h2 className="font-bold">Auditoria das Altas recentes</h2>
                   <p className="text-xs text-white/40">
-                    Os mesmos altas únicas usados nos indicadores acima. Esta tabela permite
+                    As mesmas Altas únicas usadas nos indicadores acima. Esta tabela permite
                     conferir leito por leito.
                   </p>
                 </div>
