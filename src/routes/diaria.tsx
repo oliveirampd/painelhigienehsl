@@ -563,18 +563,23 @@ function DiariaPage() {
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
-                <span
+                <button
+                  type="button"
                   key={`${x.block}-${x.floor}`}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[11px]"
+                  onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
                 >
                   <strong>Bloco {x.block} · {x.floor}º</strong>
                   <span className={x.pct < ritmoEsperado - 20 ? "text-amber-200" : "text-white/45"}>
                     {x.pct}%
                   </span>
                   <span className="text-white/30">· {x.pending} faltam</span>
-                </span>
+                </button>
               ))}
             </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/45">
+              {concentrationText}
+            </p>
           </div>
         </div>
       </div>
@@ -607,6 +612,140 @@ function DiariaPage() {
         </div>
       </div>
 
+      <div className="flex-none px-4 pb-2 lg:px-6">
+        <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+            <div className="scrollbar-hidden flex min-w-0 items-center gap-1.5 overflow-x-auto">
+              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-white/35">
+                Bloco
+              </span>
+              {(["all", ...BLOCK_ORDER] as BlockFilter[]).map((block) => {
+                const active = blockFilter === block;
+                const color = block === "all" ? "oklch(0.68 0.03 255)" : BLOCK_COLOR[block];
+                return (
+                  <button
+                    type="button"
+                    key={block}
+                    onClick={() => {
+                      setBlockFilter(block);
+                      setFloorFilter(null);
+                    }}
+                    className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                    style={{
+                      borderColor: color.replace(")", active ? " / 0.75)" : " / 0.28)"),
+                      background: color.replace(")", active ? " / 0.18)" : " / 0.05)"),
+                      color: active ? color : undefined,
+                    }}
+                  >
+                    {block === "all" ? "Todos" : block}
+                  </button>
+                );
+              })}
+              {blockFilter !== "all" && (
+                <select
+                  aria-label="Filtrar andar"
+                  value={floorFilter ?? ""}
+                  onChange={(event) =>
+                    setFloorFilter(event.target.value ? Number(event.target.value) : null)
+                  }
+                  className="h-8 shrink-0 rounded-md border border-white/15 bg-transparent px-2 text-xs outline-none"
+                >
+                  <option value="">Todos andares</option>
+                  {availableFloors.map((floor) => (
+                    <option key={floor} value={floor}>
+                      {floor}º andar
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="scrollbar-hidden flex min-w-0 items-center gap-1.5 overflow-x-auto">
+              {(
+                [
+                  ["all", "Todas rotinas"],
+                  ["concorrente", "Concorrente"],
+                  ["camareira", "Camareira"],
+                ] as Array<[RoutineFilter, string]>
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  onClick={() => setRoutineFilter(value)}
+                  className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                    routineFilter === value
+                      ? "border-sky-400/45 bg-sky-400/10 font-semibold"
+                      : "border-white/10 text-white/55 hover:bg-white/10"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              {(
+                [
+                  ["all", "Mapa completo"],
+                  ["pending", "Só pendentes"],
+                  ["running", "Em execução"],
+                ] as Array<[ViewMode, string]>
+              ).map(([value, label]) => (
+                <button
+                  type="button"
+                  key={value}
+                  onClick={() => setViewMode(value)}
+                  className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                    viewMode === value
+                      ? "border-emerald-400/45 bg-emerald-400/10 font-semibold"
+                      : "border-white/10 text-white/55 hover:bg-white/10"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={focusBed} className="flex min-w-0 items-center gap-1.5">
+              <div className="relative min-w-0 flex-1 xl:w-40 xl:flex-none">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
+                <input
+                  value={bedSearch}
+                  onChange={(event) => setBedSearch(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="Buscar leito"
+                  className="h-8 w-full rounded-md border border-white/15 bg-black/10 pl-8 pr-2 text-sm outline-none placeholder:text-white/30 focus:border-sky-400/50"
+                />
+              </div>
+              <button
+                type="submit"
+                className="h-8 rounded-md border border-sky-400/35 bg-sky-400/10 px-2.5 text-xs font-semibold"
+              >
+                Ir
+              </button>
+              {(hasMapFilter || bedSearch) && (
+                <button
+                  type="button"
+                  onClick={clearMapFilters}
+                  title="Limpar filtros"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/45 hover:bg-white/10"
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
+              )}
+            </form>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-white/40">
+            <span>
+              {visibleGroups.reduce((sum, group) => sum + group.beds.length, 0)} de {ACTIVE_BEDS.length} leitos exibidos
+            </span>
+            <span>
+              Últimos 15 min: <strong className="text-white/65">+{completedLast15Min} concluídos</strong>
+              {" · "}
+              <strong className="text-white/65">{activeNow} em execução agora</strong>
+            </span>
+            {searchMessage && <span className="text-amber-200">{searchMessage}</span>}
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium uppercase text-white/60">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
         <Legenda color="oklch(0.75 0.17 55)" text="Rotina camareira" />
@@ -619,13 +758,13 @@ function DiariaPage() {
       </div>
 
       <div className="flex-none px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/30 lg:px-6">
-        Mapa de leitos · rolagem automática na TV
+        Mapa de leitos · clique no andar para resumo · rolagem automática na TV
       </div>
       <main
         ref={mainRef}
         className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
       >
-        {grupos.map((g) => (
+        {visibleGroups.map((g) => (
           <section key={g.block}>
             <h2
               className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide"
@@ -674,12 +813,29 @@ function DiariaPage() {
                   concorrenteFeitas: 0,
                   camareiraFeitas: 0,
                 };
+                const floorNeedsAttention = floorsAtencao.some(
+                  (item) => item.block === g.block && item.floor === floor,
+                );
                 return (
-                  <div key={floor} className="flex items-start gap-3">
-                    <div className="mt-1.5 w-10 flex-none flex flex-col items-center gap-1">
-                      <span className="w-full text-right font-mono text-[11px] text-white/35">
+                  <div
+                    key={floor}
+                    className={`flex items-start gap-3 rounded-lg ${
+                      floorNeedsAttention ? "bg-amber-400/[0.035] py-1" : ""
+                    }`}
+                  >
+                    <div className="mt-1.5 w-12 flex-none flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFloor({ block: g.block, floor })}
+                        className={`w-full rounded px-1 py-0.5 text-right font-mono text-[11px] transition-colors ${
+                          floorNeedsAttention
+                            ? "border border-amber-400/25 bg-amber-400/[0.08] text-amber-200"
+                            : "text-white/35 hover:bg-white/10 hover:text-white/70"
+                        }`}
+                        title={`Abrir resumo do ${floor}º andar do Bloco ${g.block}`}
+                      >
                         {floor}º
-                      </span>
+                      </button>
                       <div className="flex items-end gap-1">
                         <VerticalProgressBar
                           value={stats.concorrenteFeitas}
@@ -706,9 +862,18 @@ function DiariaPage() {
                             bed={b.n}
                             block={g.block}
                             floor={floor}
-                            events={byBed.get(b.n)}
+                            events={eventsForMap(b.n)}
                             altaStatus={altaByBed.get(b.n)}
                             isDark={isDark}
+                            highlighted={highlightedBed === b.n}
+                            justCompleted={recentlyCompletedBeds.has(b.n)}
+                            attention={
+                              floorsAtencao.some(
+                                (item) => item.block === g.block && item.floor === floor,
+                              ) &&
+                              !byBed.get(b.n)?.concorrente &&
+                              isDailyConcurrentEligibleBed(b.n, g.block)
+                            }
                             onSelect={() => setSelectedBed({ bed: b.n, events: byBed.get(b.n) })}
                           />
                         ))}
@@ -719,13 +884,41 @@ function DiariaPage() {
             </div>
           </section>
         ))}
+        {visibleGroups.length === 0 && (
+          <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+            Nenhum leito corresponde aos filtros atuais.
+          </div>
+        )}
       </main>
       <UpdatesModal />
       {selectedBed && (
         <BedDetailSheet
           bed={selectedBed.bed}
           events={selectedBed.events}
+          altaStatus={altaByBed.get(selectedBed.bed)}
+          concurrentEligible={
+            isDailyConcurrentEligibleBed(selectedBed.bed) && !altaByBed.has(selectedBed.bed)
+          }
+          periodo={periodo}
           onClose={() => setSelectedBed(null)}
+        />
+      )}
+      {selectedFloor && (
+        <FloorDetailSheet
+          block={selectedFloor.block}
+          floor={selectedFloor.floor}
+          beds={ACTIVE_BEDS.filter(
+            (bed) => bed.b === selectedFloor.block && bedFloor(bed.n) === selectedFloor.floor,
+          )}
+          byBed={byBed}
+          onFocus={() => {
+            setBlockFilter(selectedFloor.block);
+            setFloorFilter(selectedFloor.floor);
+            setRoutineFilter("all");
+            setViewMode("all");
+            setSelectedFloor(null);
+          }}
+          onClose={() => setSelectedFloor(null)}
         />
       )}
     </div>
