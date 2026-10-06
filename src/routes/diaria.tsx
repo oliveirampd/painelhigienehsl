@@ -390,7 +390,13 @@ function DiariaPage() {
     .map((group) => {
       const beds = group.beds.filter(bedMatchesView);
       const floors = group.floors.filter((floor) => beds.some((bed) => bedFloor(bed.n) === floor));
-      return { ...group, beds, floors };
+      return {
+        ...group,
+        beds,
+        floors,
+        concorrenteRealizadas: beds.filter((bed) => !!byBed.get(bed.n)?.concorrente).length,
+        camareiraRealizadas: beds.filter((bed) => !!byBed.get(bed.n)?.camareira).length,
+      };
     })
     .filter((group) => group.beds.length > 0);
 
