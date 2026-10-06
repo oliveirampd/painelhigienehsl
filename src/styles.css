@@ -306,3 +306,13 @@
   height: 0;
   display: none;
 }
+
+
+@keyframes daily-bed-completed {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(1.08); filter: brightness(1.22); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.daily-bed-completed {
+  animation: daily-bed-completed 1.2s ease-out 2;
+}
