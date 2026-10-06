@@ -282,7 +282,7 @@ function DiariaPage() {
   );
 
   return (
-    <div className={`${themeClass} min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
+    <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
       <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base lg:text-2xl font-bold tracking-tight">
@@ -424,7 +424,7 @@ function DiariaPage() {
       </div>
 
       <div className="flex-none px-4 lg:px-6 pb-2">
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+        <div className="scrollbar-hidden flex gap-1.5 overflow-x-auto pb-1">
           {floorCoverage.map((x) => {
             const tone =
               x.pct >= 90
@@ -467,7 +467,7 @@ function DiariaPage() {
       </div>
       <main
         ref={mainRef}
-        className="min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
+        className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
       >
         {grupos.map((g) => (
           <section key={g.block}>
