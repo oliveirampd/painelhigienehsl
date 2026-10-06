@@ -1,3 +1,5 @@
+import { ACTIVE_DAILY_BEDS, isDailyConcurrentEligibleBed } from "@/lib/dailyScope";
+
 /**
  * Leitura ao vivo das rotinas de higiene diária (concorrente) e camareira no Listo360.
  * Não usa banco: consulta o Listo direto a cada chamada, então o painel /diaria
@@ -173,6 +175,9 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
     if (!kind) continue;
     const bed = bedNumber(a);
     if (!bed) continue;
+    const bedRef = ACTIVE_DAILY_BEDS.find((item) => item.n === bed);
+    if (!bedRef) continue;
+    if (kind === "concorrente" && !isDailyConcurrentEligibleBed(bed, bedRef.b)) continue;
     const status = statusOf(a);
     if (!status) continue;
 
