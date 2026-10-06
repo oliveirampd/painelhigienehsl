@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BrushCleaning,
   BedDouble,
@@ -12,9 +12,17 @@ import {
   UserRound,
   Baby,
   Radiation,
+  Search,
+  XCircle,
 } from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
-import { HOSPITAL_BEDS, bedFloor } from "@/lib/beds";
+import { getDailyBedHistory, type DailyHistoryRecord } from "@/lib/dailyAnalytics.functions";
+import { bedFloor } from "@/lib/beds";
+import {
+  ACTIVE_DAILY_BEDS,
+  dailyBedUnit,
+  isDailyConcurrentEligibleBed,
+} from "@/lib/dailyScope";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
@@ -51,15 +59,7 @@ const BLOCK_COLOR: Record<(typeof BLOCK_ORDER)[number], string> = {
   B: "oklch(0.63 0.23 25)",
 };
 
-// Andares que existem no cadastro mas não são usados na prática — tirados da
-// contagem e da exibição por completo (não é "sem rotina", é "não existe" aqui).
-const EXCLUDED_FLOORS: Array<{ block: string; floor: number }> = [
-  { block: "C", floor: 12 },
-  { block: "C", floor: 13 },
-];
-const ACTIVE_BEDS = HOSPITAL_BEDS.filter(
-  (b) => !EXCLUDED_FLOORS.some((ex) => ex.block === b.b && ex.floor === bedFloor(b.n)),
-);
+const ACTIVE_BEDS = ACTIVE_DAILY_BEDS;
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -69,6 +69,9 @@ function formatTime(iso: string): string {
 // usada no /lib/daily.server.ts) — em horário de Brasília, sem depender do fuso
 // configurado no dispositivo que está exibindo a tela.
 type Periodo = "manha" | "tarde" | "noite";
+type BlockFilter = "all" | (typeof BLOCK_ORDER)[number];
+type RoutineFilter = "all" | "concorrente" | "camareira";
+type ViewMode = "all" | "pending" | "running";
 function periodoAtualBRT(): Periodo {
   const wall = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const minutos = wall.getUTCHours() * 60 + wall.getUTCMinutes();
@@ -135,6 +138,17 @@ function DiariaPage() {
     bed: string;
     events?: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent };
   } | null>(null);
+  const [selectedFloor, setSelectedFloor] = useState<{ block: (typeof BLOCK_ORDER)[number]; floor: number } | null>(null);
+  const [blockFilter, setBlockFilter] = useState<BlockFilter>("all");
+  const [floorFilter, setFloorFilter] = useState<number | null>(null);
+  const [routineFilter, setRoutineFilter] = useState<RoutineFilter>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
+  const [bedSearch, setBedSearch] = useState("");
+  const [searchMessage, setSearchMessage] = useState<string | null>(null);
+  const [highlightedBed, setHighlightedBed] = useState<string | null>(null);
+  const [recentlyCompletedBeds, setRecentlyCompletedBeds] = useState<Set<string>>(new Set());
+  const previousStatuses = useRef<Map<string, DailyBedEvent["status"]>>(new Map());
+  const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const tick = () => {
@@ -152,6 +166,24 @@ function DiariaPage() {
       try {
         const res = await getDailyBeds();
         if (!alive) return;
+        const nextStatuses = new Map(
+          res.events.map((event) => [`${event.bed}|${event.kind}`, event.status] as const),
+        );
+        if (previousStatuses.current.size > 0) {
+          const completedNow = res.events
+            .filter(
+              (event) =>
+                event.status === "completed" &&
+                previousStatuses.current.get(`${event.bed}|${event.kind}`) === "in_progress",
+            )
+            .map((event) => event.bed);
+          if (completedNow.length) {
+            setRecentlyCompletedBeds(new Set(completedNow));
+            if (completionTimer.current) clearTimeout(completionTimer.current);
+            completionTimer.current = setTimeout(() => setRecentlyCompletedBeds(new Set()), 5500);
+          }
+        }
+        previousStatuses.current = nextStatuses;
         setEvents(res.events);
         setLastAt(Date.now());
         setErro(null);
@@ -166,20 +198,18 @@ function DiariaPage() {
     return () => {
       alive = false;
       clearInterval(id);
+      if (completionTimer.current) clearTimeout(completionTimer.current);
     };
   }, []);
 
   // Unidades onde "limpeza concorrente" não deve ser contabilizada/colorida
   // (não são leitos de paciente, ou a rotina lá não faz sentido operacional).
-  const EXCLUDED_CONCORRENTE_UNITS = new Set(["5B", "5C", "9C", "3C", "3D"]);
-  const bedUnit = (bedCode: string) => {
-    const b = HOSPITAL_BEDS.find((x) => x.n === bedCode);
-    return b ? `${bedFloor(bedCode)}${b.b}` : "";
-  };
+  const bedUnit = (bedCode: string) => dailyBedUnit(bedCode);
   const eventsFiltered = useMemo(
     () =>
       events.filter(
-        (e) => !(e.kind === "concorrente" && EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(e.bed))),
+        (event) =>
+          event.kind !== "concorrente" || isDailyConcurrentEligibleBed(event.bed),
       ),
     [events],
   );
@@ -227,7 +257,7 @@ function DiariaPage() {
   // tipo de rotina neste turno. Higiene concorrente ignora as unidades excluídas
   // e os leitos que estão num ciclo de alta terminal; camareira considera todos os leitos.
   const bedsElegiveisConcorrente = ACTIVE_BEDS.filter(
-    (b) => !EXCLUDED_CONCORRENTE_UNITS.has(bedUnit(b.n)) && !altaByBed.has(b.n),
+    (b) => isDailyConcurrentEligibleBed(b.n, b.b) && !altaByBed.has(b.n),
   );
   const faltamHigiene = bedsElegiveisConcorrente.filter((b) => !byBed.get(b.n)?.concorrente).length;
   const faltamCamareira = ACTIVE_BEDS.filter((b) => !byBed.get(b.n)?.camareira).length;
@@ -280,6 +310,132 @@ function DiariaPage() {
   const floorsAtencao = floorCoverage.filter(
     (x) => x.pending > 0 && progressoTurno > 0.6 && x.pct < ritmoEsperado - 20,
   );
+
+  const availableFloors = useMemo(
+    () =>
+      blockFilter === "all"
+        ? []
+        : Array.from(
+            new Set(
+              ACTIVE_BEDS.filter((bed) => bed.b === blockFilter).map((bed) => bedFloor(bed.n)),
+            ),
+          ).sort((a, b) => b - a),
+    [blockFilter],
+  );
+
+  const pendingConcurrentBeds = ACTIVE_BEDS.filter(
+    (bed) =>
+      isDailyConcurrentEligibleBed(bed.n, bed.b) &&
+      !altaByBed.has(bed.n) &&
+      !byBed.get(bed.n)?.concorrente,
+  );
+  const pendingByFloor = new Map<string, number>();
+  const pendingByBlock = new Map<string, number>();
+  for (const bed of pendingConcurrentBeds) {
+    const floorKey = `${bed.b}|${bedFloor(bed.n)}`;
+    pendingByFloor.set(floorKey, (pendingByFloor.get(floorKey) ?? 0) + 1);
+    pendingByBlock.set(bed.b, (pendingByBlock.get(bed.b) ?? 0) + 1);
+  }
+  const topPendingFloor = [...pendingByFloor.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const topPendingBlock = [...pendingByBlock.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  const concentrationText = (() => {
+    if (!pendingConcurrentBeds.length) return "Nenhuma concorrente pendente no escopo atual.";
+    if (topPendingFloor) {
+      const [block, floor] = topPendingFloor[0].split("|");
+      const pct = Math.round((topPendingFloor[1] / pendingConcurrentBeds.length) * 100);
+      if (pct >= 30)
+        return `${topPendingFloor[1]} de ${pendingConcurrentBeds.length} pendências estão no ${floor}º do Bloco ${block} (${pct}%).`;
+    }
+    if (topPendingBlock) {
+      const pct = Math.round((topPendingBlock[1] / pendingConcurrentBeds.length) * 100);
+      return `Bloco ${topPendingBlock[0]} concentra ${topPendingBlock[1]} de ${pendingConcurrentBeds.length} pendências (${pct}%).`;
+    }
+    return `${pendingConcurrentBeds.length} concorrentes ainda sem registro neste turno.`;
+  })();
+
+  const completedLast15Min = eventsFiltered.filter(
+    (event) =>
+      event.status === "completed" &&
+      Date.now() - new Date(event.at).getTime() >= 0 &&
+      Date.now() - new Date(event.at).getTime() <= 15 * 60 * 1000,
+  ).length;
+  const activeNow = eventsFiltered.filter((event) => event.status === "in_progress").length;
+
+  const bedMatchesView = (bed: (typeof ACTIVE_BEDS)[number]) => {
+    if (blockFilter !== "all" && bed.b !== blockFilter) return false;
+    if (floorFilter != null && bedFloor(bed.n) !== floorFilter) return false;
+
+    const current = byBed.get(bed.n);
+    const concorrenteEligible =
+      isDailyConcurrentEligibleBed(bed.n, bed.b) && !altaByBed.has(bed.n);
+    const pendingConcorrente = concorrenteEligible && !current?.concorrente;
+    const pendingCamareira = !current?.camareira;
+    const runningConcorrente = current?.concorrente?.status === "in_progress";
+    const runningCamareira = current?.camareira?.status === "in_progress";
+
+    if (viewMode === "pending") {
+      if (routineFilter === "concorrente") return pendingConcorrente;
+      if (routineFilter === "camareira") return pendingCamareira;
+      return pendingConcorrente || pendingCamareira;
+    }
+    if (viewMode === "running") {
+      if (routineFilter === "concorrente") return runningConcorrente;
+      if (routineFilter === "camareira") return runningCamareira;
+      return runningConcorrente || runningCamareira;
+    }
+    return true;
+  };
+
+  const visibleGroups = grupos
+    .map((group) => {
+      const beds = group.beds.filter(bedMatchesView);
+      const floors = group.floors.filter((floor) => beds.some((bed) => bedFloor(bed.n) === floor));
+      return { ...group, beds, floors };
+    })
+    .filter((group) => group.beds.length > 0);
+
+  function eventsForMap(bed: string) {
+    const current = byBed.get(bed);
+    if (!current || routineFilter === "all") return current;
+    return routineFilter === "concorrente"
+      ? { concorrente: current.concorrente }
+      : { camareira: current.camareira };
+  }
+
+  function focusBed(event: React.FormEvent) {
+    event.preventDefault();
+    const normalized = String(Number((bedSearch.match(/\d+/)?.[0] ?? "0")));
+    const bed = ACTIVE_BEDS.find((item) => item.n === normalized);
+    if (!bed) {
+      setSearchMessage("Leito não encontrado no mapa da Diária.");
+      return;
+    }
+    setBlockFilter(bed.b as BlockFilter);
+    setFloorFilter(bedFloor(bed.n));
+    setRoutineFilter("all");
+    setViewMode("all");
+    setSearchMessage(null);
+    setHighlightedBed(bed.n);
+    window.setTimeout(() => {
+      document
+        .querySelector(`[data-bed-code="${bed.n}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }, 80);
+    window.setTimeout(() => setHighlightedBed((current) => (current === bed.n ? null : current)), 4500);
+  }
+
+  function clearMapFilters() {
+    setBlockFilter("all");
+    setFloorFilter(null);
+    setRoutineFilter("all");
+    setViewMode("all");
+    setBedSearch("");
+    setSearchMessage(null);
+    setHighlightedBed(null);
+  }
+
+  const hasMapFilter =
+    blockFilter !== "all" || floorFilter != null || routineFilter !== "all" || viewMode !== "all";
 
   return (
     <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
