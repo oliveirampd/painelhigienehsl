@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Clock3, MapPin, Route, TimerReset, UserRound, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MapPin, UserRound, X } from "lucide-react";
 
 import {
   getLastCompletedDischarge,
@@ -11,16 +11,6 @@ import {
   formatElapsed,
   type Discharge,
 } from "@/lib/hospital";
-
-function diffMinutes(startIso: string | null, endIso: string | null): number | null {
-  if (!startIso || !endIso) return null;
-  const start = new Date(startIso).getTime();
-  const end = new Date(endIso).getTime();
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  const minutes = Math.round((end - start) / 60000);
-  if (minutes < 0 || minutes > 12 * 60) return null;
-  return minutes;
-}
 
 function durationLabel(minutes: number | null): string {
   if (minutes == null) return "—";
@@ -77,14 +67,6 @@ export function DischargeTimelineModal({
   }, [onClose]);
 
   const effectiveStaff = staffName || null;
-  const detectedAt = null;
-  const startedAt = discharge.status === "in_progress" ? discharge.status_updated_at : null;
-
-  const timeToStart = useMemo(() => diffMinutes(detectedAt, startedAt), [detectedAt, startedAt]);
-  const executionMinutes = useMemo(() => {
-    if (!startedAt || discharge.status !== "in_progress") return null;
-    return diffMinutes(startedAt, new Date(nowMs).toISOString());
-  }, [startedAt, discharge.status, nowMs]);
 
   const stageLabel =
     discharge.status === "waiting_cleaning"
@@ -104,7 +86,7 @@ export function DischargeTimelineModal({
         role="dialog"
         aria-modal="true"
         aria-label="Visão operacional do leito"
-        className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 shadow-2xl sm:rounded-2xl"
+        className="scrollbar-hidden max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 shadow-2xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -133,9 +115,6 @@ export function DischargeTimelineModal({
             <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-xs font-semibold">
               {stageLabel}
             </span>
-            <span className="rounded-full border border-white/10 px-2 py-1 font-mono text-xs text-white/65">
-              há {formatElapsed(discharge.status_updated_at, nowMs)}
-            </span>
           </div>
 
           <div className="mt-3 flex items-start gap-2 text-sm">
@@ -154,41 +133,34 @@ export function DischargeTimelineModal({
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <MetricCard
+            label="Nesta etapa desde"
+            value={formatClockTime(discharge.status_updated_at)}
+          />
           <MetricCard
             label="Tempo nesta etapa"
             value={formatElapsed(discharge.status_updated_at, nowMs)}
           />
-          <MetricCard
-            label="Início da higiene"
-            value={startedAt ? formatClockTime(startedAt) : "—"}
-          />
-          <MetricCard
-            label={discharge.status === "in_progress" ? "Em execução há" : "Registro → início"}
-            value={
-              discharge.status === "in_progress"
-                ? durationLabel(executionMinutes)
-                : durationLabel(timeToStart)
-            }
-            wideOnMobile
-          />
         </div>
 
-        <section className="mt-4 rounded-xl border border-white/10 p-3">
-          <h4 className="font-semibold">Última Alta concluída neste leito</h4>
-          <p className="mt-1 text-xs text-white/60">
-            Um único registro por unidade + leito, substituído quando uma conclusão mais recente é
-            sincronizada. Horários de Brasília.
+        <section className="panel-surface mt-4 rounded-xl border p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+            Histórico do leito
+          </div>
+          <h4 className="mt-1 font-semibold">Última Alta concluída</h4>
+          <p className="mt-1 text-xs text-white/50">
+            Última conclusão sincronizada para este leito · horários de Brasília.
           </p>
           {loading ? (
             <p className="mt-2 text-sm">Carregando histórico…</p>
           ) : error ? (
             <p className="mt-2 text-sm text-amber-100">
-              A última Alta ainda não está disponível para este leito.
+              O histórico deste leito está indisponível agora.
             </p>
           ) : !lastCompleted ? (
             <p className="mt-2 text-sm text-white/60">
-              Ainda não há uma Alta concluída registrada para este leito.
+              Ainda não há uma Alta concluída sincronizada para este leito.
             </p>
           ) : (
             <article className="mt-3 rounded-lg bg-black/10 p-3 text-sm">
@@ -205,41 +177,15 @@ export function DischargeTimelineModal({
                 <span>Fim: {formatClockTime(lastCompleted.completedAt)}</span>
                 <span>Duração: {durationLabel(lastCompleted.durationMinutes)}</span>
               </div>
-              <div className="mt-2 break-words text-xs text-white/60">
-                Registro Listo #{lastCompleted.sourceAnswerId}
-              </div>
+              <details className="mt-2 text-xs text-white/45">
+                <summary className="cursor-pointer">Conferir origem do registro</summary>
+                <div className="mt-1 break-words">
+                  Listo #{lastCompleted.sourceAnswerId}
+                </div>
+              </details>
             </article>
           )}
         </section>
-        <div className="mt-4 space-y-2">
-          <EventRow
-            icon={<Clock3 className="h-4 w-4" />}
-            label="Entrada na etapa atual"
-            value={formatClockTime(discharge.status_updated_at)}
-            detail="horário operacional usado pelo painel"
-          />
-          {detectedAt && (
-            <EventRow
-              icon={<TimerReset className="h-4 w-4" />}
-              label="Registro de origem no Listo"
-              value={formatClockTime(detectedAt)}
-              detail="referência informada pela resposta do Listo"
-            />
-          )}
-          {startedAt && (
-            <EventRow
-              icon={<Route className="h-4 w-4" />}
-              label="Higiene iniciada"
-              value={formatClockTime(startedAt)}
-              detail={
-                timeToStart == null
-                  ? undefined
-                  : `${durationLabel(timeToStart)} após o registro de origem`
-              }
-            />
-          )}
-        </div>
-
         {discharge.pause_reason && (
           <div className="mt-4 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2">
             <div className="text-[10px] uppercase tracking-wide text-amber-100/45">Observação</div>
@@ -247,29 +193,14 @@ export function DischargeTimelineModal({
           </div>
         )}
 
-        {loading && (
-          <div className="mt-4 text-xs text-white/35">Consultando a última Alta registrada…</div>
-        )}
       </div>
     </div>
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  wideOnMobile = false,
-}: {
-  label: string;
-  value: string;
-  wideOnMobile?: boolean;
-}) {
+function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 ${
-        wideOnMobile ? "col-span-2 sm:col-span-1" : ""
-      }`}
-    >
+    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
       <div className="text-[9px] uppercase tracking-wide text-white/30">{label}</div>
       <div className="mt-1 font-mono text-base font-semibold tabular-nums text-white/85">
         {value}
@@ -277,29 +208,3 @@ function MetricCard({
     </div>
   );
 }
-
-function EventRow({
-  icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-black/10 px-3 py-2.5">
-      <div className="mt-0.5 text-white/40">{icon}</div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide text-white/30">{label}</div>
-        <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-white/80">
-          {value}
-        </div>
-        {detail && <div className="mt-0.5 text-[11px] text-white/35">{detail}</div>}
-      </div>
-    </div>
-  );
-}
-
