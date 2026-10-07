@@ -7,7 +7,6 @@ import {
   UsersRound,
   CircleCheck,
   BadgeCheck,
-  Eraser,
    AlertTriangle,
   Activity,
   Eye,
@@ -177,51 +176,6 @@ function TvPage() {
     if (mudou || isFirstRun) forceFlashRerender((n) => n + 1);
   }, [discharges]);
 
-  // Marco de "limpar recentes" (só localStorage deste navegador/TV, nunca escreve no
-  // banco): esconde da faixa de finalizados recentes as conclusões antes desse
-  // horário. Não afeta em nada a contagem do turno — essa vem sempre direto do banco
-  // (ver concluidasHojePorBloco), então limpar a faixa nunca "some" uma alta contada.
-  const [recentClearedAt, setRecentClearedAt] = useState(0);
-  const [hiddenRecentKeys, setHiddenRecentKeys] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    setRecentClearedAt(Number(localStorage.getItem("tv:recentClearedAt") ?? 0));
-    try {
-      const saved = JSON.parse(localStorage.getItem("tv:hiddenRecentKeys") || "[]") as string[];
-      setHiddenRecentKeys(new Set(saved));
-    } catch {
-      setHiddenRecentKeys(new Set());
-    }
-  }, []);
-
-  // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
-  // A janela é reavaliada a cada atualização de dados / tique do relógio,
-  // então leitos antigos saem da faixa automaticamente. Deduplicado por leito
-  // (se o mesmo leito tiver mais de um evento de conclusão na janela, só o
-  // mais recente aparece — evita repetir o mesmo leito na faixa).
-  const recentCompletions = useMemo(() => {
-    const cutoff = Math.max(now - 30 * 60 * 1000, recentClearedAt);
-    const byBed = new Map<string, Discharge>();
-    for (const d of discharges) {
-      if (
-        !isExcluded(d) &&
-        isBed(d) &&
-        isTerminal(d) &&
-        d.status === "completed" &&
-        d.completed_at
-      ) {
-        const completedAt = new Date(d.completed_at).getTime();
-        const completionKey = `${d.id}|${d.completed_at}`;
-        if (completedAt < cutoff || hiddenRecentKeys.has(completionKey)) continue;
-        const bed = d.bed_number ?? "";
-        const prev = byBed.get(bed);
-        if (!prev || new Date(prev.completed_at!).getTime() < completedAt) byBed.set(bed, d);
-      }
-    }
-    return Array.from(byBed.values())
-      .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
-      .slice(0, 8)
-      .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-  }, [discharges, now, recentClearedAt, hiddenRecentKeys]);
 
   const flashVersions = flashVersionRef.current;
 
@@ -538,25 +492,6 @@ function TvPage() {
   const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
-  // Só esconde a faixa de finalizados recentes neste navegador — 100% local,
-  // nunca mexe no banco. A contagem do turno não usa esse marco, então nunca é
-  // afetada por isso (era esse o bug: limpar aqui antes apagava completed_at no
-  // banco, e o próximo sync do Listo recriava o registro, contando de novo).
-  function limparRecentes() {
-    const ts = Date.now();
-    const nextKeys = new Set(hiddenRecentKeys);
-    for (const item of recentCompletions) {
-      nextKeys.add(`${item.id}|${item.completedAt}`);
-    }
-    const compact = Array.from(nextKeys).slice(-120);
-    const persisted = new Set(compact);
-
-    setRecentClearedAt(ts);
-    setHiddenRecentKeys(persisted);
-    localStorage.setItem("tv:recentClearedAt", String(ts));
-    localStorage.setItem("tv:hiddenRecentKeys", JSON.stringify(compact));
-    toast.success("Recentes limpos.");
-  }
 
   const filtros = isDark && isNoturno ? "brightness(0.88)" : undefined;
 
@@ -600,14 +535,7 @@ function TvPage() {
           >
             <Eye className="h-3 w-3" /> Só exceções
           </button>
-          <button
-            type="button"
-            onClick={limparRecentes}
-            title="Esconder a faixa de finalizados recentes (só neste painel — não afeta a contagem do turno)"
-            className="flex items-center gap-1 rounded-md border border-white/15 px-2 py-1 text-[10px] uppercase tracking-wide text-white/55 transition-colors hover:bg-white/10 active:scale-95"
-          >
-            <Eraser className="h-3 w-3" /> Recentes
-          </button>
+
           <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
@@ -662,47 +590,7 @@ function TvPage() {
         </div>
       </div>
 
-      {recentCompletions.length > 0 && (
-        <div className="flex-none w-full flex items-stretch overflow-hidden border-b border-[oklch(0.55_0.14_150_/_0.28)] bg-[oklch(0.17_0.03_150_/_0.6)]">
-          <div className="flex-none flex items-center gap-1.5 px-3 lg:px-4 bg-[oklch(0.22_0.05_150_/_0.65)] border-r border-[oklch(0.55_0.14_150_/_0.28)]">
-            <CircleCheck className="h-3.5 w-3.5 shrink-0 text-[oklch(0.72_0.16_150)]" />
-            <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-wide text-[oklch(0.80_0.06_150)] whitespace-nowrap">
-              Finalizados recentes
-            </span>
-          </div>
-          <div className="flex-1 overflow-hidden py-1.5">
-            {(() => {
-              // Preenche a faixa com repetições suficientes do conteúdo real pra
-              // nunca deixar espaço em branco enquanto rola (a técnica de loop
-              // contínuo exige que uma "volta" já preencha bem mais que a tela).
-              // Com poucos leitos, repete só o necessário; com muitos, não repete.
-              const MIN_TRACK_ITEMS = 14;
-              const reps = Math.max(1, Math.ceil(MIN_TRACK_ITEMS / recentCompletions.length));
-              const track = Array.from({ length: reps }, () => recentCompletions).flat();
-              const durationS = Math.max(18, track.length * 2.6);
-              return (
-                <div
-                  className="animate-marquee flex items-center gap-6 lg:gap-8 whitespace-nowrap px-6"
-                  style={{ animationDuration: `${durationS}s` }}
-                >
-                  {[...track, ...track].map((c, i) => (
-                    <div
-                      key={`${c.id}-${i}`}
-                      className="flex items-center gap-2 text-[11px] lg:text-xs text-[oklch(0.80_0.06_150)]"
-                    >
-                      <span className="font-semibold text-white/90">{c.bed}</span>
-                      <span className="font-mono tabular-nums text-white/55">
-                        {formatClockTime(c.completedAt)}
-                      </span>
-                      <span className="text-white/30">há {formatElapsed(c.completedAt, now)}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+
 
       <div className="flex-none grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 lg:gap-3 px-4 lg:px-6 py-2.5 lg:py-3">
         <KpiCard
