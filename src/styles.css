@@ -316,3 +316,122 @@
 .daily-bed-completed {
   animation: daily-bed-completed 1.2s ease-out 2;
 }
+
+
+/* Superfícies e navegação compartilhadas entre TV, Diária, Geral e Gestão. */
+.panel-shell-header {
+  background-color: color-mix(in oklch, var(--background) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+.panel-surface {
+  border-color: oklch(1 0 0 / 10%);
+  background-color: oklch(1 0 0 / 3.5%);
+}
+.panel-nav {
+  border-color: oklch(1 0 0 / 10%);
+  background-color: oklch(1 0 0 / 3.5%);
+}
+.panel-nav-item {
+  min-height: 30px;
+  outline: none;
+}
+.panel-nav-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.panel-nav-item-inactive {
+  border-color: transparent;
+  color: oklch(0.82 0.01 255 / 0.62);
+}
+.panel-nav-item-inactive:hover {
+  border-color: oklch(1 0 0 / 9%);
+  background-color: oklch(1 0 0 / 7%);
+  color: oklch(0.98 0.004 255);
+}
+.panel-nav-item-active {
+  border-color: oklch(1 0 0 / 18%);
+  background-color: oklch(1 0 0 / 11%);
+  color: oklch(0.99 0.003 255);
+}
+.panel-state {
+  border: 1px dashed oklch(1 0 0 / 12%);
+  background-color: oklch(1 0 0 / 2.5%);
+}
+.panel-select {
+  color: inherit;
+  background-color: color-mix(in oklch, var(--background) 92%, transparent);
+}
+.panel-select option {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+.panel-management-nav {
+  border-color: oklch(1 0 0 / 10%);
+  background-color: color-mix(in oklch, var(--background) 95%, transparent);
+}
+.panel-management-link {
+  border-color: transparent;
+  color: oklch(0.82 0.01 255 / 0.62);
+}
+.panel-management-link:hover {
+  border-color: oklch(1 0 0 / 10%);
+  background-color: oklch(1 0 0 / 6%);
+  color: oklch(0.98 0.004 255);
+}
+
+.panel-light .panel-shell-header {
+  background-color: oklch(1 0 0 / 0.97) !important;
+}
+.panel-light .panel-surface,
+.panel-light .panel-state {
+  border-color: oklch(0.82 0.018 250);
+  background-color: oklch(1 0 0);
+}
+.panel-light .panel-nav {
+  border-color: oklch(0.80 0.018 250);
+  background-color: oklch(0.965 0.008 250);
+}
+.panel-light .panel-nav-item-inactive {
+  color: oklch(0.38 0.028 255);
+}
+.panel-light .panel-nav-item-inactive:hover {
+  border-color: oklch(0.78 0.02 250);
+  background-color: oklch(0.925 0.012 250);
+  color: oklch(0.18 0.03 255);
+}
+.panel-light .panel-nav-item-active {
+  border-color: oklch(0.66 0.12 245);
+  background-color: oklch(0.90 0.035 245);
+  color: oklch(0.24 0.11 245);
+}
+.panel-light .panel-management-nav {
+  border-color: oklch(0.82 0.018 250);
+  background-color: oklch(1 0 0 / 0.97);
+}
+.panel-light .panel-management-link {
+  color: oklch(0.38 0.028 255);
+}
+.panel-light .panel-management-link:hover {
+  border-color: oklch(0.80 0.02 250);
+  background-color: oklch(0.95 0.01 250);
+  color: oklch(0.18 0.03 255);
+}
+
+/* Respeita preferência por menos movimento sem esconder conteúdo operacional. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ping,
+  .animate-marquee,
+  .animate-sweep,
+  .animate-linen,
+  .animate-bed-blink,
+  .pulse-critical,
+  .kpi-alert,
+  .goal-warn,
+  .activity-chip,
+  .daily-bed-completed,
+  .flash-row {
+    animation: none !important;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
