@@ -221,7 +221,7 @@ function TerminalGeralPage() {
   ).sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <div className={`${themeClass} min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
+    <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
       <header className="panel-shell-header flex-none flex flex-col gap-2 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base font-bold tracking-tight lg:text-2xl">Limpeza Terminal Geral — Áreas Comuns</h1>
@@ -309,7 +309,7 @@ function TerminalGeralPage() {
       </div>
 
       <div className="flex-none px-4 pb-2 lg:px-6">
-        <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-hidden flex gap-1.5 overflow-x-auto">
           {blockAttention.map((b) => {
             const pct = b.total ? Math.round((b.completed / b.total) * 100) : 0;
             return (
