@@ -303,6 +303,9 @@ function Overview({
   onOpenDaily: () => void;
   onOpenAltas: () => void;
 }) {
+  const avgWaitPeriod = averageNullable(chartDays.map((day) => day.avgWaitMin));
+  const avgExecutionPeriod = averageNullable(chartDays.map((day) => day.avgExecutionMin));
+
   return (
     <div className="space-y-4">
       <SectionHeader
@@ -567,7 +570,8 @@ function DailyManagement({
                 <th className="py-2 pr-3">Colaborador</th>
                 <th className="py-2 pr-3">Concorrentes</th>
                 <th className="py-2 pr-3">Camareiras</th>
-                <th className="py-2 pr-3">Tempo médio</th>
+                <th className="py-2 pr-3">Média Concorrente</th>
+                <th className="py-2 pr-3">Média Camareira</th>
                 <th className="py-2">Dias ativos</th>
               </tr>
             </thead>
@@ -578,7 +582,10 @@ function DailyManagement({
                   <td className="py-2.5 pr-3 tabular-nums">{person.concorrentes}</td>
                   <td className="py-2.5 pr-3 tabular-nums">{person.camareiras}</td>
                   <td className="py-2.5 pr-3 tabular-nums">
-                    {person.avgDurationMin == null ? "—" : `${person.avgDurationMin} min`}
+                    {person.avgConcurrentMin == null ? "—" : `${person.avgConcurrentMin} min`}
+                  </td>
+                  <td className="py-2.5 pr-3 tabular-nums">
+                    {person.avgCamareiraMin == null ? "—" : `${person.avgCamareiraMin} min`}
                   </td>
                   <td className="py-2.5 tabular-nums">{person.activeDays}</td>
                 </tr>
@@ -695,9 +702,9 @@ function AltasManagement({
       <section className="panel-surface rounded-xl border p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="font-bold">Próximas horas — média histórica</h2>
+            <h2 className="font-bold">Próximas horas — média histórica de Altas</h2>
             <p className="mt-1 text-xs text-white/45">
-              Compara o mesmo dia da semana e a mesma faixa horária nos últimos {data.historyDays} dias completos.
+              Baseada no horário em que a Alta foi registrada, comparando o mesmo dia da semana nos últimos {data.historyDays} dias completos.
             </p>
           </div>
           <CheckCircle2 className="h-4 w-4 text-emerald-300" />
@@ -744,13 +751,25 @@ function AltasManagement({
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Tempos por dia">
-          <ChartKey
-            items={[
-              ["Tempo para iniciar", "oklch(0.78 0.2 60)"],
-              ["Tempo de execução", "oklch(0.72 0.17 155)"],
-            ]}
-          />
+        <ChartCard title="Tempos das Altas por dia">
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">
+                Tempo para iniciar
+              </div>
+              <div className="mt-0.5 text-xl font-bold tabular-nums">
+                {avgWaitPeriod == null ? "—" : `${avgWaitPeriod} min`}
+              </div>
+            </div>
+            <div className="rounded-lg border border-emerald-400/15 bg-emerald-400/[0.05] px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-200/80">
+                Tempo de execução
+              </div>
+              <div className="mt-0.5 text-xl font-bold tabular-nums">
+                {avgExecutionPeriod == null ? "—" : `${avgExecutionPeriod} min`}
+              </div>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartDays}>
               <CartesianGrid stroke={chartGrid} vertical={false} />
@@ -762,8 +781,7 @@ function AltasManagement({
                 dataKey="avgWaitMin"
                 name="Tempo para iniciar"
                 stroke="oklch(0.78 0.2 60)"
-                strokeWidth={2.5}
-                dot={{ r: 3 }}
+                strokeWidth={3}
                 connectNulls={false}
               />
               <Line
@@ -771,8 +789,7 @@ function AltasManagement({
                 dataKey="avgExecutionMin"
                 name="Tempo de execução"
                 stroke="oklch(0.72 0.17 155)"
-                strokeWidth={2.5}
-                dot={{ r: 3 }}
+                strokeWidth={3}
                 connectNulls={false}
               />
             </LineChart>
@@ -783,9 +800,9 @@ function AltasManagement({
       <section className="panel-surface rounded-xl border p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="font-bold">Média de Altas por horário e dia da semana</h2>
+            <h2 className="font-bold">Quando as Altas costumam sair</h2>
             <p className="mt-1 text-xs text-white/45">
-              Últimos {data.historyDays} dias completos · cada célula mostra a média daquela combinação.
+              Média pelo horário de registro da Alta · últimos {data.historyDays} dias completos · mesma faixa e mesmo dia da semana.
             </p>
           </div>
           <span className="text-[10px] uppercase tracking-widest text-white/35">
@@ -1330,6 +1347,12 @@ function weekdayPlural(weekday: number, count: number): string {
   ];
   if (count === 1) return WEEKDAYS_LONG[weekday];
   return plural[weekday];
+}
+
+function averageNullable(values: Array<number | null>): number | null {
+  const valid = values.filter((value): value is number => value != null && Number.isFinite(value));
+  if (!valid.length) return null;
+  return Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
 }
 
 function normalize(value: string): string {
