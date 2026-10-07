@@ -250,7 +250,7 @@ function GestaoPage() {
                 icon={<Activity className="h-4 w-4" />}
                 label="Altas únicas analisadas"
                 value={String(data.totalSample)}
-                detail={`${data.rawTerminalRecords} linhas brutas deduplicadas`}
+                detail={`${data.rawTerminalRecords} registros elegíveis consolidados`}
               />
               <Metric
                 icon={<Clock3 className="h-4 w-4" />}
@@ -660,9 +660,14 @@ function GestaoPage() {
                       </div>
                       <h2 className="mt-1 text-lg font-bold">Cobertura no mesmo ponto do turno</h2>
                       <p className="mt-1 max-w-3xl text-xs text-white/50">
-                        Compara o avanço atual de Concorrente e Camareira com a média dos seis dias
-                        anteriores no mesmo minuto relativo do turno. Isso é referência histórica,
-                        não SLA oficial.
+                        Reconstrói o avanço de Concorrente e Camareira a partir dos registros do Listo
+                        e compara com a média dos seis dias anteriores no mesmo minuto relativo do
+                        turno. É referência histórica, não SLA oficial.
+                      </p>
+                      <p className="mt-1 max-w-3xl text-[11px] text-white/35">
+                        A reconstrução histórica usa o cadastro e as exclusões fixas da Diária. A
+                        exclusão dinâmica de leitos com Alta terminal ativa pertence ao mapa ao vivo
+                        e pode fazer o percentual da Diária diferir levemente desta leitura histórica.
                       </p>
                     </div>
                     <span className="rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[10px] uppercase tracking-wide text-white/45">
@@ -680,7 +685,7 @@ function GestaoPage() {
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <Metric
                       icon={<BrushCleaning className="h-4 w-4" />}
-                      label="Concorrente agora"
+                      label="Concorrente · turno atual"
                       value={`${dailyData.currentConcurrentPct}%`}
                       detail={
                         dailyData.historicalConcurrentPct == null
@@ -690,7 +695,7 @@ function GestaoPage() {
                     />
                     <Metric
                       icon={<BedDouble className="h-4 w-4" />}
-                      label="Camareira agora"
+                      label="Camareira · turno atual"
                       value={`${dailyData.currentCamareiraPct}%`}
                       detail={
                         dailyData.historicalCamareiraPct == null
@@ -869,8 +874,8 @@ function GestaoPage() {
                     <h2 className="font-bold">Fechamentos automáticos da Diária</h2>
                     <p className="mt-1 text-xs text-white/50">
                       Reconstituição dos últimos seis turnos concluídos com base nas rotinas únicas
-                      registradas em cada janela. Os percentuais usam o mesmo escopo de leitos da
-                      tela Diária.
+                      registradas em cada janela. Os percentuais usam o cadastro e as exclusões fixas
+                      da Diária; leitos com Alta ativa não são descontados retroativamente.
                     </p>
                   </div>
                   <div className="scrollbar-hidden mt-3 flex gap-3 overflow-x-auto pb-1">
