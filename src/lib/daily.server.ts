@@ -170,6 +170,7 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
   const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
 
   const byBed = new Map<string, { event: Omit<DailyBedEvent, "count">; completedCount: number }>();
+  const seenCompletedCycles = new Set<string>();
   for (const a of answers) {
     const kind = kindOf(a);
     if (!kind) continue;
@@ -181,11 +182,24 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
     const status = statusOf(a);
     if (!status) continue;
 
-    const at = (parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date()).toISOString();
-    const atDate = new Date(at);
+    const startAt = parseBRT(a.startTime);
+    const endAt = parseBRT(a.endTime);
+    const sourceAt = parseBRT(a.date);
+    const atDate = endAt ?? startAt ?? sourceAt;
+    if (!atDate || atDate.getTime() > Date.now()) continue;
+    const at = atDate.toISOString();
     // Só conta pro turno em andamento agora — no início de cada turno, o leito
     // volta a aparecer como "sem rotina" até que a equipe registre uma nova entrada.
     if (atDate < shiftStart || atDate >= shiftEnd) continue;
+
+    const cycleAnchor = startAt ?? endAt ?? sourceAt;
+    const completedCycleKey =
+      status === "completed" && cycleAnchor
+        ? `${bed}|${kind}|${Math.floor(cycleAnchor.getTime() / 60000)}`
+        : null;
+    const completedIncrement =
+      completedCycleKey && !seenCompletedCycles.has(completedCycleKey) ? 1 : 0;
+    if (completedCycleKey) seenCompletedCycles.add(completedCycleKey);
 
     const ev: Omit<DailyBedEvent, "count"> = {
       bed,
@@ -205,10 +219,10 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
     const key = `${bed}|${kind}`;
     const prev = byBed.get(key);
     if (!prev) {
-      byBed.set(key, { event: ev, completedCount: status === "completed" ? 1 : 0 });
+      byBed.set(key, { event: ev, completedCount: completedIncrement });
       continue;
     }
-    const completedCount = prev.completedCount + (status === "completed" ? 1 : 0);
+    const completedCount = prev.completedCount + completedIncrement;
     // Em execução sempre vence pra exibição; entre iguais, o mais recente vence.
     const prevScore = prev.event.status === "in_progress" ? 1 : 0;
     const score = status === "in_progress" ? 1 : 0;
