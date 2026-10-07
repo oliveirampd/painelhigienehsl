@@ -182,8 +182,15 @@ function TvPage() {
   // horário. Não afeta em nada a contagem do turno — essa vem sempre direto do banco
   // (ver concluidasHojePorBloco), então limpar a faixa nunca "some" uma alta contada.
   const [recentClearedAt, setRecentClearedAt] = useState(0);
+  const [hiddenRecentKeys, setHiddenRecentKeys] = useState<Set<string>>(new Set());
   useEffect(() => {
     setRecentClearedAt(Number(localStorage.getItem("tv:recentClearedAt") ?? 0));
+    try {
+      const saved = JSON.parse(localStorage.getItem("tv:hiddenRecentKeys") || "[]") as string[];
+      setHiddenRecentKeys(new Set(saved));
+    } catch {
+      setHiddenRecentKeys(new Set());
+    }
   }, []);
 
   // Finalizados recentes: apenas os concluídos nos últimos 30 minutos.
@@ -203,7 +210,8 @@ function TvPage() {
         d.completed_at
       ) {
         const completedAt = new Date(d.completed_at).getTime();
-        if (completedAt < cutoff) continue;
+        const completionKey = `${d.id}|${d.completed_at}`;
+        if (completedAt < cutoff || hiddenRecentKeys.has(completionKey)) continue;
         const bed = d.bed_number ?? "";
         const prev = byBed.get(bed);
         if (!prev || new Date(prev.completed_at!).getTime() < completedAt) byBed.set(bed, d);
@@ -213,7 +221,7 @@ function TvPage() {
       .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())
       .slice(0, 8)
       .map((d) => ({ bed: d.bed_number ?? "", completedAt: d.completed_at!, id: d.id }));
-  }, [discharges, now, recentClearedAt]);
+  }, [discharges, now, recentClearedAt, hiddenRecentKeys]);
 
   const flashVersions = flashVersionRef.current;
 
@@ -536,8 +544,17 @@ function TvPage() {
   // banco, e o próximo sync do Listo recriava o registro, contando de novo).
   function limparRecentes() {
     const ts = Date.now();
+    const nextKeys = new Set(hiddenRecentKeys);
+    for (const item of recentCompletions) {
+      nextKeys.add(`${item.id}|${item.completedAt}`);
+    }
+    const compact = Array.from(nextKeys).slice(-120);
+    const persisted = new Set(compact);
+
     setRecentClearedAt(ts);
+    setHiddenRecentKeys(persisted);
     localStorage.setItem("tv:recentClearedAt", String(ts));
+    localStorage.setItem("tv:hiddenRecentKeys", JSON.stringify(compact));
     toast.success("Recentes limpos.");
   }
 
