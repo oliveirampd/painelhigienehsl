@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BrushCleaning,
@@ -20,9 +20,9 @@ import { getDailyBedHistory, type DailyHistoryRecord } from "@/lib/dailyAnalytic
 import { bedFloor } from "@/lib/beds";
 import {
   ACTIVE_DAILY_BEDS,
-  dailyBedUnit,
   isDailyConcurrentEligibleBed,
 } from "@/lib/dailyScope";
+import { isExcludedUnit } from "@/lib/operationalScope";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
@@ -62,7 +62,11 @@ const BLOCK_COLOR: Record<(typeof BLOCK_ORDER)[number], string> = {
 const ACTIVE_BEDS = ACTIVE_DAILY_BEDS;
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
 }
 
 // Manhã 06:20-13:40, Tarde 13:40-22:00, Noite 22:00-06:20 (mesma janela de turno
@@ -106,19 +110,8 @@ function altaBedCode(bedNumber: string): string | null {
 // "de alta" sem ser alta). E o mesmo status: "Altas Paradas" na /tv é
 // waiting_cleaning (sem colaborador alocado) — não "paused", que é outra coisa
 // (leito pausado manualmente por um motivo, ex: cofre travado).
-const ALTA_EXCLUDED_BLOCKS: Array<{ floor: number; block: string }> = [
-  { floor: 3, block: "D" },
-  { floor: 3, block: "C" },
-  { floor: 12, block: "C" },
-  { floor: 5, block: "B" },
-];
 function isAltaExcluded(unit: string | null): boolean {
-  const u = (unit || "").toUpperCase();
-  const m = u.match(/BLOCO\s+([A-Z])[^\d]*0*(\d+)/);
-  if (!m) return false;
-  const block = m[1];
-  const floor = parseInt(m[2], 10);
-  return ALTA_EXCLUDED_BLOCKS.some((ex) => ex.block === block && ex.floor === floor);
+  return isExcludedUnit(unit || "");
 }
 const isAltaBed = (bedNumber: string | null) => (bedNumber || "").toLowerCase().startsWith("leito");
 const isAltaTerminal = (externalId: string | null) =>
@@ -204,7 +197,6 @@ function DiariaPage() {
 
   // Unidades onde "limpeza concorrente" não deve ser contabilizada/colorida
   // (não são leitos de paciente, ou a rotina lá não faz sentido operacional).
-  const bedUnit = (bedCode: string) => dailyBedUnit(bedCode);
   const eventsFiltered = useMemo(
     () =>
       events.filter(
@@ -277,33 +269,73 @@ function DiariaPage() {
   const grupos = BLOCK_ORDER.map((block) => {
     const beds = ACTIVE_BEDS.filter((b) => b.b === block);
     const floors = Array.from(new Set(beds.map((b) => bedFloor(b.n)))).sort((a, b) => b - a);
-    const concorrenteRealizadas = beds.filter((b) => byBed.get(b.n)?.concorrente).length;
-    const camareiraRealizadas = beds.filter((b) => byBed.get(b.n)?.camareira).length;
-    // Progresso por andar: ignora leitos com alta em curso (parada ou já em
-    // higienização) — não são rotina diária, iam contar errado no progresso.
+    const concorrenteBeds = beds.filter(
+      (b) => isDailyConcurrentEligibleBed(b.n, b.b) && !altaByBed.has(b.n),
+    );
+    const camareiraBeds = beds.filter((b) => !altaByBed.has(b.n));
+    const concorrenteRealizadas = concorrenteBeds.filter(
+      (b) => !!byBed.get(b.n)?.concorrente,
+    ).length;
+    const camareiraRealizadas = camareiraBeds.filter(
+      (b) => !!byBed.get(b.n)?.camareira,
+    ).length;
+
     const floorStats = new Map(
       floors.map((floor) => {
         const bedsAndar = beds.filter((b) => bedFloor(b.n) === floor);
-        const elegiveis = bedsAndar.filter((b) => !altaByBed.has(b.n));
-        const concorrenteFeitas = elegiveis.filter((b) => byBed.get(b.n)?.concorrente).length;
-        const camareiraFeitas = elegiveis.filter((b) => byBed.get(b.n)?.camareira).length;
-        return [floor, { total: elegiveis.length, concorrenteFeitas, camareiraFeitas }] as const;
+        const concorrenteElegiveis = bedsAndar.filter(
+          (b) => isDailyConcurrentEligibleBed(b.n, b.b) && !altaByBed.has(b.n),
+        );
+        const camareiraElegiveis = bedsAndar.filter((b) => !altaByBed.has(b.n));
+        const concorrenteFeitas = concorrenteElegiveis.filter(
+          (b) => !!byBed.get(b.n)?.concorrente,
+        ).length;
+        const camareiraFeitas = camareiraElegiveis.filter(
+          (b) => !!byBed.get(b.n)?.camareira,
+        ).length;
+        return [
+          floor,
+          {
+            totalConcorrente: concorrenteElegiveis.length,
+            totalCamareira: camareiraElegiveis.length,
+            concorrenteFeitas,
+            camareiraFeitas,
+          },
+        ] as const;
       }),
     );
-    return { block, floors, beds, concorrenteRealizadas, camareiraRealizadas, floorStats };
+
+    return {
+      block,
+      floors,
+      beds,
+      concorrenteRealizadas,
+      camareiraRealizadas,
+      concorrenteTotal: concorrenteBeds.length,
+      camareiraTotal: camareiraBeds.length,
+      floorStats,
+    };
   }).filter((g) => g.beds.length > 0);
 
   const floorCoverage = grupos
     .flatMap((g) =>
       g.floors.map((floor) => {
         const stats = g.floorStats.get(floor) ?? {
-          total: 0,
+          totalConcorrente: 0,
+          totalCamareira: 0,
           concorrenteFeitas: 0,
           camareiraFeitas: 0,
         };
         const pct =
-          stats.total > 0 ? Math.round((stats.concorrenteFeitas / stats.total) * 100) : 100;
-        return { block: g.block, floor, pct, pending: Math.max(0, stats.total - stats.concorrenteFeitas) };
+          stats.totalConcorrente > 0
+            ? Math.round((stats.concorrenteFeitas / stats.totalConcorrente) * 100)
+            : 100;
+        return {
+          block: g.block,
+          floor,
+          pct,
+          pending: Math.max(0, stats.totalConcorrente - stats.concorrenteFeitas),
+        };
       }),
     )
     .sort((a, b) => a.pct - b.pct || b.pending - a.pending);
@@ -390,12 +422,22 @@ function DiariaPage() {
     .map((group) => {
       const beds = group.beds.filter(bedMatchesView);
       const floors = group.floors.filter((floor) => beds.some((bed) => bedFloor(bed.n) === floor));
+      const concorrenteBeds = beds.filter(
+        (bed) => isDailyConcurrentEligibleBed(bed.n, bed.b) && !altaByBed.has(bed.n),
+      );
+      const camareiraBeds = beds.filter((bed) => !altaByBed.has(bed.n));
       return {
         ...group,
         beds,
         floors,
-        concorrenteRealizadas: beds.filter((bed) => !!byBed.get(bed.n)?.concorrente).length,
-        camareiraRealizadas: beds.filter((bed) => !!byBed.get(bed.n)?.camareira).length,
+        concorrenteRealizadas: concorrenteBeds.filter(
+          (bed) => !!byBed.get(bed.n)?.concorrente,
+        ).length,
+        camareiraRealizadas: camareiraBeds.filter(
+          (bed) => !!byBed.get(bed.n)?.camareira,
+        ).length,
+        concorrenteTotal: concorrenteBeds.length,
+        camareiraTotal: camareiraBeds.length,
       };
     })
     .filter((group) => group.beds.length > 0);
@@ -445,7 +487,7 @@ function DiariaPage() {
 
   return (
     <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
-      <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
+      <header className="panel-shell-header flex-none flex flex-col gap-2 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base lg:text-2xl font-bold tracking-tight">
             Higiene Diária — Leitos
@@ -468,7 +510,7 @@ function DiariaPage() {
         </div>
       </header>
 
-      <div className="flex flex-none gap-2 overflow-x-auto px-4 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:grid lg:grid-cols-7 lg:overflow-visible lg:px-6 lg:py-3">
+      <div className="scrollbar-hidden flex flex-none gap-2 overflow-x-auto px-4 py-2.5 lg:grid lg:grid-cols-7 lg:overflow-visible lg:px-6 lg:py-3">
         <Kpi
           icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
           label="Em higiene agora"
@@ -619,7 +661,7 @@ function DiariaPage() {
       </div>
 
       <div className="flex-none px-4 pb-2 lg:px-6">
-        <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5">
+        <div className="panel-surface rounded-xl border p-2.5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="scrollbar-hidden flex min-w-0 items-center gap-1.5 overflow-x-auto">
               <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-white/35">
@@ -636,6 +678,7 @@ function DiariaPage() {
                       setBlockFilter(block);
                       setFloorFilter(null);
                     }}
+                    aria-pressed={blockFilter === block}
                     className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                     style={{
                       borderColor: color.replace(")", active ? " / 0.75)" : " / 0.28)"),
@@ -654,7 +697,7 @@ function DiariaPage() {
                   onChange={(event) =>
                     setFloorFilter(event.target.value ? Number(event.target.value) : null)
                   }
-                  className="h-8 shrink-0 rounded-md border border-white/15 bg-transparent px-2 text-xs outline-none"
+                  className="panel-select h-8 shrink-0 rounded-md border border-white/15 px-2 text-xs outline-none"
                 >
                   <option value="">Todos andares</option>
                   {availableFloors.map((floor) => (
@@ -678,6 +721,7 @@ function DiariaPage() {
                   type="button"
                   key={value}
                   onClick={() => setRoutineFilter(value)}
+                  aria-pressed={routineFilter === value}
                   className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
                     routineFilter === value
                       ? "border-sky-400/45 bg-sky-400/10 font-semibold"
@@ -698,6 +742,7 @@ function DiariaPage() {
                   type="button"
                   key={value}
                   onClick={() => setViewMode(value)}
+                  aria-pressed={viewMode === value}
                   className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
                     viewMode === value
                       ? "border-emerald-400/45 bg-emerald-400/10 font-semibold"
@@ -743,11 +788,15 @@ function DiariaPage() {
               {visibleGroups.reduce((sum, group) => sum + group.beds.length, 0)} de {ACTIVE_BEDS.length} leitos exibidos
             </span>
             <span>
-              Últimos 15 min: <strong className="text-white/65">+{completedLast15Min} concluídos</strong>
+              Últimos 15 min: <strong className="text-white/65">+{completedLast15Min} rotinas concluídas</strong>
               {" · "}
               <strong className="text-white/65">{activeNow} em execução agora</strong>
             </span>
-            {searchMessage && <span className="text-amber-200">{searchMessage}</span>}
+            {searchMessage && (
+              <span role="status" className="text-amber-200">
+                {searchMessage}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -798,14 +847,14 @@ function DiariaPage() {
               <span className="ml-auto flex min-w-[140px] flex-1 basis-40 flex-col gap-1 normal-case tracking-normal lg:max-w-xs">
                 <ProgressBar
                   value={g.concorrenteRealizadas}
-                  total={g.beds.length}
+                  total={g.concorrenteTotal}
                   color={CONCORRENTE_COLOR}
                   label="Concorrente"
                 />
                 {periodo === "tarde" && (
                   <ProgressBar
                     value={g.camareiraRealizadas}
-                    total={g.beds.length}
+                    total={g.camareiraTotal}
                     color={CAMAREIRA_COLOR}
                     label="Camareira"
                   />
@@ -815,7 +864,8 @@ function DiariaPage() {
             <div className="space-y-3">
               {g.floors.map((floor) => {
                 const stats = g.floorStats.get(floor) ?? {
-                  total: 0,
+                  totalConcorrente: 0,
+                  totalCamareira: 0,
                   concorrenteFeitas: 0,
                   camareiraFeitas: 0,
                 };
@@ -845,14 +895,14 @@ function DiariaPage() {
                       <div className="flex items-end gap-1">
                         <VerticalProgressBar
                           value={stats.concorrenteFeitas}
-                          total={stats.total}
+                          total={stats.totalConcorrente}
                           color={CONCORRENTE_COLOR}
                           label="Concorrente"
                         />
                         {periodo === "tarde" && (
                           <VerticalProgressBar
                             value={stats.camareiraFeitas}
-                            total={stats.total}
+                            total={stats.totalCamareira}
                             color={CAMAREIRA_COLOR}
                             label="Camareira"
                           />
@@ -873,13 +923,6 @@ function DiariaPage() {
                             isDark={isDark}
                             highlighted={highlightedBed === b.n}
                             justCompleted={recentlyCompletedBeds.has(b.n)}
-                            attention={
-                              floorsAtencao.some(
-                                (item) => item.block === g.block && item.floor === floor,
-                              ) &&
-                              !byBed.get(b.n)?.concorrente &&
-                              isDailyConcurrentEligibleBed(b.n, g.block)
-                            }
                             onSelect={() => setSelectedBed({ bed: b.n, events: byBed.get(b.n) })}
                           />
                         ))}
@@ -891,8 +934,8 @@ function DiariaPage() {
           </section>
         ))}
         {visibleGroups.length === 0 && (
-          <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
-            Nenhum leito corresponde aos filtros atuais.
+          <div className="panel-state flex min-h-48 items-center justify-center rounded-xl px-4 text-center text-sm text-white/45">
+            Nenhum leito corresponde aos filtros atuais. Ajuste bloco, andar, rotina ou visualização.
           </div>
         )}
       </main>
@@ -917,6 +960,7 @@ function DiariaPage() {
             (bed) => bed.b === selectedFloor.block && bedFloor(bed.n) === selectedFloor.floor,
           )}
           byBed={byBed}
+          altaByBed={altaByBed}
           onFocus={() => {
             setBlockFilter(selectedFloor.block);
             setFloorFilter(selectedFloor.floor);
@@ -948,6 +992,15 @@ function BedDetailSheet({
 }) {
   const c = events?.concorrente;
   const k = events?.camareira;
+
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [onClose]);
+
   const [history, setHistory] = useState<DailyHistoryRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState(false);
@@ -990,7 +1043,10 @@ function BedDetailSheet({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalhes do leito ${bed}`}
+        className="scrollbar-hidden max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
@@ -1140,6 +1196,7 @@ function FloorDetailSheet({
   floor,
   beds,
   byBed,
+  altaByBed,
   onFocus,
   onClose,
 }: {
@@ -1147,12 +1204,28 @@ function FloorDetailSheet({
   floor: number;
   beds: Array<{ n: string; b: string }>;
   byBed: Map<string, { concorrente?: DailyBedEvent; camareira?: DailyBedEvent }>;
+  altaByBed: Map<string, "waiting_cleaning" | "in_progress">;
   onFocus: () => void;
   onClose: () => void;
 }) {
-  const concurrentEligible = beds.filter((bed) => isDailyConcurrentEligibleBed(bed.n, bed.b));
-  const concurrentDone = concurrentEligible.filter((bed) => !!byBed.get(bed.n)?.concorrente).length;
-  const camareiraDone = beds.filter((bed) => !!byBed.get(bed.n)?.camareira).length;
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [onClose]);
+
+  const concurrentEligible = beds.filter(
+    (bed) => isDailyConcurrentEligibleBed(bed.n, bed.b) && !altaByBed.has(bed.n),
+  );
+  const camareiraEligible = beds.filter((bed) => !altaByBed.has(bed.n));
+  const concurrentDone = concurrentEligible.filter(
+    (bed) => !!byBed.get(bed.n)?.concorrente,
+  ).length;
+  const camareiraDone = camareiraEligible.filter(
+    (bed) => !!byBed.get(bed.n)?.camareira,
+  ).length;
   const active = beds.filter((bed) => {
     const event = byBed.get(bed.n);
     return (
@@ -1176,6 +1249,9 @@ function FloorDetailSheet({
     >
       <div
         onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Resumo do ${floor}º andar do Bloco ${block}`}
         className="w-full max-w-md rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
       >
         <div className="flex items-start justify-between gap-3">
@@ -1207,8 +1283,8 @@ function FloorDetailSheet({
           />
           <FloorMetric
             label="Camareira"
-            value={`${camareiraDone}/${beds.length}`}
-            detail={`${Math.max(0, beds.length - camareiraDone)} sem registro`}
+            value={`${camareiraDone}/${camareiraEligible.length}`}
+            detail={`${Math.max(0, camareiraEligible.length - camareiraDone)} sem registro`}
             color={CAMAREIRA_COLOR}
           />
           <FloorMetric
@@ -1453,7 +1529,6 @@ function BedTile({
   isDark,
   highlighted,
   justCompleted,
-  attention,
   onSelect,
 }: {
   bed: string;
@@ -1464,7 +1539,6 @@ function BedTile({
   isDark: boolean;
   highlighted?: boolean;
   justCompleted?: boolean;
-  attention?: boolean;
   onSelect?: () => void;
 }) {
   const c = events?.concorrente;
@@ -1597,9 +1671,6 @@ function BedTile({
               : null,
             highlighted ? "0 0 0 3px oklch(0.74 0.18 230 / 0.9)" : null,
             justCompleted ? "0 0 0 2px oklch(0.72 0.18 150 / 0.8)" : null,
-            attention && !highlighted && !justCompleted
-              ? "0 0 0 1px oklch(0.78 0.20 60 / 0.55)"
-              : null,
           ]
             .filter(Boolean)
             .join(", ") || undefined,
@@ -1635,12 +1706,6 @@ function BedTile({
             <PatientIcon className="h-3.5 w-3.5" style={{ color: patientIconColor }} />
           )}
         </span>
-        {attention && (
-          <span
-            className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-amber-400"
-            title="Andar abaixo do ritmo do turno"
-          />
-        )}
         {repeatBadge && (
           <span
             className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-[9px] font-bold leading-[14px] text-black"
