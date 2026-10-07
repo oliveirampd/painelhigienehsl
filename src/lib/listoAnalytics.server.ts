@@ -705,7 +705,10 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   }
 
   for (const cycle of historicalCycles) {
-    const p = brtParts(cycle.startedAt);
+    // Para distribuição horária de Altas, o evento é o registro/origem da Alta.
+    // O início da higienização só entra como fallback quando a origem não tem timestamp.
+    const eventAt = cycle.detectedAt ?? cycle.startedAt;
+    const p = brtParts(eventAt);
     hourCounts[p.hour].count += 1;
     const key = `${p.weekday}|${p.hour}`;
     weekdayHourCounts.set(key, (weekdayHourCounts.get(key) ?? 0) + 1);
