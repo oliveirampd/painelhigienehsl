@@ -282,7 +282,7 @@ export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
   const currentByKey = new Map<string, ListoAnswer>();
   for (const a of relevant) {
     const at = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
-    if (!at || at < shiftStart || at >= shiftEnd) continue;
+    if (!at || at.getTime() > Date.now() || at < shiftStart || at >= shiftEnd) continue;
     const area = (a.locationName || a.sectorDescription || `Área ${a.id}`).trim();
     const unit = [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
     const { block, floorLabel } = blockAndFloorOf(unit);
@@ -292,9 +292,16 @@ export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
       currentByKey.set(key, a);
       continue;
     }
-    const prevAt = parseBRT(prev.endTime) ?? parseBRT(prev.startTime) ?? parseBRT(prev.date) ?? new Date(0);
-    const emAndamento = (x: ListoAnswer) => (statusOf(x) === "in_progress" ? 1 : 0);
-    if (emAndamento(a) > emAndamento(prev) || (emAndamento(a) === emAndamento(prev) && at > prevAt)) {
+    const prevAt =
+      parseBRT(prev.endTime) ?? parseBRT(prev.startTime) ?? parseBRT(prev.date) ?? new Date(0);
+    const currentStatus = statusOf(a);
+    const previousStatus = statusOf(prev);
+    if (
+      at > prevAt ||
+      (at.getTime() === prevAt.getTime() &&
+        currentStatus === "in_progress" &&
+        previousStatus !== "in_progress")
+    ) {
       currentByKey.set(key, a);
     }
   }
