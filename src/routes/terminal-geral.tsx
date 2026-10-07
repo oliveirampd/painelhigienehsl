@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, X } from "lucide-react";
 import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
@@ -92,7 +92,13 @@ function TerminalGeralPage() {
 
   useEffect(() => {
     const tick = () => {
-      setClock(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      setClock(
+        new Date().toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "America/Sao_Paulo",
+        }),
+      );
       setNow(Date.now());
     };
     tick();
@@ -156,10 +162,12 @@ function TerminalGeralPage() {
     return BLOCK_ORDER.map((block) => {
       const items = events.filter((e) => e.block === block);
       const pending = items.filter((e) => e.status === "pendente").length;
+      const completed = items.filter((e) => e.status === "completed").length;
       return {
         block,
         total: items.length,
         pending,
+        completed,
         ratio: items.length ? pending / items.length : 0,
       };
     })
@@ -214,9 +222,9 @@ function TerminalGeralPage() {
 
   return (
     <div className={`${themeClass} min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
-      <header className="flex-none flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between px-4 lg:px-6 py-2.5 border-b border-white/15">
+      <header className="panel-shell-header flex-none flex flex-col gap-2 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-sm lg:text-2xl font-bold tracking-tight">Limpeza Terminal Geral — Áreas Comuns</h1>
+          <h1 className="text-base font-bold tracking-tight lg:text-2xl">Limpeza Terminal Geral — Áreas Comuns</h1>
           <PanelNav />
         </div>
         <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
@@ -242,7 +250,7 @@ function TerminalGeralPage() {
       </div>
 
       <div className="flex-none px-4 lg:px-6 pb-3">
-        <div className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2.5 lg:grid-cols-[1fr_1.4fr]">
+        <div className="panel-surface grid gap-3 rounded-xl border px-3 py-2.5 lg:grid-cols-[1fr_1.4fr]">
           <div>
             <div className="flex items-end justify-between gap-3">
               <div>
@@ -271,7 +279,7 @@ function TerminalGeralPage() {
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-white/35">Áreas que merecem atenção agora</div>
+            <div className="text-[10px] uppercase tracking-widest text-white/35">Pendências em destaque</div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {criticalAreas.length ? (
                 criticalAreas.map((e) => (
@@ -292,7 +300,7 @@ function TerminalGeralPage() {
                 ))
               ) : (
                 <span className="text-xs text-white/40">
-                  {shift.progress < 0.65 ? "Turno ainda em andamento, sem concentração crítica." : "Nenhuma concentração crítica agora."}
+                  {shift.progress < 0.65 ? "Turno ainda em andamento; sem pendência destacada." : "Nenhuma pendência destacada agora."}
                 </span>
               )}
             </div>
@@ -303,8 +311,7 @@ function TerminalGeralPage() {
       <div className="flex-none px-4 pb-2 lg:px-6">
         <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {blockAttention.map((b) => {
-            const completed = Math.max(0, b.total - b.pending);
-            const pct = b.total ? Math.round((completed / b.total) * 100) : 0;
+            const pct = b.total ? Math.round((b.completed / b.total) * 100) : 0;
             return (
               <div
                 key={b.block}
@@ -328,15 +335,25 @@ function TerminalGeralPage() {
       </div>
 
       {(erro || loading) && (
-        <div className="flex-none px-4 lg:px-6 pb-2 text-xs text-white/50">
-          {erro && <span className="text-[oklch(0.7_0.18_25)]">{erro}</span>}
-          {loading && !erro && <span>carregando…</span>}
+        <div className="flex-none px-4 pb-2 lg:px-6">
+          <div
+            role="status"
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              erro
+                ? "border-red-400/25 bg-red-400/[0.06] text-red-200"
+                : "border-white/10 bg-white/[0.025] text-white/50"
+            }`}
+          >
+            {erro ?? "Atualizando áreas comuns…"}
+          </div>
         </div>
       )}
 
-      <main ref={mainRef} className="min-h-[46vh] flex-1 overflow-y-auto px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6">
+      <main ref={mainRef} className="scrollbar-hidden min-h-[46vh] flex-1 space-y-6 overflow-y-auto px-4 pb-8 lg:min-h-0 lg:px-6">
         {events.length === 0 && !loading && !erro && (
-          <p className="text-sm text-white/40 pt-6">Nenhuma área de Limpeza Terminal Geral encontrada.</p>
+          <div className="panel-state mt-4 rounded-xl px-4 py-8 text-center text-sm text-white/45">
+            Nenhuma área de Limpeza Terminal Geral encontrada nesta janela.
+          </div>
         )}
         {gruposComBloco.map((g) => (
           <section key={g.block}>
@@ -449,16 +466,30 @@ function AreaDetailModal({
   history?: OperationsAnalytics["generalAreas"][number];
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm lg:items-center lg:p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 lg:rounded-2xl" onClick={(ev) => ev.stopPropagation()}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalhes da área ${e.area}`}
+        className="scrollbar-hidden max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 lg:rounded-2xl"
+        onClick={(ev) => ev.stopPropagation()}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-[10px] uppercase tracking-widest text-white/35">Área comum</div>
             <h3 className="mt-1 text-xl font-bold">{e.area}</h3>
             <p className="mt-0.5 text-xs text-white/45">{e.unit}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-white/45 hover:bg-white/10 hover:text-white">
+          <button type="button" aria-label="Fechar detalhes da área" onClick={onClose} className="rounded-full p-1.5 text-white/45 hover:bg-white/10 hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -497,7 +528,7 @@ function AreaCard({
     <button
       type="button"
       onClick={onSelect}
-      className="flex min-w-[150px] max-w-[240px] flex-1 flex-col gap-1 rounded-lg border px-2.5 py-2 text-left transition-transform hover:-translate-y-0.5 sm:flex-none sm:basis-[210px]"
+      className="flex min-w-[150px] max-w-[240px] flex-1 flex-col gap-1 rounded-lg border px-2.5 py-2 text-left transition-colors hover:bg-white/[0.05] active:scale-[0.99] sm:flex-none sm:basis-[210px]"
       style={{ borderColor: tone.replace(")", " / 0.4)"), background: tone.replace(")", " / 0.08)") }}
     >
       <div className="flex items-center justify-between gap-2">
