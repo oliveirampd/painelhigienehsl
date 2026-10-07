@@ -160,10 +160,12 @@ function GestaoPage() {
     [dailyData],
   );
 
-  const updatedAt = [data?.generatedAt, dailyData?.generatedAt]
+  const updatedCandidates = [data?.generatedAt, dailyData?.generatedAt]
     .filter((value): value is string => !!value)
-    .sort()
-    .at(-1);
+    .sort();
+  const updatedAt = updatedCandidates.length
+    ? updatedCandidates[updatedCandidates.length - 1]
+    : undefined;
 
   const views: Array<{ key: ManagementView; label: string; enabled: boolean }> = [
     { key: "overview", label: "Visão Geral", enabled: !!data || !!dailyData },
