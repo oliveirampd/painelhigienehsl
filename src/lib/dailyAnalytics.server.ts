@@ -66,19 +66,17 @@ export type DailyShiftClosure = {
   concurrentDone: number;
   concurrentEligible: number;
   concurrentPct: number;
-  camareiraApplicable: boolean;
   camareiraDone: number;
   camareiraEligible: number;
-  camareiraPct: number | null;
+  camareiraPct: number;
   blocks: Array<{
     block: string;
     concurrentDone: number;
     concurrentEligible: number;
     concurrentPct: number;
-    camareiraApplicable: boolean;
     camareiraDone: number;
     camareiraEligible: number;
-    camareiraPct: number | null;
+    camareiraPct: number;
   }>;
 };
 
@@ -94,7 +92,6 @@ export type DailyOperationsAnalytics = {
   currentShiftEnd: string;
   currentConcurrentPct: number;
   historicalConcurrentPct: number | null;
-  currentCamareiraApplicable: boolean;
   currentCamareiraPct: number;
   historicalCamareiraPct: number | null;
   coverageTrend: DailyCoveragePoint[];
@@ -330,7 +327,7 @@ function buildRoutines(rows: ListoAnswer[]): DailyRoutine[] {
         staff,
         startedAt,
         completedAt,
-        anchorAt: startedAt ?? completedAt ?? anchorAt,
+        anchorAt: completedAt ?? startedAt ?? anchorAt,
       });
       continue;
     }
@@ -339,7 +336,7 @@ function buildRoutines(rows: ListoAnswer[]): DailyRoutine[] {
     if (startedAt && (!current.startedAt || startedAt < current.startedAt)) current.startedAt = startedAt;
     if (completedAt && (!current.completedAt || completedAt > current.completedAt))
       current.completedAt = completedAt;
-    current.anchorAt = current.startedAt ?? current.completedAt ?? current.anchorAt;
+    current.anchorAt = current.completedAt ?? current.startedAt ?? current.anchorAt;
     if (staff && current.staff && normalize(staff) !== normalize(current.staff))
       current.staff = "Atribuição divergente";
     else if (!current.staff && staff) current.staff = staff;
@@ -458,10 +455,10 @@ function historicalAtOffset(
 function staffSummary(routines: DailyRoutine[]): DailyStaffProductivity[] {
   const byStaff = new Map<string, DailyRoutine[]>();
   for (const routine of routines) {
-    if (!routine.completedAt || !routine.staff || routine.staff === "Atribuição divergente") continue;
-    const list = byStaff.get(routine.staff) ?? [];
+    const name = routine.staff || "Sem colaborador informado";
+    const list = byStaff.get(name) ?? [];
     list.push(routine);
-    byStaff.set(routine.staff, list);
+    byStaff.set(name, list);
   }
 
   return [...byStaff.entries()]
@@ -481,7 +478,7 @@ function staffSummary(routines: DailyRoutine[]): DailyStaffProductivity[] {
         name,
         concorrentes: items.filter((item) => item.kind === "concorrente").length,
         camareiras: items.filter((item) => item.kind === "camareira").length,
-        completed: items.length,
+        completed: items.filter((item) => !!item.completedAt).length,
         avgDurationMin: avg(durations),
         medianDurationMin: median(durations),
         avgConcurrentMin: avg(concurrentDurations),
@@ -590,45 +587,27 @@ export async function loadDailyOperationsAnalytics(): Promise<DailyOperationsAna
     elapsedMin,
     "concorrente",
   );
-  const currentCamareiraApplicable = currentWindow.label === "Tarde";
-  const historicalCamareiraPct = currentCamareiraApplicable
-    ? historicalAtOffset(routines, currentWindow, elapsedMin, "camareira")
-    : null;
+  const historicalCamareiraPct = historicalAtOffset(
+    routines,
+    currentWindow,
+    elapsedMin,
+    "camareira",
+  );
 
   const shiftClosures: DailyShiftClosure[] = [];
   let cursor = previousShift(currentWindow);
   for (let index = 0; index < 6; index++) {
     const coverage = windowCoverage(routines, cursor);
-    const camareiraApplicable = cursor.label === "Tarde";
     const blocks = ["D", "E", "C", "B"]
-      .map((block) => {
-        const blockCoverage = windowCoverage(routines, cursor, cursor.end, block);
-        return {
-          block,
-          concurrentDone: blockCoverage.concurrentDone,
-          concurrentEligible: blockCoverage.concurrentEligible,
-          concurrentPct: blockCoverage.concurrentPct,
-          camareiraApplicable,
-          camareiraDone: camareiraApplicable ? blockCoverage.camareiraDone : 0,
-          camareiraEligible: camareiraApplicable ? blockCoverage.camareiraEligible : 0,
-          camareiraPct: camareiraApplicable ? blockCoverage.camareiraPct : null,
-        };
-      })
-      .filter((block) => block.concurrentEligible > 0 || block.camareiraEligible > 0);
-
+      .map((block) => ({ block, ...windowCoverage(routines, cursor, cursor.end, block) }))
+      .filter((block) => block.camareiraEligible > 0);
     shiftClosures.push({
       key: `${cursor.label}|${cursor.start.toISOString()}`,
       date: brtDate(cursor.start),
       label: cursor.label,
       start: cursor.start.toISOString(),
       end: cursor.end.toISOString(),
-      concurrentDone: coverage.concurrentDone,
-      concurrentEligible: coverage.concurrentEligible,
-      concurrentPct: coverage.concurrentPct,
-      camareiraApplicable,
-      camareiraDone: camareiraApplicable ? coverage.camareiraDone : 0,
-      camareiraEligible: camareiraApplicable ? coverage.camareiraEligible : 0,
-      camareiraPct: camareiraApplicable ? coverage.camareiraPct : null,
+      ...coverage,
       blocks,
     });
     cursor = previousShift(cursor);
@@ -650,7 +629,6 @@ export async function loadDailyOperationsAnalytics(): Promise<DailyOperationsAna
     currentShiftEnd: currentWindow.end.toISOString(),
     currentConcurrentPct: currentCoverage.concurrentPct,
     historicalConcurrentPct,
-    currentCamareiraApplicable,
     currentCamareiraPct: currentCoverage.camareiraPct,
     historicalCamareiraPct,
     coverageTrend,

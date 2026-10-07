@@ -115,25 +115,12 @@ export type OperationsAnalytics = {
   days: AnalyticsDay[];
   blocks: AnalyticsBlock[];
   hourly: Array<{ hour: number; count: number }>;
-  weekdayHour: Array<{
-    weekday: number;
-    hour: number;
-    count: number;
-    average: number;
-    samples: number;
-  }>;
+  weekdayHour: Array<{ weekday: number; hour: number; count: number }>;
   peakHour: number | null;
   peakCount: number;
-  peakAverage: number | null;
-  historyDays: number;
   currentShift: ShiftSummary;
   previousShift: ShiftSummary;
-  forecast: Array<{
-    weekday: number;
-    hour: number;
-    expected: number;
-    samples: number;
-  }>;
+  forecast: Array<{ hour: number; expected: number }>;
   generalAreas: GeneralAreaTrend[];
   staffActivity: Array<AnalyticsCycleRow & { kind: "alta" | "desmontagem" }>;
   totalSample: number;
@@ -416,7 +403,12 @@ function summarizeCycles(
   const selected = cycles.filter(
     (cycle) => cycle.startedAt >= window.start && cycle.startedAt < window.end,
   );
-  const completed = selected.filter((cycle) => cycle.completedAt != null);
+  const completed = cycles.filter(
+    (cycle) =>
+      cycle.completedAt != null &&
+      cycle.completedAt >= window.start &&
+      cycle.completedAt < window.end,
+  );
   const execution = completed.map((cycle) =>
     validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
   );
@@ -485,26 +477,23 @@ async function fetchAnswers(
 
   const token = await login();
   const nowMs = Date.now();
-  const fmt = (d: Date) =>
-    new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 19);
+  const fmt = (d: Date) => new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 19);
   const pageSize = 500;
-  const windowDays = 7;
-  const maxPagesPerWindow = 5;
-  const windowCount = Math.ceil(days / windowDays);
+  // Mantém folga ampla no limite de subrequests do Worker. Se uma janela diária
+  // vier muito carregada, marcamos a amostra como parcial em vez de derrubar a tela.
+  const maxPagesPerWindow = Math.min(3, Math.floor(35 / days));
   const byId = new Map<number, ListoAnswer>();
   let partial = false;
 
-  for (let windowIndex = 0; windowIndex < windowCount; windowIndex++) {
-    const windowEndMs = nowMs - windowIndex * windowDays * DAY_MS;
-    const windowStartMs = Math.max(startMs, windowEndMs - windowDays * DAY_MS);
-    if (windowEndMs <= startMs) break;
-
+  for (let windowIndex = 0; windowIndex < days; windowIndex++) {
+    const windowEndMs = nowMs - windowIndex * DAY_MS;
+    const windowStartMs = Math.max(startMs, windowEndMs - DAY_MS);
+    const start = new Date(windowStartMs);
+    const end = new Date(windowEndMs);
     let reachedCap = false;
+
     for (let page = 1; page <= maxPagesPerWindow; page++) {
-      const url =
-        `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}` +
-        `&pageSize=${pageSize}&pageNumber=${page}` +
-        `&startDate=${fmt(new Date(windowStartMs))}&endDate=${fmt(new Date(windowEndMs))}`;
+      const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
       try {
         const res = await fetch(url, {
           headers: { authorization: `Bearer ${token}`, accept: "application/json" },
@@ -533,10 +522,11 @@ async function fetchAnswers(
   if (rows.length === 0 && answersCache?.rows.length) {
     return { rows: answersCache.rows, partial: true, fetchedAt: answersCache.fetchedAt };
   }
-  if (rows.length === 0) throw new Error("Histórico operacional indisponível na origem");
-
+  if (rows.length === 0) {
+    throw new Error("Histórico operacional indisponível na origem");
+  }
   answersCache = {
-    expiresAt: Date.now() + 5 * 60 * 1000,
+    expiresAt: Date.now() + 3 * 60 * 1000,
     startMs,
     rows,
     partial,
@@ -610,31 +600,28 @@ function shiftWindow(nowMs: number, offset = 0): { label: string; start: Date; e
 
 export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
   if (analyticsCache && analyticsCache.expiresAt > Date.now()) return analyticsCache.value;
-  const HISTORY_DAYS = 28;
-  const history = await fetchAnswers(HISTORY_DAYS + 1);
+  const history = await fetchAnswers(7);
   const raw = history.rows;
 
   const now = new Date(history.fetchedAt);
-  const todayStart = new Date(`${brtParts(now).date}T00:00:00-03:00`);
-  const historyStart = todayStart.getTime() - HISTORY_DAYS * DAY_MS;
-  const sevenDaysAgo = todayStart.getTime() - 6 * DAY_MS;
-  const inAnalysisPeriod = (a: ListoAnswer) => {
+  const sevenDaysAgo = new Date(`${brtParts(now).date}T00:00:00-03:00`).getTime() - 6 * DAY_MS;
+  const inPeriod = (a: ListoAnswer) => {
     const anchor = parseBRT(a.startTime) ?? parseBRT(a.date);
-    return anchor != null && anchor.getTime() >= historyStart && anchor <= now;
+    return anchor != null && anchor.getTime() >= sevenDaysAgo && anchor <= now;
   };
-  const rawTerminal = raw.filter((a) => isTerminalBed(a) && inAnalysisPeriod(a));
+  const rawTerminal = raw.filter((a) => isTerminalBed(a) && inPeriod(a));
   const cycles = buildTerminalCycles(rawTerminal).filter(
-    (cycle) => cycle.startedAt.getTime() >= historyStart && cycle.startedAt <= now,
+    (cycle) => cycle.startedAt.getTime() >= sevenDaysAgo,
   );
-  const historicalCycles = cycles.filter((cycle) => cycle.startedAt < todayStart);
 
   const dateKeys: string[] = [];
-  for (let i = 6; i >= 0; i--)
-    dateKeys.push(brtParts(new Date(now.getTime() - i * DAY_MS)).date);
+  for (let i = 6; i >= 0; i--) dateKeys.push(brtParts(new Date(now.getTime() - i * DAY_MS)).date);
 
   const days: AnalyticsDay[] = dateKeys.map((date) => {
     const selected = cycles.filter((cycle) => brtParts(cycle.startedAt).date === date);
-    const completed = selected.filter((cycle) => cycle.completedAt != null);
+    const completed = cycles.filter(
+      (cycle) => cycle.completedAt != null && brtParts(cycle.completedAt).date === date,
+    );
     const within = completed.filter((cycle) => {
       const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
       return duration != null && duration <= cycle.targetMin;
@@ -693,69 +680,32 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     .sort((a, b) => b.total - a.total);
 
   const hourCounts = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
-  const weekdayHourCounts = new Map<string, number>();
-  const weekdayDates = new Map<number, Set<string>>();
-
-  for (let dayOffset = 1; dayOffset <= HISTORY_DAYS; dayOffset++) {
-    const date = new Date(todayStart.getTime() - dayOffset * DAY_MS);
-    const parts = brtParts(date);
-    const set = weekdayDates.get(parts.weekday) ?? new Set<string>();
-    set.add(parts.date);
-    weekdayDates.set(parts.weekday, set);
-  }
-
-  for (const cycle of historicalCycles) {
-    // Para distribuição horária de Altas, o evento é o registro/origem da Alta.
-    // O início da higienização só entra como fallback quando a origem não tem timestamp.
-    const eventAt = cycle.detectedAt ?? cycle.startedAt;
-    const p = brtParts(eventAt);
+  const weekdayMap = new Map<string, number>();
+  for (const cycle of cycles) {
+    const p = brtParts(cycle.startedAt);
     hourCounts[p.hour].count += 1;
     const key = `${p.weekday}|${p.hour}`;
-    weekdayHourCounts.set(key, (weekdayHourCounts.get(key) ?? 0) + 1);
+    weekdayMap.set(key, (weekdayMap.get(key) ?? 0) + 1);
   }
-
   const weekdayHour = Array.from({ length: 7 * 24 }, (_, i) => {
     const weekday = Math.floor(i / 24);
     const hour = i % 24;
-    const count = weekdayHourCounts.get(`${weekday}|${hour}`) ?? 0;
-    const samples = weekdayDates.get(weekday)?.size ?? 0;
-    return {
-      weekday,
-      hour,
-      count,
-      samples,
-      average: samples ? Math.round((count / samples) * 10) / 10 : 0,
-    };
+    return { weekday, hour, count: weekdayMap.get(`${weekday}|${hour}`) ?? 0 };
   });
+  const peak = hourCounts.reduce((best, h) => (h.count > best.count ? h : best), hourCounts[0]);
 
-  const hourlyAverage = hourCounts.map((row) => ({
-    ...row,
-    average: Math.round((row.count / HISTORY_DAYS) * 10) / 10,
-  }));
-  const peak = hourlyAverage.reduce(
-    (best, row) => (row.average > best.average ? row : best),
-    hourlyAverage[0],
+  const distinctDates = Math.max(
+    1,
+    new Set(cycles.map((cycle) => brtParts(cycle.startedAt).date)).size,
   );
-
+  const currentHour = brtParts(now).hour;
   const forecast = [1, 2, 3].map((ahead) => {
-    const target = new Date(now.getTime() + ahead * 60 * 60 * 1000);
-    const p = brtParts(target);
-    const historical = weekdayHour.find(
-      (row) => row.weekday === p.weekday && row.hour === p.hour,
-    );
-    return {
-      weekday: p.weekday,
-      hour: p.hour,
-      expected: historical?.average ?? 0,
-      samples: historical?.samples ?? 0,
-    };
+    const hour = (currentHour + ahead) % 24;
+    const historical = hourCounts[hour]?.count ?? 0;
+    return { hour, expected: Math.round((historical / dateKeys.length) * 10) / 10 };
   });
 
-  const generalHistory = raw.filter((answer) => {
-    if (!isTerminalGeneral(answer)) return false;
-    const anchor = parseBRT(answer.startTime) ?? parseBRT(answer.endTime) ?? parseBRT(answer.date);
-    return !!anchor && anchor.getTime() >= sevenDaysAgo && anchor <= now;
-  });
+  const generalHistory = raw.filter(isTerminalGeneral);
   const generalMap = new Map<
     string,
     {
@@ -822,9 +772,7 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 
   const staffActivity = [
     ...cycles,
-    ...buildTerminalCycles(raw, "desmontagem").filter(
-      (c) => c.startedAt.getTime() >= historyStart && c.startedAt <= now,
-    ),
+    ...buildTerminalCycles(raw, "desmontagem").filter((c) => c.startedAt.getTime() >= sevenDaysAgo),
   ];
 
   const recentCycles: AnalyticsCycleRow[] = cycles
@@ -845,11 +793,11 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 
   const value: OperationsAnalytics = {
     generatedAt: new Date().toISOString(),
-    periodStart: new Date(historyStart).toISOString(),
+    periodStart: new Date(sevenDaysAgo).toISOString(),
     periodEnd: now.toISOString(),
     excludedRecords: raw.filter(
       (a) =>
-        inAnalysisPeriod(a) &&
+        inPeriod(a) &&
         isExcludedUnit([a.sectorName, a.sectorDescription].filter(Boolean).join(" · ")),
     ).length,
     staffProductivity: staffSummary(staffActivity),
@@ -858,10 +806,8 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
     blocks,
     hourly: hourCounts,
     weekdayHour,
-    peakHour: peak.average > 0 ? peak.hour : null,
+    peakHour: peak.count ? peak.hour : null,
     peakCount: peak.count,
-    peakAverage: peak.average > 0 ? peak.average : null,
-    historyDays: HISTORY_DAYS,
     currentShift: summarizeCycles(cycles, shiftWindow(now.getTime(), 0)),
     previousShift: summarizeCycles(cycles, shiftWindow(now.getTime(), -1)),
     forecast,
