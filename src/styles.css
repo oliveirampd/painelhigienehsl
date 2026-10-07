@@ -435,3 +435,34 @@
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Mantém hierarquia de texto no modo claro em vez de achatar todos os níveis de branco. */
+.panel-light [class*="text-white/20"],
+.panel-light [class*="text-white/25"],
+.panel-light [class*="text-white/30"],
+.panel-light [class*="text-white/35"] {
+  color: oklch(0.50 0.022 255) !important;
+}
+.panel-light [class*="text-white/40"],
+.panel-light [class*="text-white/45"],
+.panel-light [class*="text-white/50"],
+.panel-light [class*="text-white/55"] {
+  color: oklch(0.40 0.025 255) !important;
+}
+.panel-light [class*="text-white/60"],
+.panel-light [class*="text-white/65"],
+.panel-light [class*="text-white/70"],
+.panel-light [class*="text-white/75"] {
+  color: oklch(0.30 0.027 255) !important;
+}
+.panel-light [class*="text-white/80"],
+.panel-light [class*="text-white/85"],
+.panel-light [class*="text-white/90"] {
+  color: oklch(0.20 0.028 255) !important;
+}
+.panel-light [class*="bg-white/10"],
+.panel-light [class*="bg-white/[0.1"],
+.panel-light [class*="bg-white/[0.12"] {
+  background-color: oklch(0.93 0.012 250) !important;
+}
