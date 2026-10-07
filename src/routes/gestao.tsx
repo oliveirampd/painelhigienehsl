@@ -110,9 +110,22 @@ function GestaoPage() {
     [data],
   );
 
+  const chartDays = useMemo(
+    () =>
+      (data?.days ?? []).map((day) => ({
+        ...day,
+        label: new Date(`${day.date}T12:00:00-03:00`).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          timeZone: "America/Sao_Paulo",
+        }),
+      })),
+    [data],
+  );
+
   return (
     <div className={`${themeClass} min-h-screen bg-background text-foreground`}>
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[oklch(0.145_0.02_265_/_0.94)] px-4 py-3 backdrop-blur lg:px-6">
+      <header className="panel-shell-header sticky top-0 z-30 border-b border-white/10 px-4 py-3 lg:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -142,14 +155,51 @@ function GestaoPage() {
 
       <main className="space-y-5 px-4 py-5 lg:px-6">
         {error && (
-          <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200">
+          <div role="status" className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         )}
 
-        {data ? (
+        {(data || dailyData) && (
+          <nav
+            aria-label="Seções da Gestão"
+            className="panel-management-nav scrollbar-hidden flex gap-1 overflow-x-auto rounded-xl border p-1"
+          >
+            {data && (
+              <>
+                <a className="panel-management-link shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold" href="#resumo">
+                  Resumo
+                </a>
+                <a className="panel-management-link shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold" href="#altas">
+                  Altas
+                </a>
+                <a className="panel-management-link shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold" href="#colaboradores">
+                  Colaboradores
+                </a>
+                <a className="panel-management-link shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold" href="#qualidade-dados">
+                  Dados
+                </a>
+              </>
+            )}
+            {dailyData && (
+              <a className="panel-management-link shrink-0 rounded-lg border px-3 py-2 text-xs font-semibold" href="#higiene-diaria">
+                Higiene Diária
+              </a>
+            )}
+          </nav>
+        )}
+
+        {data || dailyData ? (
           <>
-            {data.samplePartial && (
+            {data && (
+              <>
+                <ManagementSectionHeader
+                  id="resumo"
+                  eyebrow="Gestão"
+                  title="Visão geral"
+                  description="Leitura rápida do turno atual e do último turno de higiene terminal."
+                />
+                {data.samplePartial && (
               <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
                 A consulta está parcial por limite de paginação, falha na origem ou uso de cache. Os
                 totais não representam necessariamente todos os registros do período; não use esta
@@ -162,7 +212,7 @@ function GestaoPage() {
               <ShiftCard title="Último turno" summary={data.previousShift} />
             </section>
 
-            <section className="rounded-xl border border-sky-400/15 bg-sky-400/[0.035] px-3 py-2.5">
+            <section id="qualidade-dados" className="scroll-mt-24 rounded-xl border border-sky-400/15 bg-sky-400/[0.035] px-3 py-2.5">
               <div className="text-[10px] font-semibold uppercase tracking-widest text-sky-100/45">
                 Qualidade dos dados
               </div>
@@ -189,6 +239,12 @@ function GestaoPage() {
               </div>
             </section>
 
+            <ManagementSectionHeader
+              id="altas"
+              eyebrow="Higiene terminal"
+              title="Altas"
+              description="Volume, tempos, distribuição e auditoria das Altas no período recente."
+            />
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Metric
                 icon={<Activity className="h-4 w-4" />}
@@ -222,7 +278,7 @@ function GestaoPage() {
               />
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <section className="panel-surface rounded-xl border p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="font-bold">Tendência para as próximas horas</h2>
@@ -252,9 +308,9 @@ function GestaoPage() {
             <section className="grid gap-4 xl:grid-cols-2">
               <ChartCard title="Altas de higiene terminal — últimos 7 dias">
                 <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={data.days}>
+                  <BarChart data={chartDays}>
                     <CartesianGrid stroke={chartGrid} vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: chartTick, fontSize: 11 }} />
+                    <XAxis dataKey="label" tick={{ fill: chartTick, fontSize: 11 }} />
                     <YAxis tick={{ fill: chartTick, fontSize: 11 }} allowDecimals={false} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Bar
@@ -280,9 +336,9 @@ function GestaoPage() {
                   deslocamento. Dias sem duração válida ficam sem ponto.
                 </p>
                 <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={data.days}>
+                  <LineChart data={chartDays}>
                     <CartesianGrid stroke={chartGrid} vertical={false} />
-                    <XAxis dataKey="date" tick={{ fill: chartTick, fontSize: 11 }} />
+                    <XAxis dataKey="label" tick={{ fill: chartTick, fontSize: 11 }} />
                     <YAxis tick={{ fill: chartTick, fontSize: 11 }} unit=" min" width={65} />
                     <Tooltip contentStyle={tooltipStyle} />
                     <Line
@@ -313,14 +369,14 @@ function GestaoPage() {
               </ChartCard>
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <section className="panel-surface rounded-xl border p-4">
               <div className="mb-3">
                 <h2 className="font-bold">Mapa de calor por dia e horário</h2>
                 <p className="text-xs text-white/40">
                   Quanto mais forte a célula, maior o volume observado na amostra recente.
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="scrollbar-hidden overflow-x-auto">
                 <div className="min-w-[760px]">
                   <div className="grid grid-cols-[46px_repeat(24,minmax(24px,1fr))] gap-1 text-[9px] text-white/35">
                     <span />
@@ -343,9 +399,9 @@ function GestaoPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <section className="panel-surface rounded-xl border p-4">
               <h2 className="mb-3 font-bold">Desempenho por bloco</h2>
-              <div className="overflow-x-auto">
+              <div className="scrollbar-hidden overflow-x-auto">
                 <table className="w-full min-w-[700px] text-sm">
                   <thead className="text-left text-xs uppercase tracking-wide text-white/35">
                     <tr>
@@ -395,7 +451,7 @@ function GestaoPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <section className="panel-surface rounded-xl border p-4">
               <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <h2 className="font-bold">Auditoria das Altas recentes</h2>
@@ -408,7 +464,7 @@ function GestaoPage() {
                   {data.recentCycles.length} Altas no período
                 </span>
               </div>
-              <div className="max-h-[420px] overflow-auto rounded-lg border border-white/[0.06]">
+              <div className="scrollbar-hidden max-h-[420px] overflow-auto rounded-lg border border-white/[0.06]">
                 <table className="w-full min-w-[860px] text-sm">
                   <thead className="sticky top-0 bg-[oklch(0.18_0.025_265)] text-left text-[10px] uppercase tracking-wide text-white/35">
                     <tr>
@@ -486,12 +542,13 @@ function GestaoPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+            <section id="colaboradores" className="panel-surface scroll-mt-24 rounded-xl border p-4">
               <h2 className="font-bold">Produtividade de colaboradores</h2>
               <p className="mt-1 text-xs text-white/60">
                 Mesmo período e exclusões das Altas. Volumes de execuções únicas iniciadas;
                 conclusões pertencem a essas execuções. Sem ranking de velocidade: blocos e tipos de
-                leito têm complexidades diferentes.
+                leito têm complexidades diferentes. A ordem dos cards prioriza volume de conclusões,
+                não um ranking de qualidade.
               </p>
               <p className="mt-2 text-xs text-amber-100">
                 A caminho → início: indisponível no histórico Listo. O horário de registro não
@@ -578,6 +635,9 @@ function GestaoPage() {
               )}
             </section>
 
+              </>
+            )}
+
             {dailyError && (
               <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
                 {dailyError} As métricas de Altas acima continuam independentes.
@@ -586,7 +646,13 @@ function GestaoPage() {
 
             {dailyData && (
               <>
-                <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                <ManagementSectionHeader
+                  id="higiene-diaria"
+                  eyebrow="Rotina diária"
+                  title="Higiene Diária"
+                  description="Cobertura, comparação histórica, produtividade e fechamento de turnos da Concorrente e Camareira."
+                />
+                <section className="panel-surface rounded-xl border p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
@@ -636,7 +702,7 @@ function GestaoPage() {
                       icon={<Activity className="h-4 w-4" />}
                       label="Rotinas únicas analisadas"
                       value={String(dailyData.uniqueRoutines)}
-                      detail={`${dailyData.rawRecords} linhas brutas de Concorrente/Camareira`}
+                      detail="amostra histórica consolidada"
                     />
                     <Metric
                       icon={<Clock3 className="h-4 w-4" />}
@@ -729,13 +795,13 @@ function GestaoPage() {
                   </ChartCard>
                 </section>
 
-                <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                <section className="panel-surface rounded-xl border p-4">
                   <div>
                     <h2 className="font-bold">Produtividade — Higiene Diária</h2>
                     <p className="mt-1 text-xs text-white/50">
                       Concorrente e Camareira ficam separadas das Altas. A duração só entra nas
                       médias quando há início e conclusão válidos; volume não é usado sozinho como
-                      ranking de qualidade.
+                      ranking de qualidade. A ordem prioriza volume de atividade, não velocidade.
                     </p>
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -798,7 +864,7 @@ function GestaoPage() {
                   )}
                 </section>
 
-                <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                <section className="panel-surface rounded-xl border p-4">
                   <div>
                     <h2 className="font-bold">Fechamentos automáticos da Diária</h2>
                     <p className="mt-1 text-xs text-white/50">
@@ -882,11 +948,37 @@ function GestaoPage() {
             )}
           </>
         ) : (
-          <div className="flex min-h-[50vh] items-center justify-center text-sm text-white/40">
-            {loading ? "Carregando histórico operacional…" : "Sem dados disponíveis."}
+          <div className="panel-state flex min-h-[50vh] items-center justify-center rounded-xl px-4 text-center text-sm text-white/45">
+            {loading
+              ? "Carregando histórico operacional…"
+              : "Nenhuma análise está disponível agora. Tente atualizar novamente."}
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function ManagementSectionHeader({
+  id,
+  eyebrow,
+  title,
+  description,
+}: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div id={id} className="scroll-mt-24 pt-1">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+        {eyebrow}
+      </div>
+      <div className="mt-1 flex flex-wrap items-end justify-between gap-2">
+        <h2 className="text-xl font-bold">{title}</h2>
+        <p className="max-w-2xl text-xs leading-relaxed text-white/45">{description}</p>
+      </div>
     </div>
   );
 }
@@ -903,7 +995,7 @@ function Metric({
   detail: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+    <div className="panel-surface rounded-xl border p-3">
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
         {icon}
         {label}
@@ -991,7 +1083,7 @@ function Mini({ label, value }: { label: string; value: string | number }) {
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+    <section className="panel-surface rounded-xl border p-4">
       <h2 className="mb-3 font-bold">{title}</h2>
       {children}
     </section>
