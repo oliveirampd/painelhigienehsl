@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Search,
   TimerReset,
-  UsersRound,
 } from "lucide-react";
 import {
   Bar,
