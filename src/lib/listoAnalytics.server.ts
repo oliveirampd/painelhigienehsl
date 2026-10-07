@@ -416,12 +416,7 @@ function summarizeCycles(
   const selected = cycles.filter(
     (cycle) => cycle.startedAt >= window.start && cycle.startedAt < window.end,
   );
-  const completed = cycles.filter(
-    (cycle) =>
-      cycle.completedAt != null &&
-      cycle.completedAt >= window.start &&
-      cycle.completedAt < window.end,
-  );
+  const completed = selected.filter((cycle) => cycle.completedAt != null);
   const execution = completed.map((cycle) =>
     validDiffMinutes(cycle.startedAt, cycle.completedAt, 6),
   );
@@ -639,9 +634,7 @@ export async function loadOperationsAnalytics(): Promise<OperationsAnalytics> {
 
   const days: AnalyticsDay[] = dateKeys.map((date) => {
     const selected = cycles.filter((cycle) => brtParts(cycle.startedAt).date === date);
-    const completed = cycles.filter(
-      (cycle) => cycle.completedAt != null && brtParts(cycle.completedAt).date === date,
-    );
+    const completed = selected.filter((cycle) => cycle.completedAt != null);
     const within = completed.filter((cycle) => {
       const duration = validDiffMinutes(cycle.startedAt, cycle.completedAt, 6);
       return duration != null && duration <= cycle.targetMin;
