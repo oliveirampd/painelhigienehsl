@@ -145,7 +145,13 @@ function DiariaPage() {
 
   useEffect(() => {
     const tick = () => {
-      setClock(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+      setClock(
+        new Date().toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "America/Sao_Paulo",
+        }),
+      );
       setPeriodo(periodoAtualBRT());
     };
     tick();
@@ -251,15 +257,28 @@ function DiariaPage() {
   const bedsElegiveisConcorrente = ACTIVE_BEDS.filter(
     (b) => isDailyConcurrentEligibleBed(b.n, b.b) && !altaByBed.has(b.n),
   );
-  const faltamHigiene = bedsElegiveisConcorrente.filter((b) => !byBed.get(b.n)?.concorrente).length;
-  const faltamCamareira = ACTIVE_BEDS.filter((b) => !byBed.get(b.n)?.camareira).length;
+  const bedsElegiveisCamareira = ACTIVE_BEDS.filter((b) => !altaByBed.has(b.n));
+  const faltamHigiene = bedsElegiveisConcorrente.filter(
+    (b) => !byBed.get(b.n)?.concorrente,
+  ).length;
+  const faltamCamareira = bedsElegiveisCamareira.filter(
+    (b) => !byBed.get(b.n)?.camareira,
+  ).length;
   const coberturaHigiene =
     bedsElegiveisConcorrente.length > 0
-      ? Math.round(((bedsElegiveisConcorrente.length - faltamHigiene) / bedsElegiveisConcorrente.length) * 100)
+      ? Math.round(
+          ((bedsElegiveisConcorrente.length - faltamHigiene) /
+            bedsElegiveisConcorrente.length) *
+            100,
+        )
       : 0;
   const coberturaCamareira =
-    ACTIVE_BEDS.length > 0
-      ? Math.round(((ACTIVE_BEDS.length - faltamCamareira) / ACTIVE_BEDS.length) * 100)
+    bedsElegiveisCamareira.length > 0
+      ? Math.round(
+          ((bedsElegiveisCamareira.length - faltamCamareira) /
+            bedsElegiveisCamareira.length) *
+            100,
+        )
       : 0;
   const progressoTurno = progressoTurnoBRT();
   const ritmoEsperado = Math.round(progressoTurno * 100);
@@ -400,8 +419,9 @@ function DiariaPage() {
     const current = byBed.get(bed.n);
     const concorrenteEligible =
       isDailyConcurrentEligibleBed(bed.n, bed.b) && !altaByBed.has(bed.n);
+    const camareiraEligible = !altaByBed.has(bed.n);
     const pendingConcorrente = concorrenteEligible && !current?.concorrente;
-    const pendingCamareira = !current?.camareira;
+    const pendingCamareira = camareiraEligible && !current?.camareira;
     const runningConcorrente = current?.concorrente?.status === "in_progress";
     const runningCamareira = current?.camareira?.status === "in_progress";
 
@@ -585,10 +605,10 @@ function DiariaPage() {
                 Turno percorrido: <strong className="text-white/70">{ritmoEsperado}%</strong>
                 <div className="mt-0.5">
                   {ritmoStatus === "attention"
-                    ? "ritmo abaixo do esperado"
+                    ? "abaixo da referência linear"
                     : ritmoStatus === "ahead"
-                      ? "ritmo adiantado"
-                      : "ritmo compatível"}
+                      ? "acima da referência linear"
+                      : "próximo da referência linear"}
                 </div>
               </div>
             </div>
@@ -607,7 +627,7 @@ function DiariaPage() {
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-widest text-white/35">
-              Andares que merecem atenção
+              Andares abaixo da referência do turno
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
