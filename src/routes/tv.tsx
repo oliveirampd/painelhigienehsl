@@ -545,7 +545,7 @@ function TvPage() {
 
   return (
     <div
-      className={`${themeClass} min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
+      className={`${themeClass} scrollbar-hidden min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
