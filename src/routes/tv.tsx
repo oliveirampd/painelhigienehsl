@@ -1107,7 +1107,7 @@ function TerminalBedsPanel({
                         </span>
                       ) : kind === "parada" ? (
                         <span className="font-mono tabular-nums text-[10px] text-white/50 shrink-0">
-                          detectada {formatClockTime(d.status_updated_at)}
+                          Saída de alta {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : null}
                     </div>
