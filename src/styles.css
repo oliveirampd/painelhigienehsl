@@ -466,3 +466,305 @@
 .panel-light [class*="bg-white/[0.12"] {
   background-color: oklch(0.93 0.012 250) !important;
 }
+
+
+/* ===== Temas profissionais do Painel =====
+ * Os estados operacionais (altas, desmontagens, blocos e alertas) mantêm suas
+ * cores semânticas. Os temas alteram SOMENTE a identidade e as superfícies.
+ * Não usamos gradientes. Todas as superfícies claras usam texto escuro.
+ */
+.panel-theme-hospital {
+  color-scheme: light;
+  --background: oklch(0.977 0.009 242);
+  --foreground: oklch(0.24 0.035 243);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.035 243);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.035 243);
+  --border: oklch(0.82 0.021 241);
+  --ring: oklch(0.53 0.14 242);
+  --panel-canvas: oklch(0.977 0.009 242);
+  --panel-surface: oklch(1 0 0);
+  --panel-header: oklch(0.993 0.004 241);
+  --panel-soft: oklch(0.953 0.012 242);
+  --panel-nav: oklch(0.944 0.014 242);
+  --panel-line: oklch(0.83 0.024 242);
+  --panel-ink: oklch(0.24 0.035 243);
+  --panel-strong-text: oklch(0.22 0.036 243);
+  --panel-secondary-text: oklch(0.37 0.032 243);
+  --panel-muted-text: oklch(0.46 0.025 243);
+  --panel-faint-text: oklch(0.52 0.023 243);
+  --panel-accent: oklch(0.54 0.14 242);
+  --panel-accent-strong: oklch(0.37 0.14 242);
+  --panel-accent-pale: oklch(0.90 0.04 242);
+  --panel-accent-border: oklch(0.69 0.10 242);
+  --panel-shadow: oklch(0.3 0.025 243 / 0.075);
+}
+
+.panel-theme-midnight {
+  color-scheme: dark;
+  --background: oklch(0.24 0.045 253);
+  --foreground: oklch(0.97 0.008 244);
+  --card: oklch(0.31 0.045 253);
+  --card-foreground: oklch(0.97 0.008 244);
+  --popover: oklch(0.32 0.04 253);
+  --popover-foreground: oklch(0.97 0.008 244);
+  --border: oklch(0.46 0.04 253);
+  --ring: oklch(0.77 0.105 231);
+  --panel-canvas: oklch(0.24 0.045 253);
+  --panel-surface: oklch(0.31 0.044 253);
+  --panel-header: oklch(0.285 0.046 253);
+  --panel-soft: oklch(0.36 0.04 253);
+  --panel-nav: oklch(0.34 0.04 253);
+  --panel-line: oklch(0.45 0.04 253);
+  --panel-ink: oklch(0.97 0.008 244);
+  --panel-strong-text: oklch(0.97 0.008 244);
+  --panel-secondary-text: oklch(0.84 0.018 242);
+  --panel-muted-text: oklch(0.75 0.025 243);
+  --panel-faint-text: oklch(0.68 0.024 243);
+  --panel-accent: oklch(0.80 0.10 231);
+  --panel-accent-strong: oklch(0.92 0.055 232);
+  --panel-accent-pale: oklch(0.42 0.075 237);
+  --panel-accent-border: oklch(0.64 0.08 237);
+  --panel-shadow: oklch(0.10 0.025 253 / 0.24);
+}
+
+.panel-theme-emerald {
+  color-scheme: light;
+  --background: oklch(0.973 0.016 158);
+  --foreground: oklch(0.25 0.044 165);
+  --card: oklch(0.998 0.003 160);
+  --card-foreground: oklch(0.25 0.044 165);
+  --popover: oklch(0.998 0.003 160);
+  --popover-foreground: oklch(0.25 0.044 165);
+  --border: oklch(0.81 0.035 163);
+  --ring: oklch(0.49 0.12 161);
+  --panel-canvas: oklch(0.973 0.016 158);
+  --panel-surface: oklch(0.998 0.003 160);
+  --panel-header: oklch(0.952 0.027 158);
+  --panel-soft: oklch(0.94 0.026 157);
+  --panel-nav: oklch(0.92 0.03 158);
+  --panel-line: oklch(0.81 0.035 163);
+  --panel-ink: oklch(0.25 0.044 165);
+  --panel-strong-text: oklch(0.22 0.047 165);
+  --panel-secondary-text: oklch(0.38 0.043 164);
+  --panel-muted-text: oklch(0.46 0.034 163);
+  --panel-faint-text: oklch(0.53 0.03 163);
+  --panel-accent: oklch(0.54 0.13 160);
+  --panel-accent-strong: oklch(0.36 0.12 162);
+  --panel-accent-pale: oklch(0.89 0.06 157);
+  --panel-accent-border: oklch(0.69 0.10 160);
+  --panel-shadow: oklch(0.30 0.025 165 / 0.08);
+}
+
+.panel-theme-burgundy {
+  color-scheme: light;
+  --background: oklch(0.967 0.017 39);
+  --foreground: oklch(0.27 0.046 13);
+  --card: oklch(0.997 0.005 65);
+  --card-foreground: oklch(0.27 0.046 13);
+  --popover: oklch(0.997 0.005 65);
+  --popover-foreground: oklch(0.27 0.046 13);
+  --border: oklch(0.83 0.032 37);
+  --ring: oklch(0.49 0.135 13);
+  --panel-canvas: oklch(0.967 0.017 39);
+  --panel-surface: oklch(0.997 0.005 65);
+  --panel-header: oklch(0.949 0.031 25);
+  --panel-soft: oklch(0.937 0.025 29);
+  --panel-nav: oklch(0.925 0.033 25);
+  --panel-line: oklch(0.83 0.032 37);
+  --panel-ink: oklch(0.27 0.046 13);
+  --panel-strong-text: oklch(0.24 0.055 13);
+  --panel-secondary-text: oklch(0.39 0.045 13);
+  --panel-muted-text: oklch(0.47 0.037 13);
+  --panel-faint-text: oklch(0.54 0.031 13);
+  --panel-accent: oklch(0.50 0.14 14);
+  --panel-accent-strong: oklch(0.35 0.12 14);
+  --panel-accent-pale: oklch(0.91 0.045 24);
+  --panel-accent-border: oklch(0.69 0.09 22);
+  --panel-shadow: oklch(0.32 0.034 20 / 0.08);
+}
+
+.panel-theme-slate {
+  color-scheme: light;
+  --background: oklch(0.96 0.012 254);
+  --foreground: oklch(0.28 0.035 251);
+  --card: oklch(0.994 0.004 255);
+  --card-foreground: oklch(0.28 0.035 251);
+  --popover: oklch(0.994 0.004 255);
+  --popover-foreground: oklch(0.28 0.035 251);
+  --border: oklch(0.79 0.026 253);
+  --ring: oklch(0.51 0.075 250);
+  --panel-canvas: oklch(0.96 0.012 254);
+  --panel-surface: oklch(0.994 0.004 255);
+  --panel-header: oklch(0.933 0.019 254);
+  --panel-soft: oklch(0.924 0.016 253);
+  --panel-nav: oklch(0.905 0.024 253);
+  --panel-line: oklch(0.79 0.026 253);
+  --panel-ink: oklch(0.28 0.035 251);
+  --panel-strong-text: oklch(0.23 0.035 251);
+  --panel-secondary-text: oklch(0.40 0.032 251);
+  --panel-muted-text: oklch(0.48 0.025 251);
+  --panel-faint-text: oklch(0.55 0.02 251);
+  --panel-accent: oklch(0.53 0.082 251);
+  --panel-accent-strong: oklch(0.36 0.08 251);
+  --panel-accent-pale: oklch(0.87 0.045 251);
+  --panel-accent-border: oklch(0.69 0.075 251);
+  --panel-shadow: oklch(0.23 0.02 251 / 0.085);
+}
+
+/* Fundo, navegação, cabeçalho e cards usam a mesma gramática cromática. */
+.panel-light,
+.panel-dark {
+  background-color: var(--panel-canvas);
+  color: var(--panel-ink);
+}
+.panel-shell-header {
+  position: relative;
+  z-index: 35;
+  background-color: var(--panel-header) !important;
+  border-bottom-color: var(--panel-line) !important;
+  box-shadow: 0 1px 0 var(--panel-line);
+}
+.panel-light .panel-surface,
+.panel-light .panel-state,
+.panel-dark .panel-surface,
+.panel-dark .panel-state {
+  background-color: var(--panel-surface);
+  border-color: var(--panel-line);
+  box-shadow: 0 1px 3px var(--panel-shadow);
+}
+.panel-light .panel-nav,
+.panel-dark .panel-nav {
+  background-color: var(--panel-nav);
+  border-color: var(--panel-line);
+}
+.panel-light .panel-nav-item-inactive,
+.panel-dark .panel-nav-item-inactive {
+  color: var(--panel-secondary-text);
+}
+.panel-light .panel-nav-item-inactive:hover,
+.panel-dark .panel-nav-item-inactive:hover {
+  color: var(--panel-strong-text);
+  background-color: var(--panel-accent-pale);
+  border-color: var(--panel-accent-border);
+}
+.panel-light .panel-nav-item-active,
+.panel-dark .panel-nav-item-active {
+  color: var(--panel-accent-strong);
+  background-color: var(--panel-accent-pale);
+  border-color: var(--panel-accent-border);
+}
+.panel-light .panel-management-nav,
+.panel-dark .panel-management-nav {
+  background-color: var(--panel-header);
+  border-color: var(--panel-line);
+}
+.panel-light .panel-management-link,
+.panel-dark .panel-management-link {
+  color: var(--panel-secondary-text);
+}
+.panel-light .panel-management-link:hover,
+.panel-dark .panel-management-link:hover {
+  color: var(--panel-accent-strong);
+  background-color: var(--panel-accent-pale);
+  border-color: var(--panel-accent-border);
+}
+.panel-light .panel-select,
+.panel-dark .panel-select {
+  background-color: var(--panel-surface);
+  color: var(--panel-ink);
+  border-color: var(--panel-line);
+}
+.panel-light .panel-kpi-card {
+  background-color: color-mix(in oklch, var(--panel-accent) 11%, var(--panel-surface)) !important;
+  border-color: color-mix(in oklch, var(--panel-accent) 55%, var(--panel-surface)) !important;
+}
+.panel-light .panel-theme-toggle {
+  background-color: var(--panel-surface);
+  border-color: var(--panel-line);
+  color: var(--panel-strong-text);
+}
+.panel-light [class*="text-white/20"],
+.panel-light [class*="text-white/25"],
+.panel-light [class*="text-white/30"],
+.panel-light [class*="text-white/35"] { color: var(--panel-faint-text) !important; }
+.panel-light [class*="text-white/40"],
+.panel-light [class*="text-white/45"],
+.panel-light [class*="text-white/50"],
+.panel-light [class*="text-white/55"] { color: var(--panel-muted-text) !important; }
+.panel-light [class*="text-white/60"],
+.panel-light [class*="text-white/65"],
+.panel-light [class*="text-white/70"],
+.panel-light [class*="text-white/75"] { color: var(--panel-secondary-text) !important; }
+.panel-light [class*="text-white/80"],
+.panel-light [class*="text-white/85"],
+.panel-light [class*="text-white/90"] { color: var(--panel-strong-text) !important; }
+.panel-light .text-white { color: var(--panel-strong-text) !important; }
+.panel-light [class*="border-white/"] { border-color: var(--panel-line) !important; }
+.panel-light [class*="bg-white/"] { background-color: var(--panel-soft) !important; }
+.panel-light [class*="bg-black/"] { background-color: var(--panel-soft) !important; }
+.panel-light .panel-critical-badge { background-color: var(--panel-surface) !important; }
+.panel-light header.panel-shell-header { background-color: var(--panel-header) !important; box-shadow: 0 1px 0 var(--panel-line); }
+.panel-light .panel-status-row { color: var(--panel-ink); }
+
+/* Os realces de tema não substituem as cores fixas de status operacional. */
+.panel-theme-burgundy .panel-shell-header {
+  border-top: 2px solid oklch(0.65 0.085 78);
+}
+.panel-theme-emerald .panel-shell-header { border-top: 2px solid var(--panel-accent); }
+.panel-theme-slate .panel-shell-header { border-top: 2px solid var(--panel-accent); }
+.panel-theme-hospital .panel-shell-header { border-top: 2px solid var(--panel-accent); }
+.panel-theme-midnight .panel-shell-header { border-top: 2px solid var(--panel-accent); }
+
+/* Seletor acessível, sem depender de classes de texto branco fixas. */
+.panel-theme-trigger {
+  background-color: var(--panel-surface);
+  color: var(--panel-strong-text);
+  border-color: var(--panel-line);
+}
+.panel-theme-trigger:hover,
+.panel-theme-trigger[aria-expanded="true"] {
+  background-color: var(--panel-accent-pale);
+  border-color: var(--panel-accent-border);
+  color: var(--panel-accent-strong);
+}
+.panel-theme-trigger:focus-visible,
+.panel-theme-option:focus-visible {
+  outline: 2px solid var(--panel-accent);
+  outline-offset: 2px;
+}
+.panel-theme-menu {
+  background-color: var(--panel-surface);
+  border-color: var(--panel-line);
+  color: var(--panel-ink);
+  box-shadow: 0 16px 34px var(--panel-shadow);
+}
+.panel-theme-menu-heading { color: var(--panel-secondary-text); }
+.panel-theme-menu-footer,
+.panel-theme-option-detail { color: var(--panel-muted-text); }
+.panel-theme-option {
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--panel-ink);
+}
+.panel-theme-option + .panel-theme-option { margin-top: 2px; }
+.panel-theme-option:hover {
+  background-color: var(--panel-soft);
+  border-color: var(--panel-line);
+}
+.panel-theme-option[aria-pressed="true"] {
+  background-color: var(--panel-accent-pale);
+  border-color: var(--panel-accent-border);
+}
+.panel-theme-option-name { color: var(--panel-strong-text); }
+.panel-theme-selected { color: var(--panel-accent-strong); }
+
+/* Hierarquia visual fixa: dados clínico-operacionais continuam dominando. */
+.panel-light .panel-card-timing { color: var(--panel-secondary-text) !important; }
+.panel-dark .panel-card-timing { color: var(--panel-secondary-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-theme-trigger,
+  .panel-theme-option { transition: none !important; }
+}

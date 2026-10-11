@@ -7,7 +7,7 @@ import { usePanelTheme } from "@/hooks/usePanelTheme";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { ThemePicker } from "@/components/ThemePicker";
 
 export const Route = createFileRoute("/terminal-geral")({
   head: () => ({
@@ -79,7 +79,7 @@ function formatRemaining(totalMin: number) {
 }
 
 function TerminalGeralPage() {
-  const { isDark, themeClass, toggleTheme } = usePanelTheme();
+  const { theme, setTheme, isDark, themeClass } = usePanelTheme();
   const [events, setEvents] = useState<TerminalGeralEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -238,7 +238,7 @@ function TerminalGeralPage() {
           <span className="hidden sm:inline font-mono text-white/35">
             atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
           </span>
-          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
+          <ThemePicker theme={theme} onChange={setTheme} />
           <span className="text-lg lg:text-2xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
