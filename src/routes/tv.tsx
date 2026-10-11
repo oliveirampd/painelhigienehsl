@@ -1110,31 +1110,15 @@ function TerminalBedsPanel({
                         {overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
                       {kind === "execucao" ? (
-                        <span className="flex min-w-0 shrink items-center justify-end gap-1 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
-                          {dismantle && (
-                            <>
-                              <span
-                                className="min-w-0 truncate"
-                                style={{
-                                  color: dismantle.active
-                                    ? KIND_COLOR.desmontagem
-                                    : "rgba(255,255,255,0.62)",
-                                }}
-                              >
-                                <span className="hidden lg:inline">
-                                  {dismantle.active ? "Em desmontagem " : "Desmontado "}
-                                </span>
-                                <span className="lg:hidden">
-                                  {dismantle.active ? "Desmont. " : "Desm. "}
-                                </span>
-                                {formatClockTime(dismantle.startedAt)}
-                              </span>
-                              <span className="text-white/20">·</span>
-                            </>
-                          )}
-                          <span className="shrink-0">
-                            Início {formatClockTime(d.status_updated_at)}
-                          </span>
+                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
+                          Início {formatClockTime(d.status_updated_at)}
+                        </span>
+                      ) : kind === "desmontagem" ? (
+                        <span
+                          className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px]"
+                          style={{ color: "rgba(255,255,255,0.62)" }}
+                        >
+                          Início {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : dismantle ? (
                         <span
