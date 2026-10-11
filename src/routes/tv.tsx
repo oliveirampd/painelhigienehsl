@@ -490,6 +490,21 @@ function TvPage() {
   }, [discharges, turnoAtual]);
   const concluidasHoje = concluidasHojePorBloco.total;
 
+  const emExecucaoPorBloco = useMemo(() => {
+    let de = 0;
+    let b = 0;
+    let c = 0;
+    let outros = 0;
+    for (const d of inFlight) {
+      const block = bedBlock(d);
+      if (block === "D" || block === "E") de++;
+      else if (block === "B") b++;
+      else if (block === "C") c++;
+      else outros++;
+    }
+    return { de, b, c, outros };
+  }, [inFlight]);
+
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
   // menos a vista/o painel de madrugada.
   const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
@@ -675,6 +690,7 @@ function TvPage() {
         <StaffPanel
           rows={staffRows}
           nowMs={now}
+          emExecucaoPorBloco={emExecucaoPorBloco}
           className={
             paused.length >= 4
               ? "order-1 lg:order-none lg:col-start-10 lg:col-span-3 lg:row-start-1 lg:row-span-2"
@@ -1093,7 +1109,34 @@ function TerminalBedsPanel({
                       >
                         {overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
-                      {dismantle ? (
+                      {kind === "execucao" ? (
+                        <span className="flex min-w-0 shrink items-center justify-end gap-1 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
+                          {dismantle && (
+                            <>
+                              <span
+                                className="min-w-0 truncate"
+                                style={{
+                                  color: dismantle.active
+                                    ? KIND_COLOR.desmontagem
+                                    : "rgba(255,255,255,0.62)",
+                                }}
+                              >
+                                <span className="hidden lg:inline">
+                                  {dismantle.active ? "Em desmontagem " : "Desmontado "}
+                                </span>
+                                <span className="lg:hidden">
+                                  {dismantle.active ? "Desmont. " : "Desm. "}
+                                </span>
+                                {formatClockTime(dismantle.startedAt)}
+                              </span>
+                              <span className="text-white/20">·</span>
+                            </>
+                          )}
+                          <span className="shrink-0">
+                            Início {formatClockTime(d.status_updated_at)}
+                          </span>
+                        </span>
+                      ) : dismantle ? (
                         <span
                           className="font-mono tabular-nums text-[10px] shrink-0"
                           style={{
@@ -1296,6 +1339,7 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
 function StaffPanel({
   rows,
   nowMs,
+  emExecucaoPorBloco,
   className,
 }: {
   rows: Array<{
@@ -1306,6 +1350,7 @@ function StaffPanel({
     unit: string | null;
   }>;
   nowMs: number;
+  emExecucaoPorBloco: { de: number; b: number; c: number; outros: number };
   className?: string;
 }) {
   return (
@@ -1320,8 +1365,37 @@ function StaffPanel({
           </h2>
           <span className="text-[11px] text-white/50">{rows.length}</span>
         </div>
-        <div className="text-[10px] text-white/35 mt-0.5">
-          Desmontagem e higienização terminal (Listo)
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px] lg:text-[10px]">
+          <span className="mr-0.5 font-semibold uppercase tracking-wide text-white/35">
+            Em execução:
+          </span>
+          {(
+            [
+              ["D/E", emExecucaoPorBloco.de],
+              ["B", emExecucaoPorBloco.b],
+              ["C", emExecucaoPorBloco.c],
+              ...(emExecucaoPorBloco.outros > 0
+                ? [["Outros", emExecucaoPorBloco.outros] as const]
+                : []),
+            ] as const
+          ).map(([label, value]) => (
+            <span
+              key={label}
+              className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-px leading-tight"
+              style={{
+                borderColor: "oklch(0.72 0.17 155 / 0.35)",
+                background: "oklch(0.72 0.17 155 / 0.10)",
+              }}
+            >
+              <span className="font-semibold text-white/55">{label}</span>
+              <span
+                className="font-bold tabular-nums"
+                style={{ color: value > 0 ? "oklch(0.72 0.17 155)" : "rgba(255,255,255,0.38)" }}
+              >
+                {value}
+              </span>
+            </span>
+          ))}
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
