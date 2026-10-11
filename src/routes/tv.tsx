@@ -511,7 +511,7 @@ function TvPage() {
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
 
-  const filtros = isDark && isNoturno ? "brightness(0.88)" : undefined;
+  const filtros = theme === "original" && isNoturno ? "brightness(0.88)" : undefined;
 
   return (
     <div
@@ -1019,7 +1019,7 @@ function TerminalBedsPanel({
           </div>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="terminal-panel-content flex-1 min-h-0 overflow-hidden">
         {cards.length === 0 ? (
           <div className="p-4 text-center text-white/40 text-sm">Nenhum leito em higienização.</div>
         ) : (
@@ -1196,7 +1196,7 @@ function BedsPanel({
           <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>
         )}
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="terminal-panel-content flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
           <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
         ) : (
@@ -1382,7 +1382,7 @@ function StaffPanel({
           ))}
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="terminal-panel-content flex-1 min-h-0 overflow-hidden">
         {rows.length === 0 ? (
           <div className="p-4 text-center text-white/40 text-sm">Nenhum colaborador.</div>
         ) : (

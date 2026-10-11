@@ -508,14 +508,21 @@
 [class*="terminal-theme-"]:not(.terminal-theme-original) .panel-shell-header {
   background-color: var(--terminal-header);
 }
-/* Painéis neutros: o fundo do tema permanece vivo, mas as tabelas e listas
-   ficam em grafite azulado para leitura uniforme, sem tingir os cards. */
+/* A moldura/cabeçalho das seções usa a cor FORTE do tema.
+   Somente o corpo rolável fica no tom escuro, próximo ao original.
+   O cinza anterior (#1c293b) deixava os cards translúcidos desbotados. */
 .terminal-theme-abyss .panel-surface,
 .terminal-theme-forest .panel-surface,
 .terminal-theme-imperial .panel-surface,
 .terminal-theme-amethyst .panel-surface {
-  background-color: #1c293b;
-  border-color: rgba(185, 204, 230, 0.22);
+  background-color: var(--terminal-surface);
+  border-color: rgba(210, 225, 248, 0.24);
+}
+.terminal-theme-abyss .terminal-panel-content,
+.terminal-theme-forest .terminal-panel-content,
+.terminal-theme-imperial .terminal-panel-content,
+.terminal-theme-amethyst .terminal-panel-content {
+  background-color: #0c1425;
 }
 [class*="terminal-theme-"]:not(.terminal-theme-original) .panel-nav {
   background-color: var(--terminal-nav);
@@ -526,13 +533,17 @@
   z-index: 40;
 }
 
-/* Cabeçalho da tabela de leitos pausados: cinza-ardósia, jamais preto.
-   Aplica-se também ao tema original; mantém sticky, tipografia e colunas. */
-.terminal-theme-original .panel-paused-table-head,
+/* O cabeçalho Leito/Unidade/Motivo/Colaborador acompanha a cor do tema,
+   sem faixas pretas ou cinza. No Padrão mantém o cabeçalho ardósia legível. */
 .terminal-theme-abyss .panel-paused-table-head,
 .terminal-theme-forest .panel-paused-table-head,
 .terminal-theme-imperial .panel-paused-table-head,
 .terminal-theme-amethyst .panel-paused-table-head {
+  background-color: var(--terminal-surface);
+  color: rgba(245, 249, 255, 0.9);
+  box-shadow: inset 0 -1px rgba(210, 225, 248, 0.22);
+}
+.terminal-theme-original .panel-paused-table-head {
   background-color: #30415a;
   color: rgba(244, 249, 255, 0.86);
   box-shadow: inset 0 -1px rgba(190, 210, 234, 0.22);
