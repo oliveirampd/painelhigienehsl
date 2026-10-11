@@ -1,4 +1,4 @@
-import { isExcludedUnit } from "@/lib/operationalScope";
+import { isExcludedUnit, operationalBedKey } from "@/lib/operationalScope";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -238,10 +238,13 @@ function TvPage() {
       );
   }, [filtered, now]);
 
-  // Desmontagens em andamento
+  // Desmontagens já chegam pelo mesmo realtime dos leitos. Mantemos todas para
+  // marcar o card da Alta com o horário de início e destacamos as ativas também
+  // como cards próprios quando ainda não há uma Alta visível para aquele leito.
+  const dismantles = useMemo(() => filtered.filter(isDesmont), [filtered]);
   const activeDesmont = useMemo(
-    () => filtered.filter((d) => isDesmont(d) && d.status === "in_progress"),
-    [filtered],
+    () => dismantles.filter((d) => d.status === "in_progress"),
+    [dismantles],
   );
 
   // Colaboradores: derivar atividade por staff
@@ -638,6 +641,7 @@ function TvPage() {
           inFlight={exceptionsOnly ? [] : inFlight}
           enRoute={exceptionsOnly ? [] : enRoute}
           paused={paused}
+          dismantles={dismantles}
           nowMs={now}
           staffMap={staffMap}
           flashVersions={flashVersions}
@@ -809,10 +813,55 @@ function bedBlock(d: Discharge): string | null {
  * no resto do painel para leito sem colaborador alocado). Mantém, sempre visível,
  * a contagem de altas paradas por bloco (D/E, B, C).
  */
+type DismantleMarker = {
+  row: Discharge;
+  startedAt: string;
+  active: boolean;
+};
+
+function findDismantleForTerminal(
+  terminal: Discharge,
+  dismantles: Discharge[],
+  nowMs: number,
+): DismantleMarker | null {
+  const bedKey = operationalBedKey(terminal.unit || "", terminal.bed_number || "");
+  const terminalAt = new Date(terminal.status_updated_at).getTime();
+  // Para Alta Parada/A Caminho, a desmontagem deve pertencer ao ciclo que nasceu
+  // naquele estado. Em execução, aceitamos até 4h antes do início da higiene,
+  // porque a desmontagem normalmente antecede a limpeza terminal.
+  const earliest =
+    terminal.status === "in_progress"
+      ? terminalAt - 4 * 60 * 60 * 1000
+      : terminalAt - 30 * 60 * 1000;
+
+  const candidates = dismantles
+    .filter((d) => operationalBedKey(d.unit || "", d.bed_number || "") === bedKey)
+    .filter((d) => d.status === "in_progress" || d.status === "completed")
+    .map((d) => ({
+      row: d,
+      startedAt: d.status_updated_at,
+      active: d.status === "in_progress",
+      startedMs: new Date(d.status_updated_at).getTime(),
+    }))
+    .filter(
+      (item) =>
+        Number.isFinite(item.startedMs) &&
+        item.startedMs >= earliest &&
+        item.startedMs <= nowMs + 5 * 60 * 1000,
+    )
+    .sort((a, b) => b.startedMs - a.startedMs);
+
+  const latest = candidates[0];
+  return latest
+    ? { row: latest.row, startedAt: latest.startedAt, active: latest.active }
+    : null;
+}
+
 function TerminalBedsPanel({
   inFlight,
   enRoute,
   paused,
+  dismantles,
   nowMs,
   staffMap,
   flashVersions,
@@ -823,6 +872,7 @@ function TerminalBedsPanel({
   inFlight: Discharge[];
   enRoute: Discharge[];
   paused: Discharge[];
+  dismantles: Discharge[];
   nowMs: number;
   staffMap: Map<string, Staff>;
   flashVersions?: Map<string, number>;
@@ -830,14 +880,16 @@ function TerminalBedsPanel({
   onSelect?: (discharge: Discharge) => void;
   className?: string;
 }) {
-  const KIND_ORDER = { parada: 0, caminho: 1, execucao: 2 } as const;
+  const KIND_ORDER = { parada: 0, desmontagem: 1, caminho: 2, execucao: 3 } as const;
   const KIND_COLOR = {
     parada: "oklch(0.78 0.2 60)", // laranja — padrão já usado pra alta parada
+    desmontagem: "oklch(0.68 0.20 300)", // roxo — desmontagem em andamento
     caminho: "oklch(0.74 0.18 230)", // azul
     execucao: "oklch(0.72 0.17 155)", // verde
   } as const;
   const KIND_LABEL = {
     parada: "Alta Parada",
+    desmontagem: "Em Desmontagem",
     caminho: "A Caminho",
     execucao: "Em Execução",
   } as const;
@@ -845,11 +897,20 @@ function TerminalBedsPanel({
   // (sem piscar, sem selo extra) — só a cor muda e o rótulo vira "Estourado".
   const OVERDUE_COLOR = "oklch(0.68 0.19 25)";
 
-  const cards = [
+  const terminalCards = [
     ...paused.map((d) => ({ d, kind: "parada" as const })),
     ...enRoute.map((d) => ({ d, kind: "caminho" as const })),
     ...inFlight.map((d) => ({ d, kind: "execucao" as const })),
-  ].sort((a, b) => {
+  ];
+  const terminalBedKeys = new Set(
+    terminalCards.map(({ d }) => operationalBedKey(d.unit || "", d.bed_number || "")),
+  );
+  const standaloneDismantles = dismantles
+    .filter((d) => d.status === "in_progress")
+    .filter((d) => !terminalBedKeys.has(operationalBedKey(d.unit || "", d.bed_number || "")))
+    .map((d) => ({ d, kind: "desmontagem" as const }));
+
+  const cards = [...terminalCards, ...standaloneDismantles].sort((a, b) => {
     if (KIND_ORDER[a.kind] !== KIND_ORDER[b.kind]) return KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
     return (
       elapsedMinutes(b.d.status_updated_at, nowMs) - elapsedMinutes(a.d.status_updated_at, nowMs)
@@ -894,6 +955,10 @@ function TerminalBedsPanel({
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ background: KIND_COLOR.parada }} />
               Alta parada
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: KIND_COLOR.desmontagem }} />
+              Em desmontagem
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ background: OVERDUE_COLOR }} />
@@ -953,6 +1018,10 @@ function TerminalBedsPanel({
                   kind === "execucao" ? hygieneTargetMinutes(d.bed_number, d.unit) : null;
                 const overtime = target != null && minutes >= target;
                 const base = overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
+                const dismantle =
+                  kind === "desmontagem"
+                    ? { row: d, startedAt: d.status_updated_at, active: true }
+                    : findDismantleForTerminal(d, dismantles, nowMs);
                 return (
                   <div
                     key={`${d.id}-v${version}`}
@@ -1024,11 +1093,23 @@ function TerminalBedsPanel({
                       >
                         {overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
-                      {kind === "parada" && (
+                      {dismantle ? (
+                        <span
+                          className="font-mono tabular-nums text-[10px] shrink-0"
+                          style={{
+                            color: dismantle.active
+                              ? KIND_COLOR.desmontagem
+                              : "rgba(255,255,255,0.62)",
+                          }}
+                        >
+                          {dismantle.active ? "Em desmontagem" : "Desmontado"}{" "}
+                          {formatClockTime(dismantle.startedAt)}
+                        </span>
+                      ) : kind === "parada" ? (
                         <span className="font-mono tabular-nums text-[10px] text-white/50 shrink-0">
                           detectada {formatClockTime(d.status_updated_at)}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 );
