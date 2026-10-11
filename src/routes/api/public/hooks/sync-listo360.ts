@@ -308,7 +308,12 @@ async function handle() {
             : "resetado (nenhum registro anterior encontrado)";
         }
       } else {
-        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
+        // Para desmontagem, o painel precisa preservar o marco de INÍCIO mesmo
+        // depois que a atividade termina. O fim continua em completed_at.
+        const ref =
+          kind === "desmont"
+            ? parseBRT(a.startTime) ?? parseBRT(a.date) ?? parseBRT(a.endTime) ?? new Date()
+            : parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
         statusUpdatedAt = ref.toISOString();
       }
 
