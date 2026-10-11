@@ -1202,7 +1202,7 @@ function BedsPanel({
         ) : (
           <AutoScroll>
             <table className="w-full text-sm table-fixed">
-              <thead className="text-[10px] uppercase tracking-widest text-white/50 sticky top-0 bg-card">
+              <thead className="panel-paused-table-head text-[10px] uppercase tracking-widest text-white/70 sticky top-0 bg-card">
                 <tr>
                   <th className="text-left px-1.5 lg:px-4 py-1.5 w-[30%] lg:w-auto">Leito</th>
                   <th className="hidden lg:table-cell text-left px-3 py-1.5">Unidade</th>

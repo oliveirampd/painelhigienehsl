@@ -508,8 +508,14 @@
 [class*="terminal-theme-"]:not(.terminal-theme-original) .panel-shell-header {
   background-color: var(--terminal-header);
 }
-[class*="terminal-theme-"]:not(.terminal-theme-original) .panel-surface {
-  background-color: var(--terminal-surface);
+/* Painéis neutros: o fundo do tema permanece vivo, mas as tabelas e listas
+   ficam em grafite azulado para leitura uniforme, sem tingir os cards. */
+.terminal-theme-abyss .panel-surface,
+.terminal-theme-forest .panel-surface,
+.terminal-theme-imperial .panel-surface,
+.terminal-theme-amethyst .panel-surface {
+  background-color: #1c293b;
+  border-color: rgba(185, 204, 230, 0.22);
 }
 [class*="terminal-theme-"]:not(.terminal-theme-original) .panel-nav {
   background-color: var(--terminal-nav);
@@ -518,4 +524,16 @@
 [class*="terminal-theme-"] > .panel-shell-header {
   position: relative;
   z-index: 40;
+}
+
+/* Cabeçalho da tabela de leitos pausados: cinza-ardósia, jamais preto.
+   Aplica-se também ao tema original; mantém sticky, tipografia e colunas. */
+.terminal-theme-original .panel-paused-table-head,
+.terminal-theme-abyss .panel-paused-table-head,
+.terminal-theme-forest .panel-paused-table-head,
+.terminal-theme-imperial .panel-paused-table-head,
+.terminal-theme-amethyst .panel-paused-table-head {
+  background-color: #30415a;
+  color: rgba(244, 249, 255, 0.86);
+  box-shadow: inset 0 -1px rgba(190, 210, 234, 0.22);
 }
