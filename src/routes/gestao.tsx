@@ -26,7 +26,7 @@ import {
 } from "recharts";
 
 import { PanelNav } from "@/components/PanelNav";
-import { ThemePicker } from "@/components/ThemePicker";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   getOperationsAnalytics,
   type OperationsAnalytics,
@@ -62,7 +62,7 @@ const BLOCK_COLOR: Record<string, string> = {
 };
 
 function GestaoPage() {
-  const { theme, setTheme, isDark, themeClass } = usePanelTheme();
+  const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const [data, setData] = useState<OperationsAnalytics | null>(null);
   const [dailyData, setDailyData] = useState<DailyOperationsAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +175,7 @@ function GestaoPage() {
             <div className="min-w-0 flex-1 sm:flex-none">
               <PanelNav />
             </div>
-            <ThemePicker theme={theme} onChange={setTheme} />
+            <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
             <button
               type="button"
               onClick={() => void load()}

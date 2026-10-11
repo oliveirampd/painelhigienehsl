@@ -26,7 +26,7 @@ import { isExcludedUnit } from "@/lib/operationalScope";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
-import { ThemePicker } from "@/components/ThemePicker";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { usePanelTheme } from "@/hooks/usePanelTheme";
 
@@ -119,7 +119,7 @@ const isAltaTerminal = (externalId: string | null) =>
 
 function DiariaPage() {
   const mainRef = useCarouselScroll<HTMLElement>();
-  const { theme, setTheme, isDark, themeClass } = usePanelTheme();
+  const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const { discharges } = useHospitalData();
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -525,7 +525,7 @@ function DiariaPage() {
           <span className="hidden sm:inline font-mono text-white/35">
             atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
           </span>
-          <ThemePicker theme={theme} onChange={setTheme} />
+          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
           <span className="text-lg lg:text-2xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>

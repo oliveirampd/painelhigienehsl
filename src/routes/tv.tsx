@@ -20,7 +20,7 @@ import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
-import { usePanelTheme } from "@/hooks/usePanelTheme";
+import { useTerminalTheme } from "@/hooks/useTerminalTheme";
 import {
   elapsedMinutes,
   formatElapsed,
@@ -140,7 +140,7 @@ function TvPage() {
   const { discharges, staff } = useHospitalData();
   const now = useNow(15000);
   const clock = useClock();
-  const { theme, setTheme, isDark, themeClass } = usePanelTheme();
+  const { theme, setTheme, isDark, themeClass } = useTerminalTheme();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
 
@@ -520,7 +520,7 @@ function TvPage() {
     >
       <div
         className="absolute top-0 left-0 right-0 h-[2px]"
-        style={{ backgroundColor: "var(--panel-accent)" }}
+        style={{ backgroundColor: "oklch(0.62 0.18 235)" }}
       />
       <header className="panel-shell-header flex-none flex flex-col gap-1.5 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2">
         <div className="flex flex-wrap items-center gap-3">
@@ -1110,7 +1110,7 @@ function TerminalBedsPanel({
                         {overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
                       {kind === "execucao" ? (
-                        <span className="panel-card-timing shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
+                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
                           Início {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : kind === "desmontagem" ? (
@@ -1122,7 +1122,7 @@ function TerminalBedsPanel({
                         </span>
                       ) : dismantle ? (
                         <span
-                          className="panel-card-timing font-mono tabular-nums text-[10px] shrink-0"
+                          className="font-mono tabular-nums text-[10px] shrink-0"
                           style={{
                             color: dismantle.active
                               ? KIND_COLOR.desmontagem
