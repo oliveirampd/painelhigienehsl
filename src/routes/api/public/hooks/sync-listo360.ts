@@ -88,6 +88,9 @@ function unitOf(a: ListoAnswer): string {
 }
 
 async function login(): Promise<string> {
+  if (!process.env.LISTO360_EMAIL || !process.env.LISTO360_PASSWORD) {
+    throw new Error("Credenciais Listo360 ausentes: configure LISTO360_EMAIL e LISTO360_PASSWORD nos segredos do Cloudflare");
+  }
   const res = await fetch(`${LISTO_BASE}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
