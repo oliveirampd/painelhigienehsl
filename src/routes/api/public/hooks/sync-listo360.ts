@@ -419,7 +419,10 @@ async function handle(request: Request) {
         prev.assigned_staff_id !== row.assigned_staff_id ||
         !sameTime(prev.status_updated_at, row.status_updated_at) ||
         !sameTime(prev.completed_at, row.completed_at) ||
-        prev.last_answer_id !== row.last_answer_id;
+        // O banco antigo armazena last_answer_id como TEXT, enquanto a API
+        // Listo entrega número. Compare o valor normalizado, não o tipo JS.
+        (prev.last_answer_id == null ? null : String(prev.last_answer_id)) !==
+          (row.last_answer_id == null ? null : String(row.last_answer_id));
     });
 
     if (changedRows.length) {
