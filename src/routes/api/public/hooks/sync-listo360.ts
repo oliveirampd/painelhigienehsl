@@ -119,6 +119,8 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
     const rows = Array.isArray(body) ? body : (body.data ?? []);
     all.push(...rows);
     if (rows.length < pageSize) break;
+    // Evita persistir/limpar leitos com uma resposta truncada do Listo.
+    if (page === 50) throw new Error("Listo360 excedeu o limite seguro de paginação");
   }
   return all;
 }
@@ -126,29 +128,30 @@ async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
   server: {
     handlers: {
-      GET: () => handle(),
-      POST: () => handle(),
+      GET: ({ request }) => handle(request),
+      POST: ({ request }) => handle(request),
     },
   },
 });
 
-async function handle() {
+async function handle(request: Request) {
+  // Pode ser habilitado sem mudar a URL do cron. Configure a mesma chave no
+  // agendador e no Cloudflare (X-Cron-Secret). Sem a chave, mantém compatibilidade.
+  const cronSecret = process.env.SYNC_CRON_SECRET;
+  if (cronSecret) {
+    const supplied = request.headers.get("x-cron-secret") ??
+      request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    if (supplied !== cronSecret) {
+      return Response.json({ ok: false, error: "Não autorizado" }, { status: 401 });
+    }
+  }
+
   try {
     const supabase = createClient<Database>(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
-
-    // Reset diário do "Time Altas" (painel:staff:*) — evita que colaborador que
-    // logou ontem e nunca sumiu do healthcon fique aparecendo o dia todo depois.
-    // Roda só na janela 00:00-00:05 no horário de Brasília (esse job já roda
-    // sozinho a cada ~1min, então dispara algumas vezes nesse intervalo — sem
-    // problema, o delete é idempotente).
-    const nowBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
-    if (nowBRT.getUTCHours() === 0 && nowBRT.getUTCMinutes() < 5) {
-      await supabase.from("staff").delete().like("external_id", "painel:staff:%");
-    }
 
     const token = await login();
     const answers = await fetchAnswers(token);
@@ -162,21 +165,48 @@ async function handle() {
       new Set(relevant.map((a) => (a.userName || "").trim()).filter(Boolean)),
     );
 
-    if (staffNames.length) {
-      const staffRows = staffNames.map((name) => ({
+    // Lê o estado antes de escrever. Inserir a mesma equipe a cada minuto
+    // ainda passa pelo banco e, dependendo da operação, gera carga desnecessária.
+    const initialStaff = await supabase
+      .from("staff")
+      .select("id, external_id, name, status");
+    if (initialStaff.error) throw initialStaff.error;
+    let staffAll = initialStaff.data ?? [];
+
+    // Reset diário do Time Altas, apenas se houver registros a remover.
+    const nowBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    if (nowBRT.getUTCHours() === 0 && nowBRT.getUTCMinutes() < 5 &&
+        staffAll.some((s) => s.external_id?.startsWith("painel:staff:"))) {
+      const reset = await supabase.from("staff")
+        .delete().like("external_id", "painel:staff:%");
+      if (reset.error) throw reset.error;
+      staffAll = staffAll.filter((s) => !s.external_id?.startsWith("painel:staff:"));
+    }
+
+    const knownStaffIds = new Set(staffAll.map((s) => s.external_id));
+    const newStaffRows = staffNames
+      .map((name) => ({
         external_id: `listo:user:${name}`,
         name,
         status: "available" as const,
-      }));
-      await supabase.from("staff").upsert(staffRows, {
+      }))
+      .filter((row) => !knownStaffIds.has(row.external_id));
+    if (newStaffRows.length) {
+      const inserted = await supabase.from("staff").upsert(newStaffRows, {
         onConflict: "external_id",
         ignoreDuplicates: true,
       });
+      if (inserted.error) throw inserted.error;
+      // Recarrega os IDs reais apenas quando houve nomes novos.
+      const refreshed = await supabase
+        .from("staff")
+        .select("id, external_id, name, status");
+      if (refreshed.error) throw refreshed.error;
+      staffAll = refreshed.data ?? [];
     }
 
-    const { data: staffAll } = await supabase.from("staff").select("id, external_id, name");
     const staffByName = new Map<string, string>();
-    for (const s of staffAll ?? []) {
+    for (const s of staffAll) {
       if (s.name) staffByName.set(s.name, s.id);
     }
 
@@ -207,15 +237,19 @@ async function handle() {
     // Estado atual no banco, pra manter o horário estável quando o status não muda
     // entre sincronizações (importante pro "A Caminho"/"Altas Paradas", que não têm
     // um campo de horário confiável vindo do Listo).
-    // IMPORTANTE: o Supabase só devolve até 1000 linhas por consulta por padrão —
-    // sem paginar aqui, registros além dos primeiros 1000 "somem" da nossa visão,
-    // fazendo o horário resetar à toa e a limpeza de órfãos apagar coisa demais.
+    // Busca todos os campos que o sincronizador realmente pode alterar.
+    // Paginação evita o limite padrão de 1000 linhas do Supabase.
     async function fetchAllDischarges() {
       const pageSize = 1000;
       let from = 0;
       const all: {
         external_id: string;
-        status: string;
+        bed_number: string;
+        unit: string;
+        status: DischargeStatus;
+        priority: boolean;
+        pause_reason: string | null;
+        assigned_staff_id: string | null;
         status_updated_at: string;
         last_answer_id: number | null;
         completed_at: string | null;
@@ -223,8 +257,9 @@ async function handle() {
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
-          .select("external_id, status, status_updated_at, last_answer_id, completed_at")
+          .select("external_id, bed_number, unit, status, priority, pause_reason, assigned_staff_id, status_updated_at, last_answer_id, completed_at")
           .like("external_id", "listo:%")
+          .order("external_id", { ascending: true })
           .range(from, from + pageSize - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
@@ -312,9 +347,13 @@ async function handle() {
         // depois que a atividade termina. O fim continua em completed_at.
         const ref =
           kind === "desmont"
-            ? parseBRT(a.startTime) ?? parseBRT(a.date) ?? parseBRT(a.endTime) ?? new Date()
-            : parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
-        statusUpdatedAt = ref.toISOString();
+            ? parseBRT(a.startTime) ?? parseBRT(a.date) ?? parseBRT(a.endTime)
+            : parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
+        // Quando a origem não fornece nenhum marco, mantém o horário existente
+        // enquanto o status não muda, para não regravar toda execução.
+        statusUpdatedAt = (ref ??
+          (prevRow?.status === rawStatus ? new Date(prevRow.status_updated_at) : new Date())
+        ).toISOString();
       }
 
       // Registro travado (parado além do limite pra esse status) -> conclui sozinho
@@ -330,7 +369,7 @@ async function handle() {
               parseBRT(a.endTime) ??
               parseBRT(a.startTime) ??
               parseBRT(a.date) ??
-              new Date()
+              (prevRow?.completed_at ? new Date(prevRow.completed_at) : new Date(statusUpdatedAt))
             ).toISOString()
           : null;
 
@@ -360,10 +399,30 @@ async function handle() {
 
     const dischargeRows = dischargeRowsWithDebug.map(({ _debug, ...row }) => row);
 
-    if (dischargeRows.length) {
+    // Realtime cobra mensagens para cada alteração publicada. Um upsert
+    // idêntico não deve acontecer: além da banda, ele dispara eventos UPDATE.
+    const sameTime = (oldValue: string | null, next: string | null) =>
+      oldValue === next ||
+      (!!oldValue && !!next && new Date(oldValue).getTime() === new Date(next).getTime());
+
+    const changedRows = dischargeRows.filter((row) => {
+      const prev = existingByExternalId.get(row.external_id);
+      if (!prev) return true;
+      return prev.bed_number !== row.bed_number ||
+        prev.unit !== row.unit ||
+        prev.status !== row.status ||
+        prev.priority !== row.priority ||
+        prev.pause_reason !== row.pause_reason ||
+        prev.assigned_staff_id !== row.assigned_staff_id ||
+        !sameTime(prev.status_updated_at, row.status_updated_at) ||
+        !sameTime(prev.completed_at, row.completed_at) ||
+        prev.last_answer_id !== row.last_answer_id;
+    });
+
+    if (changedRows.length) {
       const { error } = await supabase
         .from("discharges")
-        .upsert(dischargeRows, { onConflict: "external_id" });
+        .upsert(changedRows, { onConflict: "external_id" });
       if (error) throw error;
     }
 
@@ -451,11 +510,23 @@ async function handle() {
     // Limpa registros órfãos: leitos que não vieram mais nesta sincronização
     // (inclui registros antigos, de antes da deduplicação, com external_id por id).
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
-    const staleIds = (existingDischarges ?? [])
-      .map((d) => d.external_id as string)
+    const staleIds = existingDischarges
+      .map((d) => d.external_id)
       .filter((id) => !freshIds.has(id));
-    if (staleIds.length) {
-      await supabase.from("discharges").delete().in("external_id", staleIds);
+
+    // Se a API do Listo responder sem nenhum leito relevante, não conclua que
+    // todos os leitos desapareceram. Um retorno vazio/transitório não deve
+    // esvaziar a TV e disparar centenas de eventos DELETE.
+    const cleanupSkipped = relevant.length === 0;
+    let removedCount = 0;
+    if (!cleanupSkipped) {
+      for (let i = 0; i < staleIds.length; i += 100) {
+        const chunk = staleIds.slice(i, i + 100);
+        const removed = await supabase.from("discharges")
+          .delete().in("external_id", chunk);
+        if (removed.error) throw removed.error;
+        removedCount += chunk.length;
+      }
     }
 
     // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
@@ -467,19 +538,24 @@ async function handle() {
     );
 
     if (staffAll) {
-      const toAssign = staffAll.filter((s) => activeIds.has(s.id)).map((s) => s.id);
+      const toAssign = staffAll
+        .filter((s) => activeIds.has(s.id) && s.status !== "assigned")
+        .map((s) => s.id);
       const toFree = staffAll
-        .filter((s) => !activeIds.has(s.id) && s.external_id?.startsWith("listo:user:"))
+        .filter((s) => !activeIds.has(s.id) &&
+          s.external_id?.startsWith("listo:user:") && s.status === "assigned")
         .map((s) => s.id);
       if (toAssign.length) {
-        await supabase.from("staff").update({ status: "assigned" }).in("id", toAssign);
+        const assigned = await supabase.from("staff")
+          .update({ status: "assigned" }).in("id", toAssign)
+          .neq("status", "assigned");
+        if (assigned.error) throw assigned.error;
       }
       if (toFree.length) {
-        await supabase
-          .from("staff")
+        const freed = await supabase.from("staff")
           .update({ status: "available" })
-          .in("id", toFree)
-          .eq("status", "assigned");
+          .in("id", toFree).eq("status", "assigned");
+        if (freed.error) throw freed.error;
       }
     }
 
@@ -495,7 +571,11 @@ async function handle() {
       terminal_bruto: bedAnswers.length,
       desmontagem: dismantleAnswersDedup.length,
       staff: staffNames.length,
-      removidos_orfaos: staleIds.length,
+      colaboradores_novos: newStaffRows.length,
+      leitos_alterados: changedRows.length,
+      leitos_inalterados: dischargeRows.length - changedRows.length,
+      removidos_orfaos: removedCount,
+      limpeza_pulada_fonte_sem_leitos: cleanupSkipped,
       ultimas_altas_atualizadas: lastCompletedUpdated,
       erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,
