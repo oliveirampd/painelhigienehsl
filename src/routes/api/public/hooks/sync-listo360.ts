@@ -1,6 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
 import { operationalBedKey } from "@/lib/operationalScope";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
@@ -150,11 +148,9 @@ async function handle(request: Request) {
   }
 
   try {
-    const supabase = createClient<Database>(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    );
+    // O cliente admin central adapta os cabeçalhos tanto para a chave JWT
+    // service_role quanto para a nova sb_secret_ (não usa Bearer com chave opaca).
+    const { supabaseAdmin: supabase } = await import("@/integrations/supabase/client.server");
 
     const token = await login();
     const answers = await fetchAnswers(token);
