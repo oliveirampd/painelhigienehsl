@@ -39,6 +39,22 @@ function parseBRT(s: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Em "Altas Paradas", a primeira consulta não é necessariamente o horário da
+// saída do paciente. Quando o Listo fornece um registro com hora explícita,
+// podemos usar esse marco mais antigo, sem inventar uma alta no instante do cron.
+// Datas sem hora ou com meia-noite artificial não são marcos confiáveis.
+function pendingRecordedAt(a: ListoAnswer, nowMs: number): Date | null {
+  const raw = a.date?.trim().replace(" ", "T");
+  if (!raw || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) return null;
+  const parsed = parseBRT(raw);
+  if (!parsed) return null;
+  const time = parsed.getTime();
+  if (time > nowMs + 60_000 || time < nowMs - 24 * 60 * 60_000) return null;
+  // Um dia cadastrado como 00:00:00 não prova que o paciente saiu à meia-noite.
+  if (/T00:00(?::00(?:\.0+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(raw)) return null;
+  return parsed;
+}
+
 function mapStatus(a: ListoAnswer): DischargeStatus {
   const id = a.statusAnswer?.id;
   const hasEnd = !!a.endTime;
@@ -332,15 +348,26 @@ async function handle(request: Request) {
 
       if (NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
         const prev = prevRow;
-        if (prev && prev.status === rawStatus) {
-          statusUpdatedAt = prev.status_updated_at;
-          debugInfo = `mantido (prev status=${prev.status})`;
-        } else {
-          statusUpdatedAt = new Date().toISOString();
-          debugInfo = prev
-            ? `resetado (prev status=${prev.status} != novo=${rawStatus})`
-            : "resetado (nenhum registro anterior encontrado)";
-        }
+        const detectedAt = new Date();
+        const previousTime = prev?.status === rawStatus ? parseBRT(prev.status_updated_at) : null;
+        // Para Alta Parada, aproveita um horário explícito anterior do Listo,
+        // se existir. Em registros antigos, corrige também o horário que havia
+        // sido iniciado tardiamente na primeira sincronização após a migração.
+        const sourceTime = rawStatus === "waiting_cleaning"
+          ? pendingRecordedAt(a, detectedAt.getTime())
+          : null;
+        const candidates = [previousTime, sourceTime].filter(
+          (d): d is Date => !!d && Number.isFinite(d.getTime()),
+        );
+        const best = candidates.length
+          ? new Date(Math.min(...candidates.map((d) => d.getTime())))
+          : detectedAt;
+        statusUpdatedAt = best.toISOString();
+        debugInfo = sourceTime && best.getTime() === sourceTime.getTime()
+          ? "registro do Listo (sem garantia de horário de saída do paciente)"
+          : previousTime
+            ? "mantido início anterior do status"
+            : "primeira detecção pelo painel (alta sem horário confiável)";
       } else {
         // Para desmontagem, o painel precisa preservar o marco de INÍCIO mesmo
         // depois que a atividade termina. O fim continua em completed_at.

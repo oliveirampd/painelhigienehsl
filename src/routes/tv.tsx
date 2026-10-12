@@ -1081,7 +1081,7 @@ function TerminalBedsPanel({
                       {kind === "parada" ? (
                         <>
                           <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-widest text-white/55">
-                            Parada há
+                            Aguardando há
                           </span>
                           <span
                             className="font-mono tabular-nums text-xl lg:text-2xl font-bold leading-none mt-1"
@@ -1134,7 +1134,7 @@ function TerminalBedsPanel({
                         </span>
                       ) : kind === "parada" ? (
                         <span className="font-mono tabular-nums text-[10px] text-white/50 shrink-0">
-                          Saída de alta {formatClockTime(d.status_updated_at)}
+                          Registro {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : null}
                     </div>
