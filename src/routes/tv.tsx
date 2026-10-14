@@ -1215,10 +1215,13 @@ function BedsPanel({
             <table className="w-full text-sm table-fixed">
               <thead className="panel-paused-table-head text-[10px] uppercase tracking-widest text-white/70 sticky top-0 bg-card">
                 <tr>
-                  <th className="text-left px-1.5 lg:px-4 py-1.5 w-[30%] lg:w-auto">Leito</th>
-                  <th className="hidden lg:table-cell text-left px-3 py-1.5">Unidade</th>
+                  <th className="text-left px-1.5 lg:px-3 py-1.5 w-[24%]">Leito</th>
+                  <th className="text-left px-1.5 lg:px-2 py-1.5 w-[20%] whitespace-nowrap">
+                    <span className="lg:hidden">Pausa</span>
+                    <span className="hidden lg:inline">Horário da pausa</span>
+                  </th>
                   {showReason ? (
-                    <th className="text-left px-2.5 lg:px-3 py-1.5 w-[36%] lg:w-auto">Motivo</th>
+                    <th className="text-left px-2 lg:px-3 py-1.5 w-[34%]">Motivo</th>
                   ) : (
                     <th className="text-left px-2.5 lg:px-3 py-1.5 w-[26%] lg:w-auto">Tempo</th>
                   )}
@@ -1258,8 +1261,8 @@ function BedsPanel({
                           )}
                         </span>
                       </td>
-                      <td className="hidden lg:table-cell px-3 py-1.5 text-white/80 text-xs border-t border-white/5">
-                        {d.unit}
+                      <td className="px-1.5 lg:px-2 py-1.5 font-mono tabular-nums text-[11px] lg:text-xs font-semibold text-white/85 border-t border-white/5 whitespace-nowrap" title="Horário do registro da pausa no painel">
+                        {formatClockTime(d.status_updated_at)}
                       </td>
                       {showReason ? (
                         <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">
