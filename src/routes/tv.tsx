@@ -17,6 +17,7 @@ import { updateDischarge } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
 import { ThemePicker } from "@/components/ThemePicker";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
+import { DischargePredictionsPanel } from "@/components/DischargePredictionsPanel";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -683,8 +684,16 @@ function TvPage() {
           worstId={worstCase?.id}
           className={
             paused.length >= 4
-              ? "order-6 lg:order-none lg:col-start-1 lg:col-span-9 lg:row-start-2"
-              : "order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
+              ? "order-6 lg:order-none lg:col-start-1 lg:col-span-5 lg:row-start-2"
+              : "order-6 lg:order-none lg:col-start-1 lg:col-span-4 lg:row-start-2"
+          }
+        />
+        <DischargePredictionsPanel
+          nowMs={now}
+          className={
+            paused.length >= 4
+              ? "order-7 lg:order-none lg:col-start-6 lg:col-span-4 lg:row-start-2"
+              : "order-7 lg:order-none lg:col-start-5 lg:col-span-4 lg:row-start-2"
           }
         />
         <StaffPanel
