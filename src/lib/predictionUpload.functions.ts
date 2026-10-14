@@ -1,15 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { normalizePredictionRows } from "@/lib/predictions";
+import { normalizePriorityRows } from "@/lib/predictions";
 import type { Json } from "@/integrations/supabase/types";
 
 const source = z.object({
-  establishment: z.string().max(80),
   sector: z.string().max(120),
   bed: z.string().max(60),
-  probability: z.string().max(80),
-  dischargeType: z.string().max(80),
-  predictedTime: z.string().max(40).nullable().optional(),
+  status: z.string().max(80),
+  predictedAt: z.string().max(40),
 }).strict();
 
 const importInput = z.object({
@@ -40,9 +38,9 @@ export const uploadDischargePredictions = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => importInput.parse(data))
   .handler(async ({ data }) => {
     await verifyImportCode(data.code);
-    const rows = normalizePredictionRows(data.rows);
+    const rows = normalizePriorityRows(data.rows);
     if (!rows.length) {
-      throw new Error("Nenhuma previsao da Bela Vista passou pelos filtros. O lote anterior foi preservado.");
+      throw new Error("Nenhum leito válido com horário previsto passou pelos filtros. O lote anterior foi preservado.");
     }
     if (rows.length > 500) throw new Error("Quantidade de previsoes acima do limite de 500 leitos.");
     // A lista permanece até a próxima importação; não expira por troca de plantão.
