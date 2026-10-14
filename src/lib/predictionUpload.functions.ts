@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { nextPredictionShift, normalizePredictionRows } from "@/lib/predictions";
+import { normalizePredictionRows } from "@/lib/predictions";
 import type { Json } from "@/integrations/supabase/types";
 
 const source = z.object({
@@ -8,6 +8,7 @@ const source = z.object({
   sector: z.string().max(120),
   bed: z.string().max(60),
   probability: z.string().max(80),
+  dischargeType: z.string().max(80),
   predictedTime: z.string().max(40).nullable().optional(),
 }).strict();
 
@@ -44,11 +45,13 @@ export const uploadDischargePredictions = createServerFn({ method: "POST" })
       throw new Error("Nenhuma previsao da Bela Vista passou pelos filtros. O lote anterior foi preservado.");
     }
     if (rows.length > 500) throw new Error("Quantidade de previsoes acima do limite de 500 leitos.");
-    const expiresAt = nextPredictionShift(Date.now());
+    // A lista permanece até a próxima importação; não expira por troca de plantão.
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: inserted, error } = await supabaseAdmin.rpc("replace_discharge_predictions", {
       p_rows: rows as unknown as Json,
-      p_expires_at: expiresAt,
+      // Mantido apenas por compatibilidade com a assinatura SQL existente.
+      // A migração de previsões persistentes não usa mais esse valor.
+      p_expires_at: new Date().toISOString(),
     });
     if (error) {
       console.error("[uploadDischargePredictions]", error.code, error.message);

@@ -690,6 +690,7 @@ function TvPage() {
         />
         <DischargePredictionsPanel
           nowMs={now}
+          discharges={discharges}
           className={
             paused.length >= 4
               ? "order-7 lg:order-none lg:col-start-6 lg:col-span-4 lg:row-start-2"

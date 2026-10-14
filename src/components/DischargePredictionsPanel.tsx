@@ -5,21 +5,32 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadDischargePredictions } from "@/lib/predictionUpload.functions";
 import { parseCommandCenterCsv, type PredictionRecord, type PredictionSourceRow } from "@/lib/predictions";
 import { isExcludedUnit } from "@/lib/operationalScope";
+import type { Discharge } from "@/lib/hospital";
 
 type PendingCsv = {
   name: string;
   total: number;
   belaVista: number;
-  withProbability: number;
+  altaMedica: number;
+  altaReal: number;
   eligible: number;
   sources: PredictionSourceRow[];
 };
 
+// O mesmo número de leito pode existir em blocos diferentes: sempre compare bloco + leito.
+function predictionBedKey(unit: string, bedNumber: string): string | null {
+  const block = unit.match(/\bbloco\s+([a-z])\b/i)?.[1]?.toUpperCase();
+  const number = bedNumber.match(/^leito\s+(\d+)$/i)?.[1];
+  return block && number ? `${block}:${Number(number)}` : null;
+}
+
 export function DischargePredictionsPanel({
   nowMs,
+  discharges,
   className,
 }: {
   nowMs: number;
+  discharges: Discharge[];
   className?: string;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -33,8 +44,7 @@ export function DischargePredictionsPanel({
     const { data, error } = await supabase
       .from("discharge_predictions")
       .select("id, bed_number, unit, source_sector, probability_text, probability_value, predicted_time, expires_at")
-      .gt("expires_at", new Date().toISOString())
-      .order("probability_value", { ascending: false, nullsFirst: false })
+      .order("bed_number", { ascending: true })
       .limit(500);
     if (error) {
       setLoadError(true);
@@ -50,14 +60,29 @@ export function DischargePredictionsPanel({
     return () => window.clearInterval(interval);
   }, [refresh]);
 
-  const visible = useMemo(
-    () => predictions.filter(
-      (p) => new Date(p.expires_at).getTime() > nowMs &&
-        !isExcludedUnit(p.unit) &&
-        /^leito\s+\d+$/i.test(p.bed_number),
-    ),
-    [predictions, nowMs],
-  );
+  const visible = useMemo(() => {
+    // Inclui leitos que já entraram em Altas Paradas, A Caminho, Higienização,
+    // Pausados ou Concluídos no dia. Ignora desmontagem e conclusões antigas.
+    const localDay = new Date(nowMs - 3 * 60 * 60_000);
+    const todayStartMs = Date.UTC(
+      localDay.getUTCFullYear(), localDay.getUTCMonth(), localDay.getUTCDate(),
+    ) + 3 * 60 * 60_000;
+    const inDischargeFlow = new Set(
+      discharges
+        .filter((d) => (d.external_id ?? "").startsWith("listo:answer:bed:"))
+        .filter((d) => d.status !== "completed" ||
+          (d.completed_at !== null && new Date(d.completed_at).getTime() >= todayStartMs))
+        .map((d) => predictionBedKey(d.unit, d.bed_number))
+        .filter((key): key is string => key !== null),
+    );
+
+    return predictions.filter((p) => {
+      const key = predictionBedKey(p.unit, p.bed_number);
+      return !isExcludedUnit(p.unit) &&
+        key !== null &&
+        !inDischargeFlow.has(key);
+    });
+  }, [predictions, discharges, nowMs]);
 
   async function selectCsv(file: File | undefined) {
     if (!file) return;
@@ -71,14 +96,14 @@ export function DischargePredictionsPanel({
       const belaVistaRows = parsed.sources.filter(
         (row) => row.establishment.trim().toLocaleLowerCase("pt-BR") === "bela vista",
       );
-      const withProbability = belaVistaRows.filter(
-        (row) => !/^(?:|\-+|n\/?a|sem previs[aã]o|null)$/i.test(row.probability.trim()),
-      ).length;
+      const altaMedica = parsed.predictions.filter((p) => p.probability_text === "Alta Médica").length;
+      const altaReal = parsed.predictions.filter((p) => p.probability_text === "Alta Real").length;
       setPending({
         name: file.name,
         total: parsed.total,
         belaVista: belaVistaRows.length,
-        withProbability,
+        altaMedica,
+        altaReal,
         eligible: parsed.predictions.length,
         sources: parsed.sources,
       });
@@ -167,19 +192,12 @@ export function DischargePredictionsPanel({
                     {p.bed_number}
                   </span>
                   <span className="shrink-0 font-mono text-xs lg:text-sm font-bold text-[#ff748a]">
-                    {p.probability_value !== null
-                      ? `${p.probability_value}%`
-                      : p.probability_text}
+                    {p.probability_text}
                   </span>
                 </div>
                 <div className="text-[10px] lg:text-xs text-white/70 leading-tight truncate" title={p.source_sector}>
                   {p.source_sector}
                 </div>
-                {p.predicted_time && (
-                  <div className="text-[10px] lg:text-xs font-semibold text-[#ffadba] truncate">
-                    Previsão {p.predicted_time}
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -203,10 +221,11 @@ export function DischargePredictionsPanel({
               <p className="truncate" title={pending.name}>Arquivo: <strong>{pending.name}</strong></p>
               <p>Registros no CSV: <strong>{pending.total}</strong></p>
               <p>Registros da Bela Vista: <strong>{pending.belaVista}</strong></p>
-              <p>Com probabilidade preenchida: <strong>{pending.withProbability}</strong></p>
+              <p>Alta Médica elegível: <strong>{pending.altaMedica}</strong></p>
+              <p>Alta Real elegível: <strong>{pending.altaReal}</strong></p>
               <p>Leitos elegíveis após as exclusões: <strong className="text-[#ff8396]">{pending.eligible}</strong></p>
               <p className="text-xs text-white/50">
-                Apenas leitos permitidos, sem dados de pacientes. A nova importação substitui o lote anterior e expira na troca de plantão.
+                Apenas leitos permitidos, sem dados de pacientes. Leitos que já entraram no fluxo do Listo360 são ocultados automaticamente.
               </p>
             </div>
             <label className="text-xs font-semibold flex flex-col gap-2">
@@ -232,9 +251,7 @@ export function DischargePredictionsPanel({
               <p className="text-xs text-amber-200">
                 {pending.belaVista === 0
                   ? "Nenhum registro da Bela Vista foi encontrado."
-                  : pending.withProbability === 0
-                    ? "Todas as probabilidades da Bela Vista estão vazias ou com traço (-)."
-                    : "Existem probabilidades, mas os leitos foram excluídos pelas regras ou não correspondem ao formato reconhecido."}
+                  : "Nenhum leito com Alta Médica ou Alta Real passou pelas regras de exclusão e formato de leito."}
                 {" "}Nenhum dado anterior será alterado.
               </p>
             )}
