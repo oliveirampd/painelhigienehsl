@@ -39,6 +39,7 @@ export function DischargePredictionsPanel({
   const [pending, setPending] = useState<PendingCsv | null>(null);
   const [code, setCode] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase
@@ -108,6 +109,7 @@ export function DischargePredictionsPanel({
         sources: parsed.sources,
       });
       setCode("");
+      setImportError(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "CSV invalido.");
     }
@@ -123,6 +125,7 @@ export function DischargePredictionsPanel({
       toast.error("O arquivo nao contem previsoes elegiveis. Nenhum dado foi alterado.");
       return;
     }
+    setImportError(null);
     setImporting(true);
     try {
       const result = await uploadDischargePredictions({
@@ -133,7 +136,9 @@ export function DischargePredictionsPanel({
       setCode("");
       await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao importar previsoes.");
+      const message = error instanceof Error ? error.message : "Erro ao importar previsões.";
+      setImportError(message);
+      toast.error(message);
     } finally {
       setImporting(false);
     }
@@ -244,6 +249,11 @@ export function DischargePredictionsPanel({
             >
               {importing ? "Importando..." : `Substituir por ${pending.eligible} previsões`}
             </button>
+            {importError && (
+              <p role="alert" className="text-xs leading-relaxed text-red-100 rounded-md border border-red-400/40 bg-red-950/50 p-3">
+                {importError}
+              </p>
+            )}
             {!pending.eligible && (
               <p className="text-xs text-amber-200">
                 {pending.belaVista === 0
