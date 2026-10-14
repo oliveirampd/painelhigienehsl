@@ -8,6 +8,42 @@ export type Database = {
   };
   public: {
     Tables: {
+      discharge_predictions: {
+        Row: {
+          id: number;
+          bed_number: string;
+          unit: string;
+          source_sector: string;
+          probability_text: string;
+          probability_value: number | null;
+          predicted_time: string | null;
+          imported_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: number;
+          bed_number: string;
+          unit: string;
+          source_sector: string;
+          probability_text: string;
+          probability_value?: number | null;
+          predicted_time?: string | null;
+          imported_at?: string;
+          expires_at: string;
+        };
+        Update: {
+          id?: number;
+          bed_number?: string;
+          unit?: string;
+          source_sector?: string;
+          probability_text?: string;
+          probability_value?: number | null;
+          predicted_time?: string | null;
+          imported_at?: string;
+          expires_at?: string;
+        };
+        Relationships: [];
+      };
       discharges: {
         Row: {
           assigned_staff_id: string | null;
@@ -104,7 +140,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      replace_discharge_predictions: {
+        Args: { p_rows: Json; p_expires_at: string };
+        Returns: number;
+      };
     };
     Enums: {
       discharge_status:
