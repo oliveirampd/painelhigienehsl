@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { nextPredictionShift, normalizePredictionRows } from "@/lib/predictions";
+import type { Json } from "@/integrations/supabase/types";
 
 const source = z.object({
   establishment: z.string().max(80),
@@ -46,7 +47,7 @@ export const uploadDischargePredictions = createServerFn({ method: "POST" })
     const expiresAt = nextPredictionShift(Date.now());
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: inserted, error } = await supabaseAdmin.rpc("replace_discharge_predictions", {
-      p_rows: rows,
+      p_rows: rows as unknown as Json,
       p_expires_at: expiresAt,
     });
     if (error) {
