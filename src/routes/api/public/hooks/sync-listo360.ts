@@ -588,6 +588,21 @@ async function handle(request: Request) {
       }
     }
 
+    // Retencao minima: remove previsoes vencidas a cada cron de 1 minuto.
+    // Nao interfere na sincronizacao do Listo nem interrompe o cron caso
+    // a tabela auxiliar ainda nao tenha sido instalada.
+    try {
+      const { error: predictionCleanupError } = await supabase
+        .from("discharge_predictions")
+        .delete()
+        .lte("expires_at", new Date().toISOString());
+      if (predictionCleanupError && !["42P01", "PGRST205"].includes(predictionCleanupError.code)) {
+        console.warn("[sync-listo360:predictions-cleanup]", predictionCleanupError.message);
+      }
+    } catch (cleanupError) {
+      console.warn("[sync-listo360:predictions-cleanup]", cleanupError);
+    }
+
     const debugSample = dischargeRowsWithDebug
       .filter((d) => d._debug)
       .slice(0, 8)
