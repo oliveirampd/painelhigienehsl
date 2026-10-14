@@ -22,7 +22,7 @@ export type PredictionImportRow = {
 
 export type PredictionRecord = PredictionImportRow & {
   id: number;
-  expires_at: string;
+  expires_at: string | null;
 };
 
 function plain(value: string): string {
@@ -31,23 +31,6 @@ function plain(value: string): string {
 
 function clean(value: string | null | undefined, limit: number): string {
   return (value ?? "").trim().replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, limit);
-}
-
-/** Proxima troca de turno da TV (06:20, 13:40, 22:00 em Brasilia). */
-export function nextPredictionShift(nowMs: number): string {
-  const brt = new Date(nowMs - 3 * 60 * 60 * 1000);
-  const midnightUTC = Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate());
-  const minuteOfDay = brt.getUTCHours() * 60 + brt.getUTCMinutes();
-  const targets = [6 * 60 + 20, 13 * 60 + 40, 22 * 60];
-  const target = targets.find((time) => time > minuteOfDay) ?? targets[0] + 24 * 60;
-  return new Date(midnightUTC + (target + 180) * 60_000).toISOString();
-}
-
-function parseProbability(value: string): number | null {
-  const normalized = value.replace(/\s/g, "").replace(",", ".");
-  if (!/^\d{1,3}(?:\.\d{1,2})?%?$/.test(normalized)) return null;
-  const n = Number(normalized.replace("%", ""));
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 }
 
 /** Normaliza codigo C602/D1556/E875 ao formato Leito 602/1556/875. */
