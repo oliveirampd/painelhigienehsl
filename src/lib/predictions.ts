@@ -7,6 +7,7 @@ export type PredictionSourceRow = {
   sector: string;
   bed: string;
   probability: string;
+  dischargeType: string;
   predictedTime?: string | null;
 };
 
@@ -75,35 +76,45 @@ function normalizeUnit(sector: string, blockFromBed: string, digits: string): st
   return `Bloco ${block} ${String(floor).padStart(2, "0")}º andar`;
 }
 
+function normalizeDischargeType(value: string): "Alta Médica" | "Alta Real" | null {
+  const normalized = plain(value);
+  if (normalized === "alta medica") return "Alta Médica";
+  if (normalized === "alta real") return "Alta Real";
+  return null;
+}
+
 export function normalizePredictionRows(rows: PredictionSourceRow[]): PredictionImportRow[] {
   const unique = new Map<string, PredictionImportRow>();
   for (const row of rows) {
     if (plain(clean(row.establishment, 80)) !== "bela vista") continue;
-    const probability = clean(row.probability, 80);
-    if (!probability || /^(-+|n\/?a|sem previsao|null)$/i.test(plain(probability))) continue;
+    // O Command Center não preenche "Prob. Alta" neste relatório.
+    // Para a TV, o tipo de alta é a informação operacional confiável.
+    const dischargeType = normalizeDischargeType(clean(row.dischargeType, 80));
+    if (!dischargeType) continue;
     const sourceSector = clean(row.sector, 120);
     const bed = normalizeBed(clean(row.bed, 60));
     if (!sourceSector || !bed) continue;
     const unit = normalizeUnit(sourceSector, bed.block, bed.digits);
     if (!unit || isExcludedUnit(unit)) continue;
-    const probabilityValue = parseProbability(probability);
-    const predictedTime = clean(row.predictedTime, 40);
     const entry: PredictionImportRow = {
       bed_number: bed.bedNumber,
       unit,
       source_sector: sourceSector,
-      probability_text: probability,
-      probability_value: probabilityValue,
-      predicted_time: predictedTime || null,
+      // Mantém a coluna existente para não exigir migração no banco.
+      // Nesta versão ela guarda o tipo de alta, nunca uma porcentagem fictícia.
+      probability_text: dischargeType,
+      probability_value: null,
+      predicted_time: null,
     };
     const key = `${unit}|${bed.bedNumber}`;
     const previous = unique.get(key);
-    if (!previous || (entry.probability_value ?? -1) > (previous.probability_value ?? -1)) {
+    // Quando um mesmo leito aparecer nas duas categorias, "Alta Real" prevalece.
+    if (!previous || (previous.probability_text === "Alta Médica" && dischargeType === "Alta Real")) {
       unique.set(key, entry);
     }
   }
   return Array.from(unique.values()).sort(
-    (a, b) => (b.probability_value ?? -1) - (a.probability_value ?? -1) ||
+    (a, b) => a.probability_text.localeCompare(b.probability_text, "pt-BR") ||
       a.bed_number.localeCompare(b.bed_number, "pt-BR", { numeric: true }),
   );
 }
@@ -158,16 +169,18 @@ export function parseCommandCenterCsv(csv: string): {
     sector: find("setor origem"),
     bed: find("leito origem"),
     probability: find("prob alta", "probabilidade alta", "probabilidade de alta"),
+    dischargeType: find("procedencia", "pendencia", "tipo de alta"),
     predictedTime: find("horario previsto", "hora prevista", "previsao horario", "previsao de alta", "data prevista de alta"),
   };
-  if ([indices.establishment, indices.sector, indices.bed, indices.probability].some(i => i < 0)) {
-    throw new Error("CSV nao reconhecido. Esperado: Estabelecimento, Setor Origem, Leito Origem e Prob. Alta.");
+  if ([indices.establishment, indices.sector, indices.bed, indices.dischargeType].some(i => i < 0)) {
+    throw new Error("CSV nao reconhecido. Esperado: Estabelecimento, Setor Origem, Leito Origem e Procedencia.");
   }
   const sources = records.slice(1).map(row => ({
     establishment: row[indices.establishment] ?? "",
     sector: row[indices.sector] ?? "",
     bed: row[indices.bed] ?? "",
-    probability: row[indices.probability] ?? "",
+    probability: indices.probability < 0 ? "" : row[indices.probability] ?? "",
+    dischargeType: row[indices.dischargeType] ?? "",
     predictedTime: indices.predictedTime < 0 ? null : row[indices.predictedTime] ?? null,
   }));
   return { total: sources.length, sources, predictions: normalizePredictionRows(sources) };
