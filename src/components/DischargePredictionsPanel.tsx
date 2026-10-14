@@ -44,8 +44,7 @@ export function DischargePredictionsPanel({
     const { data, error } = await supabase
       .from("discharge_predictions")
       .select("id, bed_number, unit, source_sector, probability_text, probability_value, predicted_time, expires_at")
-      .gt("expires_at", new Date().toISOString())
-      .order("probability_value", { ascending: false, nullsFirst: false })
+      .order("bed_number", { ascending: true })
       .limit(500);
     if (error) {
       setLoadError(true);
@@ -79,8 +78,7 @@ export function DischargePredictionsPanel({
 
     return predictions.filter((p) => {
       const key = predictionBedKey(p.unit, p.bed_number);
-      return new Date(p.expires_at).getTime() > nowMs &&
-        !isExcludedUnit(p.unit) &&
+      return !isExcludedUnit(p.unit) &&
         key !== null &&
         !inDischargeFlow.has(key);
     });
