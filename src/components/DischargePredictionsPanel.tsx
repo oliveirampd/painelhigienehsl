@@ -195,9 +195,6 @@ export function DischargePredictionsPanel({
                     {p.probability_text}
                   </span>
                 </div>
-                <div className="text-[10px] lg:text-xs text-white/70 leading-tight truncate" title={p.source_sector}>
-                  {p.source_sector}
-                </div>
               </div>
             ))}
           </div>
