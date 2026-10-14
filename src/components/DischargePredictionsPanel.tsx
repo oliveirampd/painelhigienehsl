@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { uploadDischargePredictions } from "@/lib/predictionUpload.functions";
 import { parseCommandCenterCsv, type PredictionRecord, type PredictionSourceRow } from "@/lib/predictions";
 import { isExcludedUnit } from "@/lib/operationalScope";
+import { AutoScroll } from "@/components/AutoScroll";
 import type { Discharge } from "@/lib/hospital";
 
 type PendingCsv = {
@@ -176,7 +177,7 @@ export function DischargePredictionsPanel({
         </div>
       </div>
 
-      <div className="terminal-panel-content flex-1 min-h-0 overflow-y-auto px-2 py-2">
+      <div className="terminal-panel-content flex-1 min-h-0 overflow-hidden">
         {loadError && visible.length === 0 ? (
           <div className="text-xs text-center text-white/45 p-4">
             Previsões indisponíveis. Confira a configuração da tabela.
@@ -186,23 +187,29 @@ export function DischargePredictionsPanel({
             Aguardando novas previsões
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {visible.map((p) => (
-              <div
-                key={p.id}
-                className="rounded-lg border border-[#ee4962]/55 bg-[#cc1f3b]/15 px-2.5 py-2 flex flex-col gap-1"
-              >
-                <div className="flex justify-between items-baseline gap-1">
-                  <span className="text-sm lg:text-base font-bold text-white truncate">
-                    {p.bed_number}
-                  </span>
-                  <span className="shrink-0 font-mono text-xs lg:text-sm font-bold text-[#ff748a]">
-                    {p.probability_text}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <AutoScroll>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 content-start">
+              {visible.map((p) => {
+                const isReal = p.probability_text === "Alta Real";
+                return (
+                  <article
+                    key={p.id}
+                    className="flex min-h-[94px] flex-col justify-between gap-3 rounded-xl border border-[#ff7189]/50 bg-gradient-to-br from-[#e43b5f]/25 via-[#a82953]/20 to-[#4c203d]/35 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10)]"
+                  >
+                    <span className="block text-base lg:text-lg font-extrabold leading-tight tracking-tight text-white">
+                      {p.bed_number}
+                    </span>
+                    <span className={`inline-flex w-fit max-w-full items-center rounded-md border px-2.5 py-1 text-[11px] lg:text-xs font-bold leading-tight ${isReal
+                      ? "border-[#ff738d]/55 bg-[#aa284a]/35 text-[#ffb4c4]"
+                      : "border-[#ffaeae]/35 bg-[#71304d]/40 text-[#ffd6df]"
+                    }`}>
+                      {p.probability_text}
+                    </span>
+                  </article>
+                );
+              })}
+            </div>
+          </AutoScroll>
         )}
       </div>
 
