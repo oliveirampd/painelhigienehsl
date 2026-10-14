@@ -8,6 +8,7 @@ const source = z.object({
   sector: z.string().max(120),
   bed: z.string().max(60),
   probability: z.string().max(80),
+  dischargeType: z.string().max(80),
   predictedTime: z.string().max(40).nullable().optional(),
 }).strict();
 
