@@ -18,6 +18,7 @@ export type PredictionImportRow = {
   probability_text: string;
   probability_value: number | null;
   predicted_time: string | null;
+  predicted_at?: string | null;
 };
 
 export type PredictionRecord = PredictionImportRow & {
@@ -167,4 +168,113 @@ export function parseCommandCenterCsv(csv: string): {
     predictedTime: indices.predictedTime < 0 ? null : row[indices.predictedTime] ?? null,
   }));
   return { total: sources.length, sources, predictions: normalizePredictionRows(sources) };
+}
+
+
+/**
+ * O aplicativo exporta .xls como texto tabulado Windows-1252.
+ * Só quatro campos operacionais são usados, sem dados de pacientes.
+ */
+export type PriorityXlsSourceRow = {
+  bed: string;
+  sector: string;
+  status: string;
+  predictedAt: string;
+};
+
+function normalizePriorityStatus(status: string): string | null {
+  const key = plain(status);
+  if (key === "alta medica assinada") return "Alta médica assinada";
+  if (key === "alta prevista confirmada") return "Alta prevista confirmada";
+  if (key === "alta prevista nao confirmada") return "Alta prevista não confirmada";
+  return null;
+}
+
+/** Converte dd/MM/yyyy HH:mm[:ss] de Brasília e valida o calendário. */
+function priorityDateToIso(value: string): string | null {
+  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  const [, day, month, year, hours, minutes, seconds = "00"] = match;
+  const iso = year + "-" + month + "-" + day + "T" + hours + ":" + minutes + ":" + seconds + "-03:00";
+  const instant = new Date(iso);
+  if (!Number.isFinite(instant.getTime())) return null;
+  const brt = new Date(instant.getTime() - 3 * 60 * 60 * 1000);
+  if (
+    brt.getUTCDate() !== Number(day) ||
+    brt.getUTCMonth() + 1 !== Number(month) ||
+    brt.getUTCFullYear() !== Number(year) ||
+    brt.getUTCHours() !== Number(hours) ||
+    brt.getUTCMinutes() !== Number(minutes) ||
+    brt.getUTCSeconds() !== Number(seconds)
+  ) return null;
+  return instant.toISOString();
+}
+
+export function normalizePriorityRows(rows: PriorityXlsSourceRow[]): PredictionImportRow[] {
+  const unique = new Map<string, PredictionImportRow>();
+  const rank = (status: string) =>
+    status === "Alta médica assinada" ? 3 :
+      status === "Alta prevista confirmada" ? 2 : 1;
+  for (const row of rows) {
+    const status = normalizePriorityStatus(clean(row.status, 80));
+    const bed = normalizeBed(clean(row.bed, 60));
+    const sourceSector = clean(row.sector, 120);
+    const predictedAt = clean(row.predictedAt, 40);
+    if (!status || !bed || !sourceSector || !/^\d{4}-\d{2}-\d{2}T/.test(predictedAt)) continue;
+    const parsed = new Date(predictedAt);
+    if (!Number.isFinite(parsed.getTime()) || !/(?:Z|[+-]\d{2}:\d{2})$/.test(predictedAt)) continue;
+    const unit = normalizeUnit(sourceSector, bed.block, bed.digits);
+    if (!unit || isExcludedUnit(unit)) continue;
+    const entry: PredictionImportRow = {
+      bed_number: bed.bedNumber,
+      unit,
+      source_sector: sourceSector,
+      probability_text: status,
+      probability_value: null,
+      predicted_time: parsed.toISOString(),
+      predicted_at: parsed.toISOString(),
+    };
+    const key = unit + "|" + bed.bedNumber;
+    const previous = unique.get(key);
+    if (!previous || rank(status) > rank(previous.probability_text) ||
+      (rank(status) === rank(previous.probability_text) &&
+        (entry.predicted_at ?? "") > (previous.predicted_at ?? ""))) {
+      unique.set(key, entry);
+    }
+  }
+  return [...unique.values()].sort((a, b) =>
+    (a.predicted_at ?? "").localeCompare(b.predicted_at ?? "") ||
+    a.bed_number.localeCompare(b.bed_number, "pt-BR", { numeric: true }),
+  );
+}
+
+export function parsePriorityXls(content: string): {
+  total: number;
+  sources: PriorityXlsSourceRow[];
+  predictions: PredictionImportRow[];
+} {
+  if (content.length > 1_000_000) throw new Error("O XLS deve ter no máximo 1 MB.");
+  if (content.includes("\u0000")) {
+    throw new Error("Este XLS não está no formato tabulado do aplicativo de prioridades.");
+  }
+  const records = readDelimitedCsv(content.replace(/^\uFEFF/, ""));
+  if (!records.length) throw new Error("Arquivo XLS vazio.");
+  const names = records[0].map(headerKey);
+  const header = (...labels: string[]) => names.findIndex((name) => labels.includes(name));
+  const idx = {
+    status: header("probabilidade"),
+    at: header("hora min"),
+    bed: header("unidade"),
+    sector: header("setor atendimento"),
+  };
+  if (Object.values(idx).some((i) => i < 0) || !content.includes("\t")) {
+    throw new Error("XLS inválido. Esperado: Probabilidade, Hora/Min, Unidade e Setor atendimento.");
+  }
+  const sources = records.slice(1).map((cols) => ({
+    status: cols[idx.status] ?? "",
+    bed: cols[idx.bed] ?? "",
+    sector: cols[idx.sector] ?? "",
+    predictedAt: priorityDateToIso(cols[idx.at] ?? "") ?? "",
+  }));
+  return { total: sources.length, sources, predictions: normalizePriorityRows(sources) };
 }

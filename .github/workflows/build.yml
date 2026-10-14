@@ -24,5 +24,7 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Test predictions CSV parser
         run: node tests/predictions.test.mjs
+      - name: Test priority XLS parser
+        run: node tests/predictions-xls.test.mjs
       - name: Build
         run: bun run build

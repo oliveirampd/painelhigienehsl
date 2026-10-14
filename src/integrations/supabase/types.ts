@@ -17,8 +17,9 @@ export type Database = {
           probability_text: string;
           probability_value: number | null;
           predicted_time: string | null;
+          predicted_at: string | null;
           imported_at: string;
-          expires_at: string;
+          expires_at: string | null;
         };
         Insert: {
           id?: number;
@@ -28,8 +29,9 @@ export type Database = {
           probability_text: string;
           probability_value?: number | null;
           predicted_time?: string | null;
+          predicted_at?: string | null;
           imported_at?: string;
-          expires_at: string;
+          expires_at?: string | null;
         };
         Update: {
           id?: number;
@@ -39,8 +41,9 @@ export type Database = {
           probability_text?: string;
           probability_value?: number | null;
           predicted_time?: string | null;
+          predicted_at?: string | null;
           imported_at?: string;
-          expires_at?: string;
+          expires_at?: string | null;
         };
         Relationships: [];
       };
