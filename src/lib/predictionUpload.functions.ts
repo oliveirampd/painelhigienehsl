@@ -46,16 +46,42 @@ export const uploadDischargePredictions = createServerFn({ method: "POST" })
     }
     if (rows.length > 500) throw new Error("Quantidade de previsoes acima do limite de 500 leitos.");
     // A lista permanece até a próxima importação; não expira por troca de plantão.
+    // Evita usar o banco antigo se a URL do Worker divergir da URL da TV.
+    // Nunca envia chaves ou senhas para o navegador.
+    const workerSupabaseUrl = process.env.SUPABASE_URL;
+    const browserSupabaseUrl = process.env.VITE_SUPABASE_URL;
+    if (workerSupabaseUrl && browserSupabaseUrl &&
+        new URL(workerSupabaseUrl).hostname !== new URL(browserSupabaseUrl).hostname) {
+      throw new Error("O Cloudflare está conectado a um projeto Supabase diferente do painel. Confira SUPABASE_URL.");
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: inserted, error } = await supabaseAdmin.rpc("replace_discharge_predictions", {
+    const { data: inserted, error, status } = await supabaseAdmin.rpc("replace_discharge_predictions", {
       p_rows: rows as unknown as Json,
       // Mantido apenas por compatibilidade com a assinatura SQL existente.
       // A migração de previsões persistentes não usa mais esse valor.
       p_expires_at: new Date().toISOString(),
     });
     if (error) {
-      console.error("[uploadDischargePredictions]", error.code, error.message);
-      throw new Error("Nao foi possivel substituir as previsoes. Confira se a migracao SQL foi executada.");
+      const code = (error.code || "").toUpperCase();
+      const reference = /^[A-Z0-9]{3,18}$/.test(code) ? code : `HTTP ${status || "?"}`;
+      console.error("[uploadDischargePredictions]", {
+        code: error.code,
+        httpStatus: status,
+        message: error.message,
+        hint: error.hint,
+      });
+      let guidance: string;
+      if (code === "PGRST202" || code === "PGRST205" || code === "42P01") {
+        guidance = "Função ou tabela não encontrada pela API. Verifique o projeto Supabase usado pelo Cloudflare.";
+      } else if (code === "42501" || status === 401 || status === 403) {
+        guidance = "Permissão recusada. Confira SUPABASE_SERVICE_ROLE_KEY no Worker e se a chave pertence ao projeto correto.";
+      } else if (code === "23505") {
+        guidance = "Há leitos duplicados na importação. Nenhum dado foi substituído.";
+      } else {
+        guidance = "Confira a conexão do Worker com o Supabase e informe este código para diagnóstico.";
+      }
+      throw new Error(`Não foi possível salvar as previsões (${reference}). ${guidance}`);
     }
     return { imported: Number(inserted ?? rows.length), ok: true as const };
   });
