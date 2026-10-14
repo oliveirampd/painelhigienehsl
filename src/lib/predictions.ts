@@ -66,8 +66,8 @@ function normalizeUnit(sector: string, blockFromBed: string, digits: string): st
   const block = blockFromBed || leadingBlock || pediatricBlock;
   if (!block || (leadingBlock && !text.startsWith("d/e") && leadingBlock !== block)) return null;
 
-  const namedFloor = text.match(/(\d{1,2})\s*(?:o|a)?\s*andar/)?.[1] ??
-    text.match(/ui\s*[- ]\s*(\d{1,2})\s*a\s*b\b/)?.[1];
+  const namedFloor = text.match(/(\d{1,2})\s*[ºª°oa]?\s*andar/)?.[1] ??
+    text.match(/ui\s*[- ]\s*(\d{1,2})\s*[ªºao]?\s*b\b/)?.[1];
   // Se o setor nao trouxer andar, o proprio codigo D1556/C1115 indica 15/11.
   const inferredFloor = digits.length >= 3 ? Number(digits.slice(0, -2)) : null;
   const floor = namedFloor ? Number(namedFloor) : inferredFloor;
