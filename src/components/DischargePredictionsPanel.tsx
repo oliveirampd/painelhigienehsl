@@ -9,6 +9,8 @@ import { isExcludedUnit } from "@/lib/operationalScope";
 type PendingCsv = {
   name: string;
   total: number;
+  belaVista: number;
+  withProbability: number;
   eligible: number;
   sources: PredictionSourceRow[];
 };
@@ -66,9 +68,17 @@ export function DischargePredictionsPanel({
     try {
       const content = await file.text();
       const parsed = parseCommandCenterCsv(content);
+      const belaVistaRows = parsed.sources.filter(
+        (row) => row.establishment.trim().toLocaleLowerCase("pt-BR") === "bela vista",
+      );
+      const withProbability = belaVistaRows.filter(
+        (row) => !/^(?:|\-+|n\/?a|sem previs[aã]o|null)$/i.test(row.probability.trim()),
+      ).length;
       setPending({
         name: file.name,
         total: parsed.total,
+        belaVista: belaVistaRows.length,
+        withProbability,
         eligible: parsed.predictions.length,
         sources: parsed.sources,
       });
@@ -192,7 +202,9 @@ export function DischargePredictionsPanel({
             <div className="text-sm text-white/75 space-y-2">
               <p className="truncate" title={pending.name}>Arquivo: <strong>{pending.name}</strong></p>
               <p>Registros no CSV: <strong>{pending.total}</strong></p>
-              <p>Previsões elegíveis da Bela Vista: <strong className="text-[#ff8396]">{pending.eligible}</strong></p>
+              <p>Registros da Bela Vista: <strong>{pending.belaVista}</strong></p>
+              <p>Com probabilidade preenchida: <strong>{pending.withProbability}</strong></p>
+              <p>Leitos elegíveis após as exclusões: <strong className="text-[#ff8396]">{pending.eligible}</strong></p>
               <p className="text-xs text-white/50">
                 Apenas leitos permitidos, sem dados de pacientes. A nova importação substitui o lote anterior e expira na troca de plantão.
               </p>
@@ -218,7 +230,12 @@ export function DischargePredictionsPanel({
             </button>
             {!pending.eligible && (
               <p className="text-xs text-amber-200">
-                Este CSV não possui previsões elegíveis. Os dados anteriores serão preservados.
+                {pending.belaVista === 0
+                  ? "Nenhum registro da Bela Vista foi encontrado."
+                  : pending.withProbability === 0
+                    ? "Todas as probabilidades da Bela Vista estão vazias ou com traço (-)."
+                    : "Existem probabilidades, mas os leitos foram excluídos pelas regras ou não correspondem ao formato reconhecido."}
+                {" "}Nenhum dado anterior será alterado.
               </p>
             )}
           </div>
