@@ -17,7 +17,6 @@ import { updateDischarge } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
 import { ThemePicker } from "@/components/ThemePicker";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
-import { DischargePredictionsPanel } from "@/components/DischargePredictionsPanel";
 import { AutoScroll } from "@/components/AutoScroll";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
@@ -685,17 +684,8 @@ function TvPage() {
           worstId={worstCase?.id}
           className={
             paused.length >= 4
-              ? "order-6 lg:order-none lg:col-start-1 lg:col-span-5 lg:row-start-2"
-              : "order-6 lg:order-none lg:col-start-1 lg:col-span-4 lg:row-start-2"
-          }
-        />
-        <DischargePredictionsPanel
-          nowMs={now}
-          discharges={discharges}
-          className={
-            paused.length >= 4
-              ? "order-7 lg:order-none lg:col-start-6 lg:col-span-4 lg:row-start-2"
-              : "order-7 lg:order-none lg:col-start-5 lg:col-span-4 lg:row-start-2"
+              ? "order-6 lg:order-none lg:col-start-1 lg:col-span-9 lg:row-start-2"
+              : "order-6 lg:order-none lg:col-start-1 lg:col-span-8 lg:row-start-2"
           }
         />
         <StaffPanel
@@ -1044,11 +1034,20 @@ function TerminalBedsPanel({
                 const target =
                   kind === "execucao" ? hygieneTargetMinutes(d.bed_number, d.unit) : null;
                 const overtime = target != null && minutes >= target;
-                const base = overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
                 const dismantle =
                   kind === "desmontagem"
                     ? { row: d, startedAt: d.status_updated_at, active: true }
                     : findDismantleForTerminal(d, dismantles, nowMs);
+                // A desmontagem ativa tem prioridade visual sobre o status "A Caminho".
+                // Mostra também o colaborador da desmontagem quando é diferente do da Alta.
+                const isDismantling = dismantle?.active === true;
+                const dismantleName = isDismantling && dismantle.row.assigned_staff_id
+                  ? staffMap.get(dismantle.row.assigned_staff_id)?.name
+                  : null;
+                const displayName = dismantleName ?? name;
+                const base = isDismantling
+                  ? KIND_COLOR.desmontagem
+                  : overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
                 return (
                   <div
                     key={`${d.id}-v${version}`}
@@ -1082,14 +1081,14 @@ function TerminalBedsPanel({
                       <span className="font-bold text-base lg:text-xl tabular-nums truncate">
                         {d.bed_number}
                       </span>
-                      {kind !== "parada" && (
+                      {(kind !== "parada" || isDismantling) && (
                         <span className="font-mono tabular-nums text-sm shrink-0 text-white/80">
                           {formatElapsed(d.status_updated_at, nowMs)}
                         </span>
                       )}
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center py-1 text-center min-h-[48px]">
-                      {kind === "parada" ? (
+                      {kind === "parada" && !isDismantling ? (
                         <>
                           <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-widest text-white/55">
                             Aguardando há
@@ -1107,9 +1106,9 @@ function TerminalBedsPanel({
                       ) : (
                         <span
                           className="text-[13px] lg:text-[15px] font-bold leading-tight line-clamp-2"
-                          style={{ color: name ? base : "rgba(255,255,255,0.4)" }}
+                          style={{ color: displayName ? base : "rgba(255,255,255,0.4)" }}
                         >
-                          {name ?? "sem colaborador"}
+                          {displayName ?? "sem colaborador"}
                         </span>
                       )}
                     </div>
@@ -1118,17 +1117,14 @@ function TerminalBedsPanel({
                         className="rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
                       >
-                        {overtime ? "Estourado" : KIND_LABEL[kind]}
+                        {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
-                      {kind === "execucao" ? (
-                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
-                          Início {formatClockTime(d.status_updated_at)}
+                      {isDismantling ? (
+                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/65">
+                          Início {formatClockTime(dismantle.startedAt)}
                         </span>
-                      ) : kind === "desmontagem" ? (
-                        <span
-                          className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px]"
-                          style={{ color: "rgba(255,255,255,0.62)" }}
-                        >
+                      ) : kind === "execucao" ? (
+                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
                           Início {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : dismantle ? (
