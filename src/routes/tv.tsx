@@ -1083,7 +1083,7 @@ function TerminalBedsPanel({
                       </span>
                       {(kind !== "parada" || isDismantling) && (
                         <span className="font-mono tabular-nums text-sm shrink-0 text-white/80">
-                          {formatElapsed(d.status_updated_at, nowMs)}
+                          {formatElapsed(isDismantling ? dismantle.startedAt : d.status_updated_at, nowMs)}
                         </span>
                       )}
                     </div>
