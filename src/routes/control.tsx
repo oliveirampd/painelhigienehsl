@@ -52,7 +52,12 @@ function ControlPage() {
   const now = useNow(30000);
 
   const active = useMemo(
-    () => discharges.filter((d) => d.status !== "completed"),
+    () =>
+      discharges.filter(
+        (d) =>
+          d.status !== "completed" &&
+          !(d.external_id || "").startsWith("listo:box:"),
+      ),
     [discharges],
   );
 

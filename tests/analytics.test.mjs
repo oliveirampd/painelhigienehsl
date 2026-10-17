@@ -20,6 +20,32 @@ for (const unit of [
   assert.equal(scope.isExcludedUnit(unit), true, unit);
 assert.equal(scope.isExcludedUnit("Bloco D 08º Andar"), false);
 assert.equal(scope.isExcludedUnit("Bloco C 19º Andar"), false);
+
+// Boxes UTI do 3º andar são uma exceção exclusiva de exibição no Terminal.
+// A unidade continua excluída pela regra geral, preservando o comportamento dos leitos.
+assert.equal(scope.isExcludedUnit("Bloco C 03º Andar - UTI"), true);
+for (const unit of [
+  "Bloco C 03º Andar - UTI",
+  "Bloco D 3º Andar · UTI Adulto",
+  "Bloco E 03 Andar - Semi/UTI",
+  "Bloco C 03º Andar",
+  "UTI 3C",
+  "3D UTI",
+])
+  assert.equal(scope.isTerminalUtiBoxUnit(unit), true, unit);
+for (const unit of [
+  "Bloco C 04º Andar - UTI",
+  "Bloco B 03º Andar - UTI",
+])
+  assert.equal(scope.isTerminalUtiBoxUnit(unit), false, unit);
+
+assert.equal(scope.isTerminalBoxRoutine("Limpeza Terminal Box", null), true);
+assert.equal(scope.isTerminalBoxRoutine(null, "Limpeza Terminal Box"), true);
+assert.equal(scope.isTerminalBoxRoutine("Limpeza Terminal Leito", null), false);
+assert.equal(scope.isTerminalBoxLocation("Box 12"), true);
+assert.equal(scope.isTerminalBoxLocation("BOX UTI 03"), true);
+assert.equal(scope.isTerminalBoxLocation("Corredor - Box 05|08"), false);
+assert.equal(scope.isTerminalBoxLocation("Leito 301"), false);
 assert.equal(
   scope.operationalBedKey("Bloco D 08º Andar", "Leito 801"),
   scope.operationalBedKey("bloco d 08 andar", "LEITO 801"),

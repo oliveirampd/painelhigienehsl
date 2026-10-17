@@ -16,6 +16,51 @@ export function operationalBedKey(unit: string, bed: string): string {
   return `${normalizeOperationalPart(unit)}|${normalizeOperationalPart(bed)}`;
 }
 
+function normalizeOperationalText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Rotina específica do Listo usada pelos boxes de UTI que funcionam como alta. */
+export function isTerminalBoxRoutine(
+  routeName: string | null | undefined,
+  inspectionName: string | null | undefined,
+): boolean {
+  const text = normalizeOperationalText(`${routeName ?? ""} ${inspectionName ?? ""}`).toLowerCase();
+  return text.includes("limpeza terminal box");
+}
+
+/** Box operacional, não área comum cujo nome apenas contém a palavra "box". */
+export function isTerminalBoxLocation(locationName: string | null | undefined): boolean {
+  return /^box(?:\s|$)/i.test((locationName ?? "").trim());
+}
+
+/**
+ * Exceção exclusiva do Terminal: boxes de UTI do 3º andar nos blocos C, D e E.
+ * Leitos dessas unidades continuam sujeitos às exclusões normais.
+ */
+export function isTerminalUtiBoxUnit(unit: string): boolean {
+  const text = normalizeOperationalText(unit);
+
+  // O Listo nem sempre escreve "UTI" no nome do setor. O escopo confiável é o
+  // código operacional 3C/3D/3E; a confirmação de que é Box vem separadamente
+  // de locationName + rotina "Limpeza Terminal Box".
+  if (/(^|\s)0*3\s*[CDE](\s|$)/.test(text)) return true;
+  if (/(^|\s)[CDE]\s*0*3(\s|$)/.test(text)) return true;
+
+  const block = text.match(/BLOCO\s+([A-Z])/)?.[1];
+  const floor =
+    text.match(/BLOCO\s+[A-Z][^\d]*0*(\d+)/)?.[1] ??
+    text.match(/0*(\d+)\s*ANDAR/)?.[1];
+
+  return !!block && ["C", "D", "E"].includes(block) && Number(floor) === 3;
+}
+
 export function isExcludedUnit(unit: string): boolean {
   const text = unit
     .normalize("NFD")

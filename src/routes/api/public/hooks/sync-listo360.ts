@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { operationalBedKey } from "@/lib/operationalScope";
+import {
+  isTerminalBoxLocation,
+  isTerminalBoxRoutine,
+  isTerminalUtiBoxUnit,
+  operationalBedKey,
+} from "@/lib/operationalScope";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
@@ -83,6 +88,14 @@ function isTerminalBed(a: ListoAnswer): boolean {
   const route = (a.routeName || "").toLowerCase();
   const insp = (a.inspectionName || "").toLowerCase();
   return isBedLocation(a) && (route.includes("limpeza terminal") || insp.includes("terminal"));
+}
+
+function isTerminalUtiBox(a: ListoAnswer): boolean {
+  return (
+    isTerminalBoxLocation(a.locationName) &&
+    isTerminalBoxRoutine(a.routeName, a.inspectionName) &&
+    isTerminalUtiBoxUnit(unitOf(a))
+  );
 }
 
 function isDismantleBed(a: ListoAnswer): boolean {
@@ -172,8 +185,9 @@ async function handle(request: Request) {
     const answers = await fetchAnswers(token);
 
     const bedAnswers = answers.filter(isTerminalBed);
+    const boxAnswers = answers.filter(isTerminalUtiBox);
     const dismantleAnswers = answers.filter(isDismantleBed);
-    const relevant = [...bedAnswers, ...dismantleAnswers];
+    const relevant = [...bedAnswers, ...boxAnswers, ...dismantleAnswers];
 
     // 1) upsert staff (unique per userName) — inclui quem está em desmontagem
     const staffNames = Array.from(
@@ -225,7 +239,7 @@ async function handle(request: Request) {
       if (s.name) staffByName.set(s.name, s.id);
     }
 
-    // 2) upsert discharges (terminal + desmontagem, distinguíveis pelo external_id)
+    // 2) upsert discharges (terminal de leito + box UTI + desmontagem, distinguíveis pelo external_id)
     //    Dedup por leito: o Listo pode gerar várias respostas pro mesmo leito no mesmo
     //    dia — sem isso, um leito pode aparecer em "A Caminho" E "Em Limpeza" ao mesmo
     //    tempo, um contradizendo o outro. Só a resposta mais recente por leito importa.
@@ -247,6 +261,7 @@ async function handle(request: Request) {
     }
 
     const bedAnswersDedup = dedupByBed(bedAnswers);
+    const boxAnswersDedup = dedupByBed(boxAnswers);
     const dismantleAnswersDedup = dedupByBed(dismantleAnswers);
 
     // Estado atual no banco, pra manter o horário estável quando o status não muda
@@ -300,7 +315,7 @@ async function handle(request: Request) {
       paused: 4 * 24 * 60, // Leitos Pausados: 4 dias
     };
 
-    const buildRow = (a: ListoAnswer, kind: "answer" | "desmont") => {
+    const buildRow = (a: ListoAnswer, kind: "answer" | "box" | "desmont") => {
       const rawStatus = mapStatus(a);
       const assigned = a.userName ? (staffByName.get(a.userName.trim()) ?? null) : null;
       const bed = (a.locationName || `Leito ${a.id}`).trim();
@@ -420,6 +435,7 @@ async function handle(request: Request) {
 
     const dischargeRowsWithDebug = [
       ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
+      ...boxAnswersDedup.map((a) => buildRow(a, "box")),
       ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
     ];
 
@@ -598,6 +614,8 @@ async function handle(request: Request) {
       answers: answers.length,
       terminal: bedAnswersDedup.length,
       terminal_bruto: bedAnswers.length,
+      boxes_uti: boxAnswersDedup.length,
+      boxes_uti_bruto: boxAnswers.length,
       desmontagem: dismantleAnswersDedup.length,
       staff: staffNames.length,
       colaboradores_novos: newStaffRows.length,

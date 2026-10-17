@@ -1,4 +1,8 @@
-import { isExcludedUnit, operationalBedKey } from "@/lib/operationalScope";
+import {
+  isExcludedUnit,
+  isTerminalUtiBoxUnit,
+  operationalBedKey,
+} from "@/lib/operationalScope";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -44,12 +48,18 @@ export const Route = createFileRoute("/tv")({
   component: TvPage,
 });
 
-const isExcluded = (d: Discharge) => isExcludedUnit(d.unit || "");
-
-const isTerminal = (d: Discharge) => (d.external_id || "").startsWith("listo:answer:");
+const isTerminalBox = (d: Discharge) => (d.external_id || "").startsWith("listo:box:");
+const isTerminal = (d: Discharge) =>
+  (d.external_id || "").startsWith("listo:answer:") || isTerminalBox(d);
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
+const isTerminalDisplayLocation = (d: Discharge) => isBed(d) || isTerminalBox(d);
+
+// 3C/3D continuam excluídos para leitos. A única exceção é Box UTI 3C/3D/3E,
+// e ela existe exclusivamente nesta tela Terminal.
+const isExcluded = (d: Discharge) =>
+  isTerminalBox(d) ? !isTerminalUtiBoxUnit(d.unit || "") : isExcludedUnit(d.unit || "");
 // Contorno de "caso crítico": só vale para os leitos do 8D/E e 7D/E.
 const isCuidadoUnit = (d: Discharge) => /BLOCO\s+[DE]\s+0?[78]/i.test(d.unit || "");
 
@@ -181,7 +191,7 @@ function TvPage() {
   const flashVersions = flashVersionRef.current;
 
   const filtered = useMemo(
-    () => discharges.filter((d) => !isExcluded(d) && isBed(d)),
+    () => discharges.filter((d) => !isExcluded(d) && isTerminalDisplayLocation(d)),
     [discharges],
   );
 
@@ -472,7 +482,7 @@ function TvPage() {
     const done = discharges.filter(
       (d) =>
         !isExcluded(d) &&
-        isBed(d) &&
+        isTerminalDisplayLocation(d) &&
         isTerminal(d) &&
         d.status === "completed" &&
         !!d.completed_at &&
@@ -1211,7 +1221,7 @@ function BedsPanel({
             <table className="w-full text-sm table-fixed">
               <thead className="panel-paused-table-head text-[10px] uppercase tracking-widest text-white/70 sticky top-0 bg-card">
                 <tr>
-                  <th className="text-left px-1.5 lg:px-3 py-1.5 w-[24%]">Leito</th>
+                  <th className="text-left px-1.5 lg:px-3 py-1.5 w-[24%]">Leito / Box</th>
                   <th className="text-left px-1.5 lg:px-2 py-1.5 w-[20%] whitespace-nowrap">
                     <span className="lg:hidden">Pausa</span>
                     <span className="hidden lg:inline">Horário da pausa</span>
