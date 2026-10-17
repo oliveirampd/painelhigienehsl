@@ -17,6 +17,7 @@ assert.equal(scope.isTerminalBoxLocation("Corredor - Box 05|08"), false);
 assert.equal(scope.isTerminalUtiBoxUnit("Bloco C 03º Andar - UTI"), true);
 assert.equal(scope.isTerminalUtiBoxUnit("Bloco D 03º Andar - UTI Adulto"), true);
 assert.equal(scope.isTerminalUtiBoxUnit("Bloco E 3º Andar - Semi/UTI"), true);
+assert.equal(scope.isTerminalUtiBoxUnit("Bloco C 03º Andar"), true);
 assert.equal(scope.isTerminalUtiBoxUnit("Bloco C 04º Andar - UTI"), false);
 assert.equal(scope.isTerminalUtiBoxUnit("Bloco B 03º Andar - UTI"), false);
 assert.equal(scope.isExcludedUnit("Bloco C 03º Andar - UTI"), true, "leitos 3C continuam excluídos");
