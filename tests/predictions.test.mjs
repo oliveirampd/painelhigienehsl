@@ -7,6 +7,20 @@ const compile = (path) => ts.transpileModule(readFileSync(path, "utf8"), {
 }).outputText;
 const dataUrl = (code) => `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
 const scopeUrl = dataUrl(compile("src/lib/operationalScope.ts"));
+const scope = await import(scopeUrl);
+
+// A regra nova precisa ser extremamente específica: Box + rotina Box + UTI 3C/3D/3E.
+assert.equal(scope.isTerminalBoxRoutine("Limpeza Terminal Box", null), true);
+assert.equal(scope.isTerminalBoxRoutine("Limpeza Terminal Leito", null), false);
+assert.equal(scope.isTerminalBoxLocation("Box 07"), true);
+assert.equal(scope.isTerminalBoxLocation("Corredor - Box 05|08"), false);
+assert.equal(scope.isTerminalUtiBoxUnit("Bloco C 03º Andar - UTI"), true);
+assert.equal(scope.isTerminalUtiBoxUnit("Bloco D 03º Andar - UTI Adulto"), true);
+assert.equal(scope.isTerminalUtiBoxUnit("Bloco E 3º Andar - Semi/UTI"), true);
+assert.equal(scope.isTerminalUtiBoxUnit("Bloco C 04º Andar - UTI"), false);
+assert.equal(scope.isTerminalUtiBoxUnit("Bloco B 03º Andar - UTI"), false);
+assert.equal(scope.isExcludedUnit("Bloco C 03º Andar - UTI"), true, "leitos 3C continuam excluídos");
+
 const moduleCode = compile("src/lib/predictions.ts")
   .replace('from "@/lib/operationalScope"', `from "${scopeUrl}"`);
 const { parseCommandCenterCsv, normalizePredictionRows } = await import(dataUrl(moduleCode));
