@@ -46,9 +46,10 @@ export function isTerminalBoxLocation(locationName: string | null | undefined): 
  */
 export function isTerminalUtiBoxUnit(unit: string): boolean {
   const text = normalizeOperationalText(unit);
-  if (!/(^|\s)UTI(\s|$)/.test(text)) return false;
 
-  // Formatos curtos que às vezes aparecem em integrações: "UTI 3C" / "3D UTI".
+  // O Listo nem sempre escreve "UTI" no nome do setor. O escopo confiável é o
+  // código operacional 3C/3D/3E; a confirmação de que é Box vem separadamente
+  // de locationName + rotina "Limpeza Terminal Box".
   if (/(^|\s)0*3\s*[CDE](\s|$)/.test(text)) return true;
   if (/(^|\s)[CDE]\s*0*3(\s|$)/.test(text)) return true;
 
