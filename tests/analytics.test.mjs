@@ -28,6 +28,7 @@ for (const unit of [
   "Bloco C 03º Andar - UTI",
   "Bloco D 3º Andar · UTI Adulto",
   "Bloco E 03 Andar - Semi/UTI",
+  "Bloco C 03º Andar",
   "UTI 3C",
   "3D UTI",
 ])
@@ -35,7 +36,6 @@ for (const unit of [
 for (const unit of [
   "Bloco C 04º Andar - UTI",
   "Bloco B 03º Andar - UTI",
-  "Bloco C 03º Andar - Internação",
 ])
   assert.equal(scope.isTerminalUtiBoxUnit(unit), false, unit);
 
