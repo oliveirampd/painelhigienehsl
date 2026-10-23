@@ -16,7 +16,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { getDailyBeds, type DailyBedEvent } from "@/lib/daily.functions";
-import { getDailyBedHistory, type DailyHistoryRecord } from "@/lib/dailyAnalytics.functions";
 import { bedFloor } from "@/lib/beds";
 import {
   ACTIVE_DAILY_BEDS,
@@ -1021,29 +1020,6 @@ function BedDetailSheet({
     return () => document.removeEventListener("keydown", close);
   }, [onClose]);
 
-  const [history, setHistory] = useState<DailyHistoryRecord[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    setHistoryLoading(true);
-    setHistoryError(false);
-    getDailyBedHistory({ data: { bed } })
-      .then((rows) => {
-        if (alive) setHistory(rows);
-      })
-      .catch(() => {
-        if (alive) setHistoryError(true);
-      })
-      .finally(() => {
-        if (alive) setHistoryLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [bed]);
-
   const currentLabel = (event: DailyBedEvent | undefined, eligible = true) => {
     if (!eligible) {
       return altaStatus
@@ -1128,84 +1104,7 @@ function BedDetailSheet({
           />
         </div>
 
-        <section className="mt-4">
-          <div className="flex items-end justify-between gap-2">
-            <div>
-              <h4 className="font-semibold">Últimos 3 registros concluídos</h4>
-              <p className="text-[11px] text-white/40">
-                Histórico recente deste leito no Listo.
-              </p>
-            </div>
-            {historyLoading && <span className="text-[10px] text-white/35">carregando…</span>}
-          </div>
-          <div className="mt-2 space-y-2">
-            {history.map((item) => (
-              <article
-                key={item.key}
-                className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase"
-                      style={{
-                        color: item.kind === "concorrente" ? CONCORRENTE_COLOR : CAMAREIRA_COLOR,
-                        background: (
-                          item.kind === "concorrente" ? CONCORRENTE_COLOR : CAMAREIRA_COLOR
-                        ).replace(")", " / 0.12)"),
-                      }}
-                    >
-                      {item.kind === "concorrente" ? "Concorrente" : "Camareira"}
-                    </span>
-                    <strong className="text-xs">
-                      {item.startedAt
-                        ? new Date(item.startedAt).toLocaleDateString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            timeZone: "America/Sao_Paulo",
-                          })
-                        : "Data não informada"}
-                    </strong>
-                  </div>
-                  <span className="font-mono text-xs text-white/55">
-                    {item.durationMin == null ? "tempo —" : `${item.durationMin} min`}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm font-medium">
-                  {item.staff || "Colaborador não identificado"}
-                </div>
-                <div className="mt-0.5 text-[11px] text-white/45">
-                  início{" "}
-                  {item.startedAt
-                    ? new Date(item.startedAt).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "America/Sao_Paulo",
-                      })
-                    : "—"}
-                  {" · "}fim{" "}
-                  {item.completedAt
-                    ? new Date(item.completedAt).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: "America/Sao_Paulo",
-                      })
-                    : "—"}
-                </div>
-              </article>
-            ))}
-            {!historyLoading && !history.length && !historyError && (
-              <div className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/40">
-                Nenhum registro concluído encontrado na janela histórica recente.
-              </div>
-            )}
-            {historyError && (
-              <div className="rounded-lg border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-xs text-amber-200">
-                O histórico recente não pôde ser consultado agora. A situação do turno acima continua válida.
-              </div>
-            )}
-          </div>
-        </section>
+
       </div>
     </div>
   );
@@ -1393,9 +1292,13 @@ function DetailRow({
             {event.staff ?? <span className="text-white/40">Colaborador não identificado</span>}
           </div>
           <div className="text-xs text-white/50">
-            {event.status === "in_progress" ? "Em execução desde" : "Concluída às"}{" "}
-            {formatTime(event.at)}
-            {event.count > 1 ? ` · ×${event.count} neste turno` : ""} · {event.shift}
+            <span className="block">Início: {event.startedAt ? formatTime(event.startedAt) : "não informado"}</span>
+            <span className="block">
+              {event.status === "in_progress"
+                ? "Em execução"
+                : `Fim: ${event.completedAt ? formatTime(event.completedAt) : "não informado"}`}
+            </span>
+            {event.count > 1 ? `×${event.count} neste turno · ` : ""}{event.shift}
           </div>
         </div>
       ) : (
