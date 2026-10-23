@@ -34,6 +34,8 @@ export type DailyBedEvent = {
   staff: string | null;
   unit: string;
   at: string;
+  startedAt: string | null;
+  completedAt: string | null;
   /** Quantos ciclos concluídos desse tipo de rotina esse leito já teve neste turno. */
   count: number;
 };
@@ -209,6 +211,8 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
       staff: a.userName?.trim() || null,
       unit: [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—",
       at,
+      startedAt: startAt?.toISOString() ?? (status === "in_progress" ? at : null),
+      completedAt: status === "completed" ? (endAt?.toISOString() ?? null) : null,
     };
 
     // Chave por leito + tipo de rotina: um leito pode ter concorrente E camareira
