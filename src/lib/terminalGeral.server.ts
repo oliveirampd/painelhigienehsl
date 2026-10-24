@@ -16,10 +16,14 @@ import { TERMINAL_GERAL_AREAS } from "@/lib/terminalGeralAreas";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
-// Janela do fetch principal — o catálogo de áreas já vem fixo da lista acima,
-// então essa janela só precisa cobrir o turno atual + uma margem de segurança
-// (não precisa mais ser gigante só pra "descobrir" área).
-const FETCH_HOURS = 26;
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+const QUERY_MARGIN_MS = 10 * 60 * 1000;
+const RESULT_CACHE_TTL_MS = 12 * 1000;
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+let terminalCache: { shiftStartMs: number; expiresAt: number; events: TerminalGeralEvent[] } | null = null;
+let terminalInFlight: { shiftStartMs: number; promise: Promise<TerminalGeralEvent[]> } | null = null;
 
 type ListoAnswer = {
   id: number;
@@ -71,7 +75,9 @@ function parseBRT(s: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-async function login(): Promise<string> {
+async function login(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now()) return tokenCache.token;
+
   const res = await fetch(`${LISTO_BASE}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -84,20 +90,32 @@ async function login(): Promise<string> {
   const data = (await res.json()) as { token?: string; accessToken?: string };
   const token = data.token || data.accessToken;
   if (!token) throw new Error("Falha ao autenticar na origem dos dados");
+  tokenCache = { token, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS };
   return token;
 }
 
-async function fetchAnswers(token: string, hours: number): Promise<ListoAnswer[]> {
-  const end = new Date();
-  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 19);
+function formatListoDate(d: Date): string {
+  return new Date(d.getTime() - BRT_OFFSET_MS).toISOString().slice(0, 19);
+}
+
+async function fetchAnswers(start: Date, end: Date): Promise<ListoAnswer[]> {
   const all: ListoAnswer[] = [];
   const pageSize = 500;
+  let token = await login();
+
   for (let page = 1; page <= 60; page++) {
-    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-    const res = await fetch(url, {
+    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${formatListoDate(start)}&endDate=${formatListoDate(end)}`;
+    let res = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
     });
+
+    if (res.status === 401 || res.status === 403) {
+      token = await login(true);
+      res = await fetch(url, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      });
+    }
+
     if (!res.ok) throw new Error("Falha ao consultar as rotinas");
     const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
     const rows = Array.isArray(body) ? body : (body.data ?? []);
@@ -173,7 +191,7 @@ const SHIFT_BOUNDARIES = [
 ] as const;
 
 function currentShiftWindow(): { start: Date; end: Date } {
-  const wall = new Date(Date.now() - 3 * 60 * 60 * 1000); // horário de parede BRT
+  const wall = new Date(Date.now() - BRT_OFFSET_MS); // horário de parede BRT
   const minutesNow = wall.getUTCHours() * 60 + wall.getUTCMinutes();
 
   let startMin: number = SHIFT_BOUNDARIES[2].startMin;
@@ -199,7 +217,7 @@ function currentShiftWindow(): { start: Date; end: Date } {
       0,
     ),
   );
-  const start = new Date(startWall.getTime() + 3 * 60 * 60 * 1000);
+  const start = new Date(startWall.getTime() + BRT_OFFSET_MS);
 
   const lengthMin =
     shiftIndex === 0
@@ -237,12 +255,14 @@ function outroGrupoOf(unit: string): string {
  * mesmo que a área não tenha nenhuma rotina neste turno (aí ela entra como
  * "pendente", nunca herdando um "concluída" de um turno já passado).
  */
-export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
-  const token = await login();
-  const answers = await fetchAnswers(token, FETCH_HOURS);
+async function loadTerminalGeralEventsFresh(
+  shiftStart: Date,
+  shiftEnd: Date,
+): Promise<TerminalGeralEvent[]> {
+  // O catálogo já é fixo; para status ao vivo basta consultar o turno atual.
+  const queryStart = new Date(shiftStart.getTime() - QUERY_MARGIN_MS);
+  const answers = await fetchAnswers(queryStart, new Date());
   const relevant = answers.filter((a) => isTerminalGeralRoute(a) && isRealArea(a.locationName || ""));
-  const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
-
   // 1) Catálogo: parte da lista fixa (garante cobertura total das áreas
   // conhecidas), e soma qualquer área nova que apareça no Listo e ainda não
   // esteja na lista (rede de segurança).
@@ -337,4 +357,37 @@ export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
       at,
     };
   });
+}
+
+export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
+  const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
+  const shiftStartMs = shiftStart.getTime();
+  const now = Date.now();
+
+  if (terminalCache && terminalCache.shiftStartMs === shiftStartMs && terminalCache.expiresAt > now) {
+    return terminalCache.events;
+  }
+  if (terminalInFlight && terminalInFlight.shiftStartMs === shiftStartMs) {
+    return terminalInFlight.promise;
+  }
+
+  const promise = loadTerminalGeralEventsFresh(shiftStart, shiftEnd)
+    .then((events) => {
+      terminalCache = {
+        shiftStartMs,
+        expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
+        events,
+      };
+      return events;
+    })
+    .catch((error) => {
+      if (terminalCache?.shiftStartMs === shiftStartMs) return terminalCache.events;
+      throw error;
+    })
+    .finally(() => {
+      if (terminalInFlight?.promise === promise) terminalInFlight = null;
+    });
+
+  terminalInFlight = { shiftStartMs, promise };
+  return promise;
 }

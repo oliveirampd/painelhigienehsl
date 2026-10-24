@@ -8,6 +8,14 @@ import { ACTIVE_DAILY_BEDS, isDailyConcurrentEligibleBed } from "@/lib/dailyScop
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+const QUERY_MARGIN_MS = 10 * 60 * 1000;
+const RESULT_CACHE_TTL_MS = 12 * 1000;
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+let dailyCache: { shiftStartMs: number; expiresAt: number; events: DailyBedEvent[] } | null = null;
+let dailyInFlight: { shiftStartMs: number; promise: Promise<DailyBedEvent[]> } | null = null;
 
 type ListoAnswer = {
   id: number;
@@ -47,7 +55,9 @@ function parseBRT(s: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-async function login(): Promise<string> {
+async function login(forceRefresh = false): Promise<string> {
+  if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now()) return tokenCache.token;
+
   const res = await fetch(`${LISTO_BASE}/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -60,20 +70,34 @@ async function login(): Promise<string> {
   const data = (await res.json()) as { token?: string; accessToken?: string };
   const token = data.token || data.accessToken;
   if (!token) throw new Error("Falha ao autenticar na origem dos dados");
+  tokenCache = { token, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS };
   return token;
 }
 
-async function fetchAnswers(token: string, hours: number): Promise<ListoAnswer[]> {
-  const end = new Date();
-  const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 19);
+function formatListoDate(d: Date): string {
+  // A API do Listo trabalha com data/hora de parede sem timezone. Convertemos
+  // o instante real para Brasília antes de remover o offset.
+  return new Date(d.getTime() - BRT_OFFSET_MS).toISOString().slice(0, 19);
+}
+
+async function fetchAnswers(start: Date, end: Date): Promise<ListoAnswer[]> {
   const all: ListoAnswer[] = [];
   const pageSize = 500;
+  let token = await login();
+
   for (let page = 1; page <= 30; page++) {
-    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-    const res = await fetch(url, {
+    const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${formatListoDate(start)}&endDate=${formatListoDate(end)}`;
+    let res = await fetch(url, {
       headers: { authorization: `Bearer ${token}`, accept: "application/json" },
     });
+
+    if (res.status === 401 || res.status === 403) {
+      token = await login(true);
+      res = await fetch(url, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      });
+    }
+
     if (!res.ok) throw new Error("Falha ao consultar as rotinas");
     const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
     const rows = Array.isArray(body) ? body : (body.data ?? []);
@@ -120,7 +144,7 @@ const SHIFT_BOUNDARIES = [
 
 /** "Agora" com os getters UTC representando o horário de parede de Brasília (UTC-3, sem DST). */
 function nowAsBrtWallClock(): Date {
-  return new Date(Date.now() - 3 * 60 * 60 * 1000);
+  return new Date(Date.now() - BRT_OFFSET_MS);
 }
 
 /** Início/fim (instantes reais, em UTC) do turno em andamento agora em Brasília. */
@@ -152,7 +176,7 @@ function currentShiftWindow(): { start: Date; end: Date; label: string } {
     ),
   );
   // volta o horário de parede BRT para o instante real em UTC
-  const start = new Date(startWall.getTime() + 3 * 60 * 60 * 1000);
+  const start = new Date(startWall.getTime() + BRT_OFFSET_MS);
 
   const lengthMin =
     label === "Manhã"
@@ -165,20 +189,26 @@ function currentShiftWindow(): { start: Date; end: Date; label: string } {
   return { start, end, label };
 }
 
-/** Eventos de higiene diária por leito, deduplicados (em execução tem prioridade). */
-export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
-  const token = await login();
-  const answers = await fetchAnswers(token, 26);
-  const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
+const ACTIVE_DAILY_BEDS_BY_NUMBER = new Map(ACTIVE_DAILY_BEDS.map((item) => [item.n, item] as const));
+
+async function loadDailyBedEventsFresh(
+  shiftStart: Date,
+  shiftEnd: Date,
+): Promise<DailyBedEvent[]> {
+  // A tela só considera o turno atual. Buscar 26h fazia o Worker baixar e
+  // processar registros que seriam descartados logo abaixo.
+  const queryStart = new Date(shiftStart.getTime() - QUERY_MARGIN_MS);
+  const answers = await fetchAnswers(queryStart, new Date());
 
   const byBed = new Map<string, { event: Omit<DailyBedEvent, "count">; completedCount: number }>();
+
   const seenCompletedCycles = new Set<string>();
   for (const a of answers) {
     const kind = kindOf(a);
     if (!kind) continue;
     const bed = bedNumber(a);
     if (!bed) continue;
-    const bedRef = ACTIVE_DAILY_BEDS.find((item) => item.n === bed);
+    const bedRef = ACTIVE_DAILY_BEDS_BY_NUMBER.get(bed);
     if (!bedRef) continue;
     if (kind === "concorrente" && !isDailyConcurrentEligibleBed(bed, bedRef.b)) continue;
     const status = statusOf(a);
@@ -238,4 +268,40 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
     ...event,
     count: Math.max(completedCount, event.status === "completed" ? 1 : 0),
   }));
+}
+
+/** Eventos de higiene diária por leito, deduplicados (em execução tem prioridade). */
+export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
+  const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
+  const shiftStartMs = shiftStart.getTime();
+  const now = Date.now();
+
+  if (dailyCache && dailyCache.shiftStartMs === shiftStartMs && dailyCache.expiresAt > now) {
+    return dailyCache.events;
+  }
+  if (dailyInFlight && dailyInFlight.shiftStartMs === shiftStartMs) {
+    return dailyInFlight.promise;
+  }
+
+  const promise = loadDailyBedEventsFresh(shiftStart, shiftEnd)
+    .then((events) => {
+      dailyCache = {
+        shiftStartMs,
+        expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
+        events,
+      };
+      return events;
+    })
+    .catch((error) => {
+      // Em uma oscilação curta do Listo, mantém o último estado válido do mesmo
+      // turno em vez de transformar a tela inteira em loading/erro.
+      if (dailyCache?.shiftStartMs === shiftStartMs) return dailyCache.events;
+      throw error;
+    })
+    .finally(() => {
+      if (dailyInFlight?.promise === promise) dailyInFlight = null;
+    });
+
+  dailyInFlight = { shiftStartMs, promise };
+  return promise;
 }

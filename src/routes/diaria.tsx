@@ -160,7 +160,10 @@ function DiariaPage() {
 
   useEffect(() => {
     let alive = true;
+    let running = false;
     async function load() {
+      if (running) return;
+      running = true;
       try {
         const res = await getDailyBeds();
         if (!alive) return;
@@ -188,11 +191,12 @@ function DiariaPage() {
       } catch {
         if (alive) setErro("Não foi possível atualizar agora.");
       } finally {
+        running = false;
         if (alive) setLoading(false);
       }
     }
-    load();
-    const id = setInterval(load, 30000);
+    void load();
+    const id = setInterval(() => void load(), 30000);
     return () => {
       alive = false;
       clearInterval(id);
