@@ -525,8 +525,11 @@ function DiariaPage() {
             <PanelNav />
           </div>
           <div className="flex items-center gap-3 text-xs sm:gap-4">
-            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-emerald-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-white/50">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+              </span>
               Ao vivo
             </span>
             <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
