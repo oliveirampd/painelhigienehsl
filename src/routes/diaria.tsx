@@ -6,7 +6,6 @@ import {
   CircleCheck,
   ChevronLeft,
   ChevronRight,
-  Circle,
   X,
   User,
   UserRound,
@@ -52,11 +51,16 @@ export const Route = createFileRoute("/diaria")({
 
 const BLOCK_ORDER = ["D", "E", "C", "B"] as const;
 const BLOCK_COLOR: Record<(typeof BLOCK_ORDER)[number], string> = {
-  D: "oklch(0.66 0.20 145)",
-  E: "oklch(0.62 0.22 300)",
-  C: "oklch(0.64 0.20 245)",
-  B: "oklch(0.63 0.23 25)",
+  D: "#38761d",
+  E: "#674ea7",
+  C: "#4a86e8",
+  B: "#cc0000",
 };
+
+// Translucidez compatível tanto com as cores oficiais em hexadecimal como com oklch.
+function colorWash(color: string, opacity: number): string {
+  return `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, transparent)`;
+}
 
 const ACTIVE_BEDS = ACTIVE_DAILY_BEDS;
 
@@ -510,178 +514,174 @@ function DiariaPage() {
 
   return (
     <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
-      <header className="panel-shell-header flex-none flex flex-col gap-2 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-base lg:text-2xl font-bold tracking-tight">
-            Higiene Diária — Leitos
-          </h1>
-          <PanelNav />
-        </div>
-        <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
-          <span className="flex items-center gap-1.5 uppercase text-white/50">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+
+      <header className="panel-shell-header flex-none border-b border-white/10 px-4 py-3 lg:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <h1 className="text-base font-bold tracking-tight lg:text-2xl">Higiene Diária · Leitos</h1>
+            <PanelNav />
+          </div>
+          <div className="flex items-center gap-3 text-xs sm:gap-4">
+            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-emerald-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Ao vivo
             </span>
-            ao vivo
+            <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
+            <span className="font-mono text-lg font-semibold tabular-nums lg:text-xl">{clock}</span>
+          </div>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/45">
+          <span>{ACTIVE_BEDS.length} leitos cadastrados · rotinas do turno atual</span>
+          <span className="font-mono tabular-nums">
+            Atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
           </span>
-          <span className="hidden sm:inline font-mono text-white/35">
-            atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
-          </span>
-          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
-          <span className="text-lg lg:text-2xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
 
-      <div className="scrollbar-hidden flex flex-none gap-2 overflow-x-auto px-4 py-2.5 lg:grid lg:grid-cols-7 lg:overflow-visible lg:px-6 lg:py-3">
-        <Kpi
-          icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
-          label="Em higiene agora"
-          value={emHigiene.length}
-          color="oklch(0.72 0.16 235)"
-        />
-        <Kpi
-          icon={<BedDouble className="h-4 w-4 animate-linen" />}
-          label="Camareira agora"
-          value={emCamareira.length}
-          color="oklch(0.75 0.17 55)"
-        />
-        <Kpi
-          icon={<CircleCheck className="h-4 w-4" />}
-          label="Concorrentes concluídas"
-          value={concorrentesConcluidas}
-          color="oklch(0.72 0.16 235)"
-        />
-        <Kpi
-          icon={<CircleCheck className="h-4 w-4" />}
-          label="Camareiras concluídas"
-          value={camareirasConcluidas}
-          color="oklch(0.75 0.17 55)"
-        />
-        <Kpi
-          icon={<BrushCleaning className="h-4 w-4" />}
-          label="Faltam higiene"
-          value={faltamHigiene}
-          color="oklch(0.7 0.19 25)"
-        />
-        <Kpi
-          icon={<BedDouble className="h-4 w-4" />}
-          label="Faltam camareira"
-          value={faltamCamareira}
-          color="oklch(0.7 0.19 25)"
-        />
-        <Kpi
-          icon={<Circle className="h-4 w-4" />}
-          label="Total de leitos"
-          value={ACTIVE_BEDS.length}
-          color="oklch(0.7 0.02 260)"
-        />{" "}
-      </div>
+      <section aria-label="Indicadores do turno" className="flex-none px-4 pb-3 pt-3 lg:px-6">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+            Ritmo das rotinas
+          </h2>
+          <span className="text-[11px] text-white/40">Turno atual</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <Kpi
+            icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
+            label="Em higiene agora"
+            value={emHigiene.length}
+            color={CONCORRENTE_COLOR}
+          />
+          <Kpi
+            icon={<BedDouble className="h-4 w-4 animate-linen" />}
+            label="Camareira agora"
+            value={emCamareira.length}
+            color={CAMAREIRA_COLOR}
+          />
+          <Kpi
+            icon={<CircleCheck className="h-4 w-4" />}
+            label="Concorrentes concluídas"
+            value={concorrentesConcluidas}
+            color={CONCORRENTE_COLOR}
+          />
+          <Kpi
+            icon={<CircleCheck className="h-4 w-4" />}
+            label="Camareiras concluídas"
+            value={camareirasConcluidas}
+            color={CAMAREIRA_COLOR}
+          />
+        </div>
+      </section>
 
-      <div className="flex-none px-4 lg:px-6 pb-2">
+      <section aria-label="Cobertura e panorama dos andares" className="flex-none px-4 pb-3 lg:px-6">
         <div
-          className={`grid gap-3 rounded-xl border px-3 py-2.5 lg:grid-cols-[1.1fr_1fr] ${
-            ritmoStatus === "attention"
-              ? "border-amber-400/30 bg-amber-400/[0.06]"
+          className={
+            "rounded-xl border p-3 sm:p-4 " +
+            (ritmoStatus === "attention"
+              ? "border-amber-400/25 bg-amber-400/[0.035]"
               : ritmoStatus === "ahead"
-                ? "border-emerald-400/20 bg-emerald-400/[0.045]"
-                : "border-white/10 bg-white/[0.035]"
-          }`}
+                ? "border-emerald-400/20 bg-emerald-400/[0.03]"
+                : "border-white/10 bg-white/[0.025]")
+          }
         >
-          <div>
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-white/35">Cobertura do turno</div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-3xl font-bold tabular-nums">{coberturaHigiene}%</span>
-                  <span className="text-xs text-white/40">concorrente</span>
-                  {periodo === "tarde" && (
-                    <>
-                      <span className="text-white/20">·</span>
-                      <span className="text-lg font-semibold tabular-nums">{coberturaCamareira}%</span>
-                      <span className="text-xs text-white/40">camareira</span>
-                    </>
-                  )}
-                </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Cobertura do turno
               </div>
-              <div className="text-right text-xs text-white/45">
-                Turno percorrido: <strong className="text-white/70">{ritmoEsperado}%</strong>
-                <div className="mt-0.5">
-                  {ritmoStatus === "attention"
-                    ? "abaixo da referência linear"
-                    : ritmoStatus === "ahead"
-                      ? "acima da referência linear"
-                      : "próximo da referência linear"}
-                </div>
-              </div>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full transition-[width]"
-                style={{
-                  width: `${coberturaHigiene}%`,
-                  background:
-                    ritmoStatus === "attention"
-                      ? "oklch(0.78 0.2 60)"
-                      : "oklch(0.72 0.16 235)",
-                }}
-              />
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-white/35">
-              Andares abaixo da referência do turno
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
-                <button
-                  type="button"
-                  key={`${x.block}-${x.floor}`}
-                  onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
-                >
-                  <strong>Bloco {x.block} · {x.floor}º</strong>
-                  <span className={x.pct < ritmoEsperado - 20 ? "text-amber-200" : "text-white/45"}>
-                    {x.pct}%
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-4xl font-bold leading-none tabular-nums">{coberturaHigiene}%</span>
+                <span className="text-xs text-white/50">concorrente</span>
+                {periodo === "tarde" && (
+                  <span className="rounded-md bg-white/[0.055] px-2 py-1 text-xs text-white/70">
+                    Camareira <strong className="tabular-nums">{coberturaCamareira}%</strong>
                   </span>
-                  <span className="text-white/30">· {x.pending} faltam</span>
-                </button>
-              ))}
+                )}
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{
+                    width: coberturaHigiene + "%",
+                    background: ritmoStatus === "attention" ? "oklch(0.78 0.2 60)" : CONCORRENTE_COLOR,
+                  }}
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/50">
+                <span>Turno percorrido: <strong className="text-white/75">{ritmoEsperado}%</strong></span>
+                <span>
+                  {ritmoStatus === "attention"
+                    ? "Abaixo da referência"
+                    : ritmoStatus === "ahead"
+                      ? "Acima da referência"
+                      : "Dentro da referência"}
+                </span>
+              </div>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-              {concentrationText}
-            </p>
+
+            <div className="border-t border-white/10 pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Andares abaixo da referência
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
+                  <button
+                    type="button"
+                    key={x.block + "-" + x.floor}
+                    onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/10 px-2 py-1.5 text-[11px] transition-colors hover:bg-white/10"
+                  >
+                    <strong>{x.floor}{x.block}</strong>
+                    <span className={x.pct < ritmoEsperado - 20 ? "font-semibold text-amber-200" : "text-white/60"}>
+                      {x.pct}%
+                    </span>
+                    <span className="text-white/40">· {x.pending} faltam</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-white/50">{concentrationText}</p>
+            </div>
+          </div>
+
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+                Visão rápida dos andares
+              </span>
+              <span className="text-[10px] text-white/35">deslize para ver todos</span>
+            </div>
+            <div className="scrollbar-hidden flex gap-2 overflow-x-auto pb-1">
+              {floorCoverage.map((x) => {
+                const blockTone = BLOCK_COLOR[x.block];
+                const tone =
+                  x.pct >= 90
+                    ? "oklch(0.66 0.18 150)"
+                    : x.pct >= Math.max(55, ritmoEsperado - 15)
+                      ? "oklch(0.62 0.18 235)"
+                      : "oklch(0.72 0.19 65)";
+                return (
+                  <div
+                    key={"heat-" + x.block + "-" + x.floor}
+                    className="min-w-[86px] shrink-0 rounded-lg border px-2.5 py-2"
+                    style={{
+                      borderColor: colorWash(blockTone, 0.5),
+                      background: colorWash(blockTone, 0.13),
+                    }}
+                    title={"Bloco " + x.block + " · " + x.floor + "º andar · " + x.pct + "% de cobertura"}
+                  >
+                    <div className="text-[10px] font-semibold tracking-wide" style={{ color: blockTone }}>
+                      {x.floor}{x.block}
+                    </div>
+                    <strong className="mt-1 block text-lg font-bold tabular-nums" style={{ color: tone }}>
+                      {x.pct}%
+                    </strong>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex-none px-4 lg:px-6 pb-2">
-        <div className="scrollbar-hidden flex gap-1.5 overflow-x-auto pb-1">
-          {floorCoverage.map((x) => {
-            const tone =
-              x.pct >= 90
-                ? "oklch(0.66 0.18 150)"
-                : x.pct >= Math.max(55, ritmoEsperado - 15)
-                  ? "oklch(0.62 0.18 235)"
-                  : "oklch(0.72 0.19 65)";
-            const blockTone = BLOCK_COLOR[x.block];
-            return (
-              <div
-                key={`heat-${x.block}-${x.floor}`}
-                className="min-w-[78px] rounded-md border px-2 py-1.5"
-                style={{ borderColor: blockTone.replace(")", " / 0.48)"), background: blockTone.replace(")", " / 0.10)") }}
-                title={`Bloco ${x.block} ${x.floor}º · ${x.pct}% de cobertura concorrente`}
-              >
-                <div className="text-[9px] uppercase tracking-wide text-white/35">Bloco {x.block}</div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-xs">{x.floor}º</span>
-                  <strong className="text-sm tabular-nums" style={{ color: tone }}>{x.pct}%</strong>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </section>
 
       <div className="flex-none px-4 pb-2 lg:px-6">
         <div className="panel-surface rounded-xl border p-2.5">
@@ -704,8 +704,8 @@ function DiariaPage() {
                     aria-pressed={blockFilter === block}
                     className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                     style={{
-                      borderColor: color.replace(")", active ? " / 0.75)" : " / 0.28)"),
-                      background: color.replace(")", active ? " / 0.18)" : " / 0.05)"),
+                      borderColor: colorWash(color, active ? 0.8 : 0.36),
+                      background: colorWash(color, active ? 0.22 : 0.06),
                       color: active ? color : undefined,
                     }}
                   >
@@ -725,7 +725,7 @@ function DiariaPage() {
                   <option value="">Todos andares</option>
                   {availableFloors.map((floor) => (
                     <option key={floor} value={floor}>
-                      {floor}º andar
+                      {floor}{blockFilter} · {floor}º andar
                     </option>
                   ))}
                 </select>
@@ -843,12 +843,19 @@ function DiariaPage() {
         className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
       >
         {visibleGroups.map((g) => (
-          <section key={g.block}>
+          <section
+            key={g.block}
+            className="rounded-2xl border p-2.5 sm:p-3 lg:p-4"
+            style={{
+              borderColor: colorWash(BLOCK_COLOR[g.block], 0.3),
+              background: `linear-gradient(115deg, ${colorWash(BLOCK_COLOR[g.block], 0.09)}, ${colorWash(BLOCK_COLOR[g.block], 0.035)})`,
+            }}
+          >
             <h2
-              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide"
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-l-[6px] px-3 py-3 text-xl font-black uppercase tracking-wide text-white shadow-sm lg:text-3xl"
               style={{
                 borderLeftColor: BLOCK_COLOR[g.block],
-                backgroundColor: BLOCK_COLOR[g.block].replace(")", " / 0.10)"),
+                background: `linear-gradient(100deg, color-mix(in srgb, ${BLOCK_COLOR[g.block]} 48%, #091522), color-mix(in srgb, ${BLOCK_COLOR[g.block]} 19%, #091522))`,
               }}
             >
               <span>Bloco {g.block}</span>
@@ -906,14 +913,14 @@ function DiariaPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedFloor({ block: g.block, floor })}
-                        className={`w-full rounded px-1 py-0.5 text-right font-mono text-[11px] transition-colors ${
-                          floorNeedsAttention
-                            ? "border border-amber-400/25 bg-amber-400/[0.08] text-amber-200"
-                            : "text-white/35 hover:bg-white/10 hover:text-white/70"
-                        }`}
+                        className="w-full rounded-md border px-1 py-1 text-center font-mono text-xs font-bold text-white transition-[filter] hover:brightness-125"
+                        style={{
+                          borderColor: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.9 : 0.65),
+                          background: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.42 : 0.27),
+                        }}
                         title={`Abrir resumo do ${floor}º andar do Bloco ${g.block}`}
                       >
-                        {floor}º
+                        {floor}{g.block}
                       </button>
                       <div className="flex items-end gap-1">
                         <VerticalProgressBar
@@ -1185,7 +1192,7 @@ function FloorDetailSheet({
             >
               Bloco {block}
             </div>
-            <h3 className="mt-0.5 text-xl font-bold">{floor}º andar</h3>
+            <h3 className="mt-0.5 text-xl font-bold">{floor}{block} <span className="text-sm font-normal text-white/45">· {floor}º andar</span></h3>
             <p className="text-xs text-white/40">{beds.length} leitos cadastrados neste andar</p>
           </div>
           <button
@@ -1228,7 +1235,7 @@ function FloorDetailSheet({
           type="button"
           onClick={onFocus}
           className="mt-4 w-full rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/10"
-          style={{ borderColor: BLOCK_COLOR[block].replace(")", " / 0.45)") }}
+          style={{ borderColor: colorWash(BLOCK_COLOR[block], 0.5) }}
         >
           Mostrar somente este andar no mapa
         </button>
@@ -1252,8 +1259,8 @@ function FloorMetric({
     <div
       className="rounded-lg border px-3 py-2"
       style={{
-        borderColor: color.replace(")", " / 0.28)"),
-        background: color.replace(")", " / 0.07)"),
+        borderColor: colorWash(color, 0.3),
+        background: colorWash(color, 0.08),
       }}
     >
       <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color }}>
@@ -1324,10 +1331,12 @@ function Legenda({ color, text }: { color: string; text: string }) {
 function LegendaSplit({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="flex h-2 w-3 overflow-hidden rounded-sm">
-        <span className="h-full w-1/2" style={{ background: CONCORRENTE_COLOR }} />
-        <span className="h-full w-1/2" style={{ background: CAMAREIRA_COLOR }} />
-      </span>
+      <span
+        className="h-2.5 w-4 rounded-full border border-white/15"
+        style={{
+          background: `linear-gradient(115deg, ${CONCORRENTE_COLOR}, color-mix(in srgb, ${CONCORRENTE_COLOR} 50%, ${CAMAREIRA_COLOR}), ${CAMAREIRA_COLOR})`,
+        }}
+      />
       {text}
     </span>
   );
@@ -1403,20 +1412,20 @@ function Kpi({
 }) {
   return (
     <div
-      className="min-w-[138px] rounded-lg border px-3 py-2 lg:min-w-0"
+      className="min-w-0 rounded-xl border px-3 py-3 shadow-sm"
       style={{
-        borderColor: `${color.replace(")", " / 0.3)")}`,
-        background: color.replace(")", " / 0.08)"),
+        borderColor: colorWash(color, 0.34),
+        background: colorWash(color, 0.075),
       }}
     >
       <div
-        className="flex items-center gap-1.5 text-xs lg:text-sm font-semibold uppercase"
+        className="flex min-h-8 items-center gap-2 text-[11px] font-semibold uppercase leading-tight tracking-wide sm:text-xs"
         style={{ color }}
       >
-        {icon}
-        {label}
+        <span className="shrink-0">{icon}</span>
+        <span>{label}</span>
       </div>
-      <div className="text-2xl lg:text-3xl font-bold tabular-nums">{value}</div>
+      <div className="mt-1 text-2xl font-bold tabular-nums lg:text-3xl">{value}</div>
     </div>
   );
 }
@@ -1526,8 +1535,8 @@ function BedTile({
     ? altaColor.replace(")", isDark ? " / 0.24)" : " / 0.12)")
     : both
       ? isDark
-        ? "oklch(0.22 0.025 260)"
-        : "oklch(1 0 0)"
+        ? "oklch(0.20 0.022 260)"
+        : "oklch(0.98 0.006 250)"
       : hasC
         ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.18)" : " / 0.10)")
         : hasK
@@ -1536,10 +1545,15 @@ function BedTile({
             ? SEM_ROTINA_COLOR.replace(")", " / 0.12)")
             : "oklch(0.965 0.006 250)";
 
+  const dualGradient =
+    !altaColor && both
+      ? `linear-gradient(115deg, ${colorWash(CONCORRENTE_COLOR, isDark ? 0.35 : 0.2)} 0%, ${colorWash(CONCORRENTE_COLOR, 0.16)} 42%, ${colorWash(CAMAREIRA_COLOR, 0.18)} 58%, ${colorWash(CAMAREIRA_COLOR, isDark ? 0.35 : 0.2)} 100%)`
+      : undefined;
+
   const borderColor = altaColor
     ? altaColor.replace(")", " / 0.8)")
     : both
-      ? "oklch(0.9 0.01 260 / 0.55)"
+      ? `color-mix(in srgb, ${CONCORRENTE_COLOR} 50%, ${CAMAREIRA_COLOR})`
       : hasC
         ? CONCORRENTE_COLOR.replace(")", " / 0.65)")
         : hasK
@@ -1552,8 +1566,8 @@ function BedTile({
       : "oklch(0.74 0.02 255)"
     : "oklch(0.20 0.025 255)";
 
-  const splitShadow = both
-    ? `inset 4px 0 0 ${CONCORRENTE_COLOR}, inset -4px 0 0 ${CAMAREIRA_COLOR}`
+  const dualAccent = !altaColor && both
+    ? `inset 0 2px 0 ${colorWash(CONCORRENTE_COLOR, 0.75)}, inset 0 -2px 0 ${colorWash(CAMAREIRA_COLOR, 0.75)}`
     : undefined;
 
   return (
@@ -1561,21 +1575,6 @@ function BedTile({
       data-bed-code={bed}
       className={`flex flex-col items-center gap-0.5 ${justCompleted ? "daily-bed-completed" : ""}`}
     >
-      <div className="flex h-[11px] items-center gap-1 font-mono text-[8px] leading-none tabular-nums">
-        {!altaColor && hasC && (
-          <span style={{ color: CONCORRENTE_COLOR }}>{formatTime(c!.at)}</span>
-        )}
-        {!altaColor && hasC && hasK && <span className="text-white/25">·</span>}
-        {!altaColor && hasK && <span style={{ color: CAMAREIRA_COLOR }}>{formatTime(k!.at)}</span>}
-        {altaColor && (
-          <span
-            className="font-sans font-semibold uppercase tracking-wide"
-            style={{ color: altaColor }}
-          >
-            {altaStatus === "waiting_cleaning" ? "parada" : "alta"}
-          </span>
-        )}
-      </div>
       <div
         title={title}
         onClick={onSelect}
@@ -1590,9 +1589,10 @@ function BedTile({
         style={{
           borderColor,
           background,
+          backgroundImage: dualGradient,
           color: textColor,
           boxShadow: [
-            splitShadow,
+            dualAccent,
             anyActive
               ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.45)")}`
               : null,
@@ -1603,6 +1603,18 @@ function BedTile({
             .join(", ") || undefined,
         }}
       >
+        {altaColor && (
+          <span
+            className="absolute -left-1.5 -top-1.5 rounded-md border px-1 text-[8px] font-bold uppercase leading-[13px]"
+            style={{
+              color: isDark ? "#ffffff" : "#17202b",
+              borderColor: altaColor,
+              background: isDark ? "oklch(0.20 0.022 260)" : "#ffffff",
+            }}
+          >
+            {altaStatus === "waiting_cleaning" ? "parada" : "alta"}
+          </span>
+        )}
         <span className="font-semibold tabular-nums leading-none">{bed}</span>
         <span className="mt-1 flex h-4 items-center justify-center gap-1">
           {altaStatus === "waiting_cleaning" && (
@@ -1626,7 +1638,16 @@ function BedTile({
               style={{ color: CONCORRENTE_COLOR }}
             />
           )}
-          {!altaColor && !anyActive && (hasC || hasK) && (
+          {!altaColor && !anyActive && both && (
+            <span className="flex items-center gap-1">
+              <CircleCheck className="h-3 w-3 opacity-90" />
+              <span className="flex items-center gap-0.5" aria-hidden="true">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: CONCORRENTE_COLOR }} />
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: CAMAREIRA_COLOR }} />
+              </span>
+            </span>
+          )}
+          {!altaColor && !anyActive && !both && (hasC || hasK) && (
             <CircleCheck className="h-3 w-3 opacity-90" />
           )}
           {!altaColor && !anyActive && !hasC && !hasK && (
