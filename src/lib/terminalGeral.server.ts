@@ -68,6 +68,53 @@ export type TerminalGeralEvent = {
   at: string | null;
 };
 
+type EdgeCache = {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+};
+
+function getEdgeCache(): EdgeCache | null {
+  return (
+    globalThis as unknown as { caches?: { default?: EdgeCache } }
+  ).caches?.default ?? null;
+}
+
+function terminalEdgeRequest(shiftStartMs: number): Request {
+  return new Request(`https://painelhigiene.internal/cache/terminal-geral/${shiftStartMs}`);
+}
+
+async function readTerminalEdgeCache(shiftStartMs: number): Promise<TerminalGeralEvent[] | null> {
+  const cache = getEdgeCache();
+  if (!cache) return null;
+  try {
+    const response = await cache.match(terminalEdgeRequest(shiftStartMs));
+    return response ? ((await response.json()) as TerminalGeralEvent[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeTerminalEdgeCache(
+  shiftStartMs: number,
+  events: TerminalGeralEvent[],
+): Promise<void> {
+  const cache = getEdgeCache();
+  if (!cache) return;
+  try {
+    await cache.put(
+      terminalEdgeRequest(shiftStartMs),
+      new Response(JSON.stringify(events), {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": `public, max-age=${Math.ceil(RESULT_CACHE_TTL_MS / 1000)}`,
+        },
+      }),
+    );
+  } catch {
+    // Cache de borda é otimização; nunca derruba a leitura ao vivo.
+  }
+}
+
 function parseBRT(s: string | null | undefined): Date | null {
   if (!s) return null;
   const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
@@ -371,13 +418,28 @@ export async function loadTerminalGeralEvents(): Promise<TerminalGeralEvent[]> {
     return terminalInFlight.promise;
   }
 
+  const edgeEvents = await readTerminalEdgeCache(shiftStartMs);
+  if (edgeEvents) {
+    terminalCache = {
+      shiftStartMs,
+      expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
+      events: edgeEvents,
+    };
+    return edgeEvents;
+  }
+
+  if (terminalInFlight && terminalInFlight.shiftStartMs === shiftStartMs) {
+    return terminalInFlight.promise;
+  }
+
   const promise = loadTerminalGeralEventsFresh(shiftStart, shiftEnd)
-    .then((events) => {
+    .then(async (events) => {
       terminalCache = {
         shiftStartMs,
         expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
         events,
       };
+      await writeTerminalEdgeCache(shiftStartMs, events);
       return events;
     })
     .catch((error) => {
