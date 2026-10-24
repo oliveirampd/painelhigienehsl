@@ -265,8 +265,16 @@ function TvPage() {
       { kind: StaffActivity; start: string; bed: string; unit: string }
     >();
 
+    // Se a limpeza terminal do mesmo leito já entrou em execução, a desmontagem
+    // deixa de representar o estado atual tanto no card quanto na tabela de colaboradores.
+    const inFlightBedKeys = new Set(
+      inFlight.map((d) => operationalBedKey(d.unit || "", d.bed_number || "")),
+    );
+
     for (const d of activeDesmont) {
       if (!d.assigned_staff_id) continue;
+      const dismantleBedKey = operationalBedKey(d.unit || "", d.bed_number || "");
+      if (inFlightBedKeys.has(dismantleBedKey)) continue;
       const prev = activity.get(d.assigned_staff_id);
       if (!prev || new Date(d.status_updated_at) > new Date(prev.start)) {
         activity.set(d.assigned_staff_id, {
