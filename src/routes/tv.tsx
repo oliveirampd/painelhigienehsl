@@ -53,7 +53,43 @@ const isTerminal = (d: Discharge) =>
   (d.external_id || "").startsWith("listo:answer:") || isTerminalBox(d);
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
+const isLastCompletedSnapshot = (d: Discharge) =>
+  (d.external_id || "").startsWith("snapshot:last-completed:");
 const isBed = (d: Discharge) => (d.bed_number || "").toLowerCase().startsWith("leito");
+
+function dismantleWasSuperseded(dismantle: Discharge, rows: Discharge[]): boolean {
+  if (dismantle.status !== "in_progress") return false;
+  const bedKey = operationalBedKey(dismantle.unit || "", dismantle.bed_number || "");
+  const dismantleStart = new Date(dismantle.status_updated_at).getTime();
+  if (!Number.isFinite(dismantleStart)) return false;
+  const toleranceMs = 10 * 60 * 1000;
+
+  return rows.some((row) => {
+    if (operationalBedKey(row.unit || "", row.bed_number || "") !== bedKey) return false;
+
+    if (isLastCompletedSnapshot(row)) {
+      if (!row.completed_at) return false;
+      const cleaningStarted = new Date(row.status_updated_at).getTime();
+      const cleaningCompleted = new Date(row.completed_at).getTime();
+      return (
+        Number.isFinite(cleaningStarted) &&
+        Number.isFinite(cleaningCompleted) &&
+        cleaningStarted >= dismantleStart - toleranceMs &&
+        cleaningCompleted >= dismantleStart
+      );
+    }
+
+    if (!isTerminal(row) || (row.status !== "in_progress" && row.status !== "completed")) {
+      return false;
+    }
+    const terminalMoment = new Date(row.status_updated_at).getTime();
+    if (!Number.isFinite(terminalMoment) || terminalMoment < dismantleStart - toleranceMs) {
+      return false;
+    }
+    return row.status !== "completed" || !row.completed_at ||
+      new Date(row.completed_at).getTime() >= dismantleStart;
+  });
+}
 const isTerminalDisplayLocation = (d: Discharge) => isBed(d) || isTerminalBox(d);
 
 // 3C/3D continuam excluídos para leitos. A única exceção é Box UTI 3C/3D/3E,
@@ -249,13 +285,22 @@ function TvPage() {
       );
   }, [filtered, now]);
 
-  // Desmontagens já chegam pelo mesmo realtime dos leitos. Mantemos todas para
-  // marcar o card da Alta com o horário de início e destacamos as ativas também
-  // como cards próprios quando ainda não há uma Alta visível para aquele leito.
+  // Desmontagens chegam pelo mesmo realtime. Se a limpeza terminal daquele ciclo
+  // já começou ou terminou, a desmontagem não pode "ressuscitar" por um status
+  // antigo ainda marcado como in_progress na origem.
   const dismantles = useMemo(() => filtered.filter(isDesmont), [filtered]);
+  const dismantlesForDisplay = useMemo(
+    () =>
+      dismantles.map((d) =>
+        dismantleWasSuperseded(d, filtered)
+          ? { ...d, status: "completed" as const }
+          : d,
+      ),
+    [dismantles, filtered],
+  );
   const activeDesmont = useMemo(
-    () => dismantles.filter((d) => d.status === "in_progress"),
-    [dismantles],
+    () => dismantlesForDisplay.filter((d) => d.status === "in_progress"),
+    [dismantlesForDisplay],
   );
 
   // Colaboradores: derivar atividade por staff
@@ -509,6 +554,29 @@ function TvPage() {
   }, [discharges, turnoAtual]);
   const concluidasHoje = concluidasHojePorBloco.total;
 
+  const recentCompleted = useMemo(() => {
+    const latestByBed = new Map<string, Discharge>();
+    const candidates = discharges
+      .filter(
+        (d) =>
+          !isExcluded(d) &&
+          isTerminalDisplayLocation(d) &&
+          !!d.completed_at &&
+          new Date(d.completed_at).getTime() >= turnoAtual.startMs &&
+          (isLastCompletedSnapshot(d) || (isTerminalBox(d) && d.status === "completed")),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime(),
+      );
+
+    for (const d of candidates) {
+      const key = operationalBedKey(d.unit || "", d.bed_number || "");
+      if (!latestByBed.has(key)) latestByBed.set(key, d);
+    }
+    return Array.from(latestByBed.values()).slice(0, 5);
+  }, [discharges, turnoAtual.startMs]);
+
   const emExecucaoPorBloco = useMemo(() => {
     let de = 0;
     let b = 0;
@@ -578,51 +646,83 @@ function TvPage() {
         </div>
       </header>
 
-      <div className="flex-none px-4 lg:px-6 pt-2.5">
-        <div
-          className={`grid gap-2 rounded-xl border px-3 py-2.5 lg:grid-cols-[180px_1fr_auto] lg:items-center ${
-            operationState === "critical"
-              ? "border-red-400/35 bg-red-400/[0.08]"
-              : operationState === "attention"
-                ? "border-amber-400/30 bg-amber-400/[0.07]"
-                : "border-emerald-400/20 bg-emerald-400/[0.045]"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {operationState === "normal" ? (
-              <Activity className="h-4 w-4 text-emerald-300" />
-            ) : (
-              <AlertTriangle
-                className={`h-4 w-4 ${operationState === "critical" ? "text-red-300" : "text-amber-300"}`}
-              />
-            )}
-            <div>
-              <div className="text-[9px] uppercase tracking-widest text-white/40">
-                Situação da operação
+      <div className="flex-none px-4 pt-2.5 lg:px-6">
+        <div className="grid gap-2 lg:grid-cols-2">
+          <div
+            className={`rounded-xl border px-3 py-2.5 ${
+              operationState === "critical"
+                ? "border-red-400/35 bg-red-400/[0.08]"
+                : operationState === "attention"
+                  ? "border-amber-400/30 bg-amber-400/[0.07]"
+                  : "border-emerald-400/20 bg-emerald-400/[0.045]"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                {operationState === "normal" ? (
+                  <Activity className="h-4 w-4 shrink-0 text-emerald-300" />
+                ) : (
+                  <AlertTriangle
+                    className={`h-4 w-4 shrink-0 ${operationState === "critical" ? "text-red-300" : "text-amber-300"}`}
+                  />
+                )}
+                <div className="min-w-0">
+                  <div className="text-[9px] uppercase tracking-widest text-white/40">
+                    Situação da operação
+                  </div>
+                  <div className="text-sm font-bold uppercase">
+                    {operationState === "critical"
+                      ? "Crítica"
+                      : operationState === "attention"
+                        ? "Atenção"
+                        : "Normal"}
+                  </div>
+                </div>
               </div>
-              <div className="text-sm font-bold uppercase">
-                {operationState === "critical"
-                  ? "Crítica"
-                  : operationState === "attention"
-                    ? "Atenção"
-                    : "Normal"}
-              </div>
+              <span className="shrink-0 text-[10px] text-white/45 lg:text-xs">
+                Fila 15m:{" "}
+                <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
+                  {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
+                </strong>
+              </span>
+            </div>
+            <div className="mt-1.5 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[10px] text-white/60 lg:text-[11px]">
+              {operationAttention.slice(0, 2).map((item) => (
+                <span key={item} className="truncate">
+                  • {item}
+                </span>
+              ))}
             </div>
           </div>
-          <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/60">
-            {operationAttention.map((item) => (
-              <span key={item} className="truncate">
-                • {item}
-              </span>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] lg:text-xs">
-            <span className="text-white/45">
-              Fila 15m:{" "}
-              <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
-                {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
-              </strong>
-            </span>
+
+          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <CircleCheck className="h-4 w-4 shrink-0 text-emerald-300" />
+              <div className="text-[9px] font-semibold uppercase tracking-widest text-white/45">
+                Finalizados recentes
+              </div>
+            </div>
+            {recentCompleted.length ? (
+              <div className="mt-2 flex min-w-0 gap-1.5 overflow-hidden">
+                {recentCompleted.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5"
+                  >
+                    <span className="truncate text-[10px] font-semibold text-white/75 lg:text-[11px]">
+                      {d.bed_number}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] font-semibold tabular-nums text-emerald-200 lg:text-[11px]">
+                      {formatClockTime(d.completed_at!)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 text-[10px] text-white/35 lg:text-[11px]">
+                Nenhuma higiene finalizada neste turno.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -675,7 +775,7 @@ function TvPage() {
           inFlight={exceptionsOnly ? [] : inFlight}
           enRoute={exceptionsOnly ? [] : enRoute}
           paused={paused}
-          dismantles={dismantles}
+          dismantles={dismantlesForDisplay}
           nowMs={now}
           staffMap={staffMap}
           flashVersions={flashVersions}

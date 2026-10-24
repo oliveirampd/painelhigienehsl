@@ -361,6 +361,39 @@ async function handle(request: Request) {
         }
       }
 
+      // Uma desmontagem antiga pode continuar aparecendo como "em andamento" no
+      // Listo mesmo depois de encerrada pelo início da limpeza terminal. Se já
+      // fechamos esse mesmo ciclo antes, não deixe a fonte antiga reabri-lo.
+      if (
+        kind === "desmont" &&
+        rawStatus === "in_progress" &&
+        prevRow?.status === "completed"
+      ) {
+        const sourceStart =
+          parseBRT(a.startTime) ?? parseBRT(a.date) ?? parseBRT(a.endTime);
+        const previousStart = parseBRT(prevRow.status_updated_at);
+        const sameOrOlderCycle =
+          !sourceStart ||
+          !previousStart ||
+          sourceStart.getTime() <= previousStart.getTime();
+
+        if (sameOrOlderCycle) {
+          return {
+            external_id: externalId,
+            bed_number: bed,
+            unit,
+            status: "completed" as DischargeStatus,
+            priority: !!a.isPriority,
+            pause_reason: extractComment(a.answerComment),
+            assigned_staff_id: assigned ?? prevRow.assigned_staff_id,
+            status_updated_at: prevRow.status_updated_at,
+            completed_at: prevRow.completed_at,
+            last_answer_id: a.id,
+            _debug: "mantida desmontagem concluída (fonte antiga sem novo ciclo)",
+          };
+        }
+      }
+
       if (NO_RELIABLE_TIMESTAMP.includes(rawStatus)) {
         const prev = prevRow;
         const detectedAt = new Date();
@@ -433,11 +466,55 @@ async function handle(request: Request) {
       };
     };
 
-    const dischargeRowsWithDebug = [
+    const dischargeRowsWithDebugRaw = [
       ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
       ...boxAnswersDedup.map((a) => buildRow(a, "box")),
       ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
     ];
+
+    // A limpeza terminal é posterior à desmontagem no fluxo operacional.
+    // Quando a terminal inicia ou conclui, encerra a desmontagem correspondente
+    // mesmo que o Listo ainda devolva a resposta de desmontagem como "em andamento".
+    const terminalProgressByBed = new Map<string, (typeof dischargeRowsWithDebugRaw)[number]>();
+    for (const row of dischargeRowsWithDebugRaw) {
+      const isTerminalRow =
+        row.external_id.startsWith("listo:answer:") ||
+        row.external_id.startsWith("listo:box:");
+      if (!isTerminalRow || (row.status !== "in_progress" && row.status !== "completed")) {
+        continue;
+      }
+      terminalProgressByBed.set(operationalBedKey(row.unit, row.bed_number), row);
+    }
+
+    const dischargeRowsWithDebug = dischargeRowsWithDebugRaw.map((row) => {
+      if (!row.external_id.startsWith("listo:desmont:") || row.status !== "in_progress") {
+        return row;
+      }
+      const terminal = terminalProgressByBed.get(operationalBedKey(row.unit, row.bed_number));
+      if (!terminal) return row;
+
+      const dismantleStartedMs = new Date(row.status_updated_at).getTime();
+      const terminalMomentRaw =
+        terminal.status === "completed"
+          ? terminal.completed_at ?? terminal.status_updated_at
+          : terminal.status_updated_at;
+      const terminalMomentMs = new Date(terminalMomentRaw).getTime();
+      const toleranceMs = 10 * 60 * 1000;
+      if (
+        !Number.isFinite(dismantleStartedMs) ||
+        !Number.isFinite(terminalMomentMs) ||
+        terminalMomentMs < dismantleStartedMs - toleranceMs
+      ) {
+        return row;
+      }
+
+      return {
+        ...row,
+        status: "completed" as DischargeStatus,
+        completed_at: new Date(Math.max(dismantleStartedMs, terminalMomentMs)).toISOString(),
+        _debug: "desmontagem encerrada pelo avanço da limpeza terminal",
+      };
+    });
 
     const dischargeRows = dischargeRowsWithDebug.map(({ _debug, ...row }) => row);
 
