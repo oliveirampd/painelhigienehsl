@@ -26,7 +26,7 @@ import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { useHospitalData } from "@/hooks/useHospitalData";
+import { useActiveDischarges } from "@/hooks/useActiveDischarges";
 import { usePanelTheme } from "@/hooks/usePanelTheme";
 
 export const Route = createFileRoute("/diaria")({
@@ -119,7 +119,7 @@ const isAltaTerminal = (externalId: string | null) =>
 function DiariaPage() {
   const mainRef = useCarouselScroll<HTMLElement>();
   const { isDark, themeClass, toggleTheme } = usePanelTheme();
-  const { discharges } = useHospitalData();
+  const discharges = useActiveDischarges();
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
