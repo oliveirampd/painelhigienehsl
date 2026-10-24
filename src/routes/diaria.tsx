@@ -513,7 +513,10 @@ function DiariaPage() {
     blockFilter !== "all" || floorFilter != null || routineFilter !== "all" || viewMode !== "all";
 
   return (
-    <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
+    <div
+      ref={mainRef}
+      className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-y-auto`}
+    >
 
       <header className="panel-shell-header flex-none border-b border-white/10 px-4 py-3 lg:px-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -839,8 +842,7 @@ function DiariaPage() {
         Mapa de leitos · clique no andar para resumo · rolagem automática na TV
       </div>
       <main
-        ref={mainRef}
-        className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
+        className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:flex-none lg:overflow-visible lg:px-6 space-y-6"
       >
         {visibleGroups.map((g) => (
           <section
