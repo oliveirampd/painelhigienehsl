@@ -372,12 +372,19 @@ async function handle(request: Request) {
         const sourceStart =
           parseBRT(a.startTime) ?? parseBRT(a.date) ?? parseBRT(a.endTime);
         const previousStart = parseBRT(prevRow.status_updated_at);
-        const sameOrOlderCycle =
-          !sourceStart ||
-          !previousStart ||
-          sourceStart.getTime() <= previousStart.getTime();
+        const previousAnswerId =
+          prevRow.last_answer_id == null ? null : Number(prevRow.last_answer_id);
+        const hasNewerStart =
+          !!sourceStart &&
+          !!previousStart &&
+          sourceStart.getTime() > previousStart.getTime();
+        const hasNewerAnswer =
+          previousAnswerId != null &&
+          Number.isFinite(previousAnswerId) &&
+          a.id > previousAnswerId;
+        const isNewCycle = hasNewerStart || hasNewerAnswer;
 
-        if (sameOrOlderCycle) {
+        if (!isNewCycle) {
           return {
             external_id: externalId,
             bed_number: bed,
