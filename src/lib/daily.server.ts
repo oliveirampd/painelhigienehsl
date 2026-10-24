@@ -10,8 +10,10 @@ const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
 const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
 const QUERY_MARGIN_MS = 10 * 60 * 1000;
-const RESULT_CACHE_TTL_MS = 12 * 1000;
+const RESULT_CACHE_TTL_MS = 30 * 1000;
 const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+const LISTO_REQUEST_BUDGET_MS = 9 * 1000;
+const STALE_EDGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 let dailyCache: { shiftStartMs: number; expiresAt: number; events: DailyBedEvent[] } | null = null;
@@ -63,30 +65,49 @@ function dailyEdgeRequest(shiftStartMs: number): Request {
   return new Request(`https://painelhigiene.internal/cache/daily/${shiftStartMs}`);
 }
 
-async function readDailyEdgeCache(shiftStartMs: number): Promise<DailyBedEvent[] | null> {
+function dailyStaleEdgeRequest(shiftStartMs: number): Request {
+  return new Request(`https://painelhigiene.internal/cache/daily-stale/${shiftStartMs}`);
+}
+
+async function readEdgeEvents(request: Request): Promise<DailyBedEvent[] | null> {
   const cache = getEdgeCache();
   if (!cache) return null;
   try {
-    const response = await cache.match(dailyEdgeRequest(shiftStartMs));
+    const response = await cache.match(request);
     return response ? ((await response.json()) as DailyBedEvent[]) : null;
   } catch {
     return null;
   }
 }
 
-async function writeDailyEdgeCache(shiftStartMs: number, events: DailyBedEvent[]): Promise<void> {
+async function readDailyEdgeCache(shiftStartMs: number): Promise<DailyBedEvent[] | null> {
+  return readEdgeEvents(dailyEdgeRequest(shiftStartMs));
+}
+
+async function readDailyStaleEdgeCache(shiftStartMs: number): Promise<DailyBedEvent[] | null> {
+  return readEdgeEvents(dailyStaleEdgeRequest(shiftStartMs));
+}
+
+async function putEdgeEvents(request: Request, events: DailyBedEvent[], maxAgeMs: number): Promise<void> {
   const cache = getEdgeCache();
   if (!cache) return;
+  await cache.put(
+    request,
+    new Response(JSON.stringify(events), {
+      headers: {
+        "content-type": "application/json",
+        "cache-control": `public, max-age=${Math.ceil(maxAgeMs / 1000)}`,
+      },
+    }),
+  );
+}
+
+async function writeDailyEdgeCache(shiftStartMs: number, events: DailyBedEvent[]): Promise<void> {
   try {
-    await cache.put(
-      dailyEdgeRequest(shiftStartMs),
-      new Response(JSON.stringify(events), {
-        headers: {
-          "content-type": "application/json",
-          "cache-control": `public, max-age=${Math.ceil(RESULT_CACHE_TTL_MS / 1000)}`,
-        },
-      }),
-    );
+    await Promise.all([
+      putEdgeEvents(dailyEdgeRequest(shiftStartMs), events, RESULT_CACHE_TTL_MS),
+      putEdgeEvents(dailyStaleEdgeRequest(shiftStartMs), events, STALE_EDGE_CACHE_TTL_MS),
+    ]);
   } catch {
     // Cache de borda é otimização; nunca derruba a leitura ao vivo.
   }
@@ -99,17 +120,59 @@ function parseBRT(s: string | null | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-async function login(forceRefresh = false): Promise<string> {
+async function fetchWithDeadline(
+  url: string,
+  init: RequestInit,
+  deadlineMs: number,
+  label: string,
+): Promise<Response> {
+  const remainingMs = deadlineMs - Date.now();
+  if (remainingMs <= 0) throw new Error(`Tempo limite do Listo excedido antes de ${label}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), remainingMs);
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    console.info("[diaria:listo]", {
+      step: label,
+      durationMs: Date.now() - startedAt,
+      status: response.status,
+    });
+    return response;
+  } catch (error) {
+    const timedOut = controller.signal.aborted;
+    console.warn("[diaria:listo]", {
+      step: label,
+      durationMs: Date.now() - startedAt,
+      timedOut,
+    });
+    if (timedOut) throw new Error(`Tempo limite do Listo excedido em ${label}`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function login(
+  forceRefresh = false,
+  deadlineMs = Date.now() + LISTO_REQUEST_BUDGET_MS,
+): Promise<string> {
   if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now()) return tokenCache.token;
 
-  const res = await fetch(`${LISTO_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      email: process.env["LISTO360_EMAIL"],
-      password: process.env["LISTO360_PASSWORD"],
-    }),
-  });
+  const res = await fetchWithDeadline(
+    `${LISTO_BASE}/auth/login`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: process.env["LISTO360_EMAIL"],
+        password: process.env["LISTO360_PASSWORD"],
+      }),
+    },
+    deadlineMs,
+    forceRefresh ? "login-refresh" : "login",
+  );
   if (!res.ok) throw new Error("Falha ao autenticar na origem dos dados");
   const data = (await res.json()) as { token?: string; accessToken?: string };
   const token = data.token || data.accessToken;
@@ -127,27 +190,44 @@ function formatListoDate(d: Date): string {
 async function fetchAnswers(start: Date, end: Date): Promise<ListoAnswer[]> {
   const all: ListoAnswer[] = [];
   const pageSize = 500;
-  let token = await login();
+  const startedAt = Date.now();
+  const deadlineMs = startedAt + LISTO_REQUEST_BUDGET_MS;
+  let pages = 0;
+  let token = await login(false, deadlineMs);
 
   for (let page = 1; page <= 30; page++) {
     const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${formatListoDate(start)}&endDate=${formatListoDate(end)}`;
-    let res = await fetch(url, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-    });
+    let res = await fetchWithDeadline(
+      url,
+      { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+      deadlineMs,
+      `answers-page-${page}`,
+    );
 
     if (res.status === 401 || res.status === 403) {
-      token = await login(true);
-      res = await fetch(url, {
-        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-      });
+      token = await login(true, deadlineMs);
+      res = await fetchWithDeadline(
+        url,
+        { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+        deadlineMs,
+        `answers-page-${page}-retry`,
+      );
     }
 
     if (!res.ok) throw new Error("Falha ao consultar as rotinas");
     const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
     const rows = Array.isArray(body) ? body : (body.data ?? []);
+    pages = page;
     all.push(...rows);
     if (rows.length < pageSize) break;
   }
+
+  console.info("[diaria:listo]", {
+    step: "answers-complete",
+    durationMs: Date.now() - startedAt,
+    pages,
+    rows: all.length,
+  });
   return all;
 }
 
@@ -352,10 +432,30 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
       await writeDailyEdgeCache(shiftStartMs, events);
       return events;
     })
-    .catch((error) => {
-      // Em uma oscilação curta do Listo, mantém o último estado válido do mesmo
-      // turno em vez de transformar a tela inteira em loading/erro.
+    .catch(async (error) => {
+      console.warn("[diaria:listo]", {
+        step: "fresh-load-failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+
+      // Em oscilação ou lentidão do Listo, nunca segura a tela por quase 1 minuto:
+      // prefere o último estado válido do mesmo turno, primeiro local e depois edge.
       if (dailyCache?.shiftStartMs === shiftStartMs) return dailyCache.events;
+
+      const staleEdgeEvents = await readDailyStaleEdgeCache(shiftStartMs);
+      if (staleEdgeEvents) {
+        dailyCache = {
+          shiftStartMs,
+          expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
+          events: staleEdgeEvents,
+        };
+        console.warn("[diaria:listo]", {
+          step: "stale-fallback",
+          rows: staleEdgeEvents.length,
+        });
+        return staleEdgeEvents;
+      }
+
       throw error;
     })
     .finally(() => {
