@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Clock3, X } from "lucide-react";
 import { getTerminalGeral, type TerminalGeralEvent, type TerminalGeralBlock } from "@/lib/terminalGeral.functions";
 import { getOperationsAnalytics, type OperationsAnalytics } from "@/lib/analytics.functions";
@@ -78,6 +78,46 @@ function formatRemaining(totalMin: number) {
   return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
 }
 
+function DeferredRender({
+  children,
+  minHeight = 96,
+}: {
+  children: ReactNode;
+  minHeight?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (ready) return;
+    const node = ref.current;
+    if (!node) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setReady(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setReady(true);
+        observer.disconnect();
+      },
+      { rootMargin: "700px 0px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [ready]);
+
+  return (
+    <div ref={ref} style={ready ? undefined : { minHeight }}>
+      {ready ? children : null}
+    </div>
+  );
+}
+
 function TerminalGeralPage() {
   const { isDark, themeClass, toggleTheme } = usePanelTheme();
   const [events, setEvents] = useState<TerminalGeralEvent[]>([]);
@@ -133,8 +173,14 @@ function TerminalGeralPage() {
     };
   }, []);
 
+  const hasLiveEvents = events.length > 0;
+
   useEffect(() => {
+    if (!hasLiveEvents) return;
+
     let alive = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
     async function loadHistory() {
       try {
         const analytics = await getOperationsAnalytics();
@@ -143,13 +189,20 @@ function TerminalGeralPage() {
         console.error(err);
       }
     }
-    void loadHistory();
-    const id = setInterval(() => void loadHistory(), 5 * 60 * 1000);
+
+    // O histórico não é necessário para montar a tela ao vivo. No celular ele
+    // passa a entrar só depois que os dados principais já apareceram.
+    const timeoutId = setTimeout(() => {
+      void loadHistory();
+      intervalId = setInterval(() => void loadHistory(), 5 * 60 * 1000);
+    }, 1500);
+
     return () => {
       alive = false;
-      clearInterval(id);
+      clearTimeout(timeoutId);
+      if (intervalId) clearInterval(intervalId);
     };
-  }, []);
+  }, [hasLiveEvents]);
 
   const historyByArea = useMemo(
     () => new Map(historicalAreas.map((x) => [`${x.unit}|${x.area}`, x])),
@@ -202,27 +255,35 @@ function TerminalGeralPage() {
     if (match) setSelectedArea(match);
   }, [events]);
 
-  const gruposComBloco = BLOCK_ORDER.map((block) => {
-    const items = events.filter((e) => e.block === block);
-    const floors = Array.from(new Set(items.map((e) => e.floor).filter((f): f is number => f != null))).sort(
-      (a, b) => b - a,
-    );
-    return { block, items, floors };
-  }).filter((g) => g.items.length > 0);
+  const gruposComBloco = useMemo(
+    () =>
+      BLOCK_ORDER.map((block) => {
+        const items = events.filter((e) => e.block === block);
+        const floors = Array.from(
+          new Set(items.map((e) => e.floor).filter((f): f is number => f != null)),
+        ).sort((a, b) => b - a);
+        return { block, items, floors };
+      }).filter((g) => g.items.length > 0),
+    [events],
+  );
 
   // "Outras áreas": agrupadas pelo nome real do grupo original (ex: "Térreo B",
   // "Mezanino Diretoria") em vez de uma lista única sem contexto.
-  const outrasPorGrupo = Array.from(
-    events
-      .filter((e) => e.block === "outro")
-      .reduce((m, e) => {
-        const label = e.outroGrupo || "Outras áreas";
-        if (!m.has(label)) m.set(label, []);
-        m.get(label)!.push(e);
-        return m;
-      }, new Map<string, TerminalGeralEvent[]>())
-      .entries(),
-  ).sort((a, b) => a[0].localeCompare(b[0]));
+  const outrasPorGrupo = useMemo(
+    () =>
+      Array.from(
+        events
+          .filter((e) => e.block === "outro")
+          .reduce((m, e) => {
+            const label = e.outroGrupo || "Outras áreas";
+            if (!m.has(label)) m.set(label, []);
+            m.get(label)!.push(e);
+            return m;
+          }, new Map<string, TerminalGeralEvent[]>())
+          .entries(),
+      ).sort((a, b) => a[0].localeCompare(b[0])),
+    [events],
+  );
 
   return (
     <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
@@ -383,7 +444,8 @@ function TerminalGeralPage() {
                 // Quando tem mais de um (comum em 1ºss/subsolos, com vários setores no mesmo
                 // número de andar), separa por setor pra não virar uma lista única confusa.
                 return (
-                  <div key={floor} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+                  <DeferredRender key={`${g.block}-${floor}`} minHeight={90}>
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
                     <span className="flex-none font-mono text-[11px] text-white/35 sm:mt-1.5 sm:w-10 sm:text-right">
                       {floor}º
                     </span>
@@ -414,7 +476,8 @@ function TerminalGeralPage() {
                         ))}
                       </div>
                     )}
-                  </div>
+                    </div>
+                  </DeferredRender>
                 );
               })}
             </div>
@@ -433,7 +496,8 @@ function TerminalGeralPage() {
             </h2>
             <div className="space-y-3">
               {outrasPorGrupo.map(([label, items]) => (
-                <div key={label} className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
+                <DeferredRender key={label} minHeight={90}>
+                  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
                   <span className="flex-none text-xs font-semibold text-white/50 sm:mt-1.5 sm:w-40">{label}</span>
                   <div className="flex flex-wrap gap-2">
                     {items
@@ -442,7 +506,8 @@ function TerminalGeralPage() {
                         <AreaCard key={`${e.block}-${e.outroGrupo}-${e.area}`} event={e} now={now} shiftRemaining={shift.remainingMin} onSelect={() => setSelectedArea(e)} />
                       ))}
                   </div>
-                </div>
+                  </div>
+                </DeferredRender>
               ))}
             </div>
           </section>
