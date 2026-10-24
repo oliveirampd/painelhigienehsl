@@ -279,6 +279,7 @@ async function handle(request: Request) {
         status: DischargeStatus;
         priority: boolean;
         pause_reason: string | null;
+        service_order: string | null;
         assigned_staff_id: string | null;
         status_updated_at: string;
         last_answer_id: number | null;
@@ -287,7 +288,7 @@ async function handle(request: Request) {
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
-          .select("external_id, bed_number, unit, status, priority, pause_reason, assigned_staff_id, status_updated_at, last_answer_id, completed_at")
+          .select("external_id, bed_number, unit, status, priority, pause_reason, service_order, assigned_staff_id, status_updated_at, last_answer_id, completed_at")
           .like("external_id", "listo:%")
           .order("external_id", { ascending: true })
           .range(from, from + pageSize - 1);
@@ -477,7 +478,11 @@ async function handle(request: Request) {
       ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
       ...boxAnswersDedup.map((a) => buildRow(a, "box")),
       ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
-    ];
+    ].map((row) => ({
+      ...row,
+      // Campo manual do painel: nunca deve ser apagado pelo sync do Listo.
+      service_order: existingByExternalId.get(row.external_id)?.service_order ?? null,
+    }));
 
     // A limpeza terminal é posterior à desmontagem no fluxo operacional.
     // Quando a terminal inicia ou conclui, encerra a desmontagem correspondente

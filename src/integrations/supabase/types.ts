@@ -58,6 +58,7 @@ export type Database = {
           last_answer_id: number | null;
           pause_reason: string | null;
           priority: boolean;
+          service_order: string | null;
           status: Database["public"]["Enums"]["discharge_status"];
           status_updated_at: string;
           unit: string;
@@ -72,6 +73,7 @@ export type Database = {
           last_answer_id?: number | null;
           pause_reason?: string | null;
           priority?: boolean;
+          service_order?: string | null;
           status?: Database["public"]["Enums"]["discharge_status"];
           status_updated_at?: string;
           unit: string;
@@ -86,6 +88,7 @@ export type Database = {
           last_answer_id?: number | null;
           pause_reason?: string | null;
           priority?: boolean;
+          service_order?: string | null;
           status?: Database["public"]["Enums"]["discharge_status"];
           status_updated_at?: string;
           unit?: string;

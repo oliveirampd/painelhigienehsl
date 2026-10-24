@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
-import { updateDischarge } from "@/lib/hospital.functions";
+import { updateDischarge, updateDischargeServiceOrder } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
 import { ThemePicker } from "@/components/ThemePicker";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
@@ -797,6 +797,7 @@ function TvPage() {
           staffMap={staffMap}
           tone="red"
           showReason
+          showServiceOrder
           showComplete
           hideCount
           empty="Nenhum leito pausado hoje."
@@ -1366,6 +1367,7 @@ function BedsPanel({
   staffMap,
   tone,
   showReason,
+  showServiceOrder,
   showComplete,
   empty,
   flashVersions,
@@ -1381,6 +1383,7 @@ function BedsPanel({
   staffMap: Map<string, Staff>;
   tone: Tone;
   showReason?: boolean;
+  showServiceOrder?: boolean;
   showComplete?: boolean;
   empty: string;
   flashVersions?: Map<string, number>;
@@ -1389,9 +1392,27 @@ function BedsPanel({
   caption?: string;
   hideCount?: boolean;
 }) {
+  const renderBedLabel = (d: Discharge, isWorst: boolean | "") => (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <span className="truncate">{d.bed_number}</span>
+      {isWorst && (
+        <span
+          title="Caso ativo há mais tempo no recorte operacional"
+          className="shrink-0 rounded-[3px] border px-1 py-px text-[8px] lg:text-[9px] font-semibold uppercase tracking-wide"
+          style={{
+            borderColor: "oklch(0.7 0.2 25 / 0.5)",
+            color: "oklch(0.78 0.19 25)",
+          }}
+        >
+          mais antigo
+        </span>
+      )}
+    </span>
+  );
+
   return (
     <section
-      className={`h-[300px] lg:h-full panel-surface rounded-xl border overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
+      className={`h-[300px] lg:h-full panel-surface rounded-xl border overflow-hidden flex flex-col lg:min-h-0 min-w-0 max-w-full ${className ?? ""}`}
     >
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline justify-between">
@@ -1405,89 +1426,220 @@ function BedsPanel({
           <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>
         )}
       </div>
-      <div className="terminal-panel-content flex-1 min-h-0 overflow-hidden">
+      <div className="terminal-panel-content flex-1 min-h-0 min-w-0 overflow-hidden">
         {rows.length === 0 ? (
           <div className="p-4 text-center text-white/40 text-sm">{empty}</div>
         ) : (
           <AutoScroll>
-            <table className="w-full text-sm table-fixed">
-              <thead className="panel-paused-table-head text-[10px] uppercase tracking-widest text-white/70 sticky top-0 bg-card">
-                <tr>
-                  <th className="text-left px-1.5 lg:px-3 py-1.5 w-[24%]">Leito / Box</th>
-                  <th className="text-left px-1.5 lg:px-2 py-1.5 w-[20%] whitespace-nowrap">
-                    <span className="lg:hidden">Pausa</span>
-                    <span className="hidden lg:inline">Horário da pausa</span>
-                  </th>
-                  {showReason ? (
-                    <th className="text-left px-2 lg:px-3 py-1.5 w-[34%]">Motivo</th>
-                  ) : (
-                    <th className="text-left px-2.5 lg:px-3 py-1.5 w-[26%] lg:w-auto">Tempo</th>
-                  )}
-                  <th className="text-left px-2.5 lg:px-4 py-1.5">Colaborador</th>
-                  {showComplete && <th className="w-8 px-1.5 py-1.5" aria-label="Concluir" />}
-                </tr>
-              </thead>
-              <tbody>
+            <div className="min-w-0 max-w-full">
+              <div className="space-y-2 p-2 md:hidden">
                 {rows.map((d) => {
                   const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
                   const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
                   const version = flashVersions?.get(d.external_id ?? "") ?? 0;
-                  const isWorst = worstId && d.id === worstId;
+                  const isWorst = !!(worstId && d.id === worstId);
                   return (
-                    <tr
-                      key={`${d.id}-v${version}`}
-                      className={`panel-status-row ${version > 0 ? "flash-row" : ""}`}
+                    <div
+                      key={`${d.id}-mobile-v${version}`}
+                      className={`panel-status-row min-w-0 rounded-lg border border-white/8 px-2.5 py-2 ${version > 0 ? "flash-row" : ""}`}
                       style={{
                         background:
                           overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                       }}
                     >
-                      <td className="px-1.5 lg:px-4 py-1.5 font-bold text-[13px] lg:text-base border-t border-white/5 truncate">
-                        <span className="inline-flex items-center gap-1.5">
-                          {d.bed_number}
-                          {isWorst && (
-                            <span
-                              title="Caso ativo há mais tempo no recorte operacional"
-                              className="shrink-0 rounded-[3px] border px-1 py-px text-[8px] lg:text-[9px] font-semibold uppercase tracking-wide"
-                              style={{
-                                borderColor: "oklch(0.7 0.2 25 / 0.5)",
-                                color: "oklch(0.78 0.19 25)",
-                              }}
-                            >
-                              mais antigo
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-1.5 lg:px-2 py-1.5 font-mono tabular-nums text-[11px] lg:text-xs font-semibold text-white/85 border-t border-white/5 whitespace-nowrap" title="Horário do registro da pausa no painel">
-                        {formatClockTime(d.status_updated_at)}
-                      </td>
-                      {showReason ? (
-                        <td className="px-2.5 lg:px-3 py-1.5 text-white/90 text-[11px] lg:text-xs border-t border-white/5">
-                          {d.pause_reason || <span className="text-white/40">—</span>}
-                        </td>
-                      ) : (
-                        <td className="px-2.5 lg:px-3 py-1.5 font-mono tabular-nums text-xs lg:text-sm border-t border-white/5">
-                          {formatElapsed(d.status_updated_at, nowMs)}
-                        </td>
+                      <div className="flex min-w-0 items-center justify-between gap-2">
+                        <div className="min-w-0 font-bold text-[13px]">
+                          {renderBedLabel(d, isWorst)}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span
+                            className="font-mono text-[11px] font-semibold tabular-nums text-white/85"
+                            title="Horário do registro da pausa no painel"
+                          >
+                            {formatClockTime(d.status_updated_at)}
+                          </span>
+                          {showComplete && <CompleteButton dischargeId={d.id} />}
+                        </div>
+                      </div>
+
+                      {showReason && (
+                        <div className="mt-1.5 min-w-0">
+                          <div className="text-[9px] font-semibold uppercase tracking-wider text-white/35">
+                            Motivo
+                          </div>
+                          <div className="break-words text-[11px] leading-snug text-white/90">
+                            {d.pause_reason || <span className="text-white/40">—</span>}
+                          </div>
+                        </div>
                       )}
-                      <td className="px-2.5 lg:px-4 py-1.5 text-[11px] lg:text-xs border-t border-white/5 truncate">
-                        {name || "—"}
-                      </td>
-                      {showComplete && (
-                        <td className="px-1.5 py-1.5 border-t border-white/5 text-center">
-                          <CompleteButton dischargeId={d.id} />
-                        </td>
-                      )}
-                    </tr>
+
+                      <div
+                        className={`mt-2 grid min-w-0 gap-2 ${
+                          showServiceOrder
+                            ? "grid-cols-[minmax(0,1fr)_minmax(112px,0.85fr)]"
+                            : "grid-cols-1"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[9px] font-semibold uppercase tracking-wider text-white/35">
+                            Colaborador
+                          </div>
+                          <div className="truncate text-[11px] text-white/80">{name || "—"}</div>
+                        </div>
+                        {showServiceOrder && (
+                          <div className="min-w-0">
+                            <div className="text-[9px] font-semibold uppercase tracking-wider text-white/35">
+                              OS
+                            </div>
+                            <ServiceOrderEditor discharge={d} compact />
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+
+              <table className="hidden w-full table-fixed text-sm md:table">
+                <thead className="panel-paused-table-head sticky top-0 bg-card text-[10px] uppercase tracking-widest text-white/70">
+                  <tr>
+                    <th className="w-[18%] px-2 py-1.5 text-left lg:px-3">Leito / Box</th>
+                    <th className="w-[15%] whitespace-nowrap px-2 py-1.5 text-left">
+                      Horário da pausa
+                    </th>
+                    {showReason ? (
+                      <th className="w-[25%] px-2 py-1.5 text-left lg:px-3">Motivo</th>
+                    ) : (
+                      <th className="w-[18%] px-2.5 py-1.5 text-left lg:px-3">Tempo</th>
+                    )}
+                    {showServiceOrder && (
+                      <th className="w-[17%] px-2 py-1.5 text-left lg:px-3">OS</th>
+                    )}
+                    <th className="px-2.5 py-1.5 text-left lg:px-4">Colaborador</th>
+                    {showComplete && <th className="w-9 px-1.5 py-1.5" aria-label="Concluir" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((d) => {
+                    const overtime = elapsedMinutes(d.status_updated_at, nowMs) >= 60;
+                    const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : "—";
+                    const version = flashVersions?.get(d.external_id ?? "") ?? 0;
+                    const isWorst = !!(worstId && d.id === worstId);
+                    return (
+                      <tr
+                        key={`${d.id}-desktop-v${version}`}
+                        className={`panel-status-row ${version > 0 ? "flash-row" : ""}`}
+                        style={{
+                          background:
+                            overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
+                        }}
+                      >
+                        <td className="truncate border-t border-white/5 px-2 py-1.5 text-[13px] font-bold lg:px-4 lg:text-base">
+                          {renderBedLabel(d, isWorst)}
+                        </td>
+                        <td
+                          className="whitespace-nowrap border-t border-white/5 px-2 py-1.5 font-mono text-[11px] font-semibold tabular-nums text-white/85 lg:text-xs"
+                          title="Horário do registro da pausa no painel"
+                        >
+                          {formatClockTime(d.status_updated_at)}
+                        </td>
+                        {showReason ? (
+                          <td className="border-t border-white/5 px-2.5 py-1.5 text-[11px] text-white/90 lg:px-3 lg:text-xs">
+                            <div className="line-clamp-2 break-words">
+                              {d.pause_reason || <span className="text-white/40">—</span>}
+                            </div>
+                          </td>
+                        ) : (
+                          <td className="border-t border-white/5 px-2.5 py-1.5 font-mono text-xs tabular-nums lg:px-3 lg:text-sm">
+                            {formatElapsed(d.status_updated_at, nowMs)}
+                          </td>
+                        )}
+                        {showServiceOrder && (
+                          <td className="border-t border-white/5 px-2 py-1.5 lg:px-3">
+                            <ServiceOrderEditor discharge={d} />
+                          </td>
+                        )}
+                        <td className="truncate border-t border-white/5 px-2.5 py-1.5 text-[11px] lg:px-4 lg:text-xs">
+                          {name || "—"}
+                        </td>
+                        {showComplete && (
+                          <td className="border-t border-white/5 px-1.5 py-1.5 text-center">
+                            <CompleteButton dischargeId={d.id} />
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </AutoScroll>
         )}
       </div>
     </section>
+  );
+}
+
+function ServiceOrderEditor({
+  discharge,
+  compact = false,
+}: {
+  discharge: Discharge;
+  compact?: boolean;
+}) {
+  const [value, setValue] = useState(discharge.service_order ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(discharge.service_order ?? "");
+  }, [discharge.id, discharge.service_order]);
+
+  const save = async () => {
+    if (saving) return;
+    const next = value.trim();
+    const current = (discharge.service_order ?? "").trim();
+    if (next === current) return;
+
+    setSaving(true);
+    try {
+      await updateDischargeServiceOrder({
+        data: {
+          id: discharge.id,
+          service_order: next || null,
+        },
+      });
+    } catch {
+      setValue(current);
+      toast.error("Não foi possível salvar a OS.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={80}
+      value={value}
+      disabled={saving}
+      aria-label={`OS do ${discharge.bed_number}`}
+      placeholder="Adicionar OS"
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={() => void save()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        } else if (event.key === "Escape") {
+          setValue(discharge.service_order ?? "");
+          event.currentTarget.blur();
+        }
+      }}
+      className={`w-full min-w-0 rounded-md border border-white/15 bg-black/15 px-2 font-mono tabular-nums text-white/90 outline-none transition-colors placeholder:text-white/30 focus:border-sky-300/60 focus:bg-sky-300/[0.06] disabled:opacity-50 ${
+        compact ? "h-8 text-[12px]" : "h-7 text-[11px] lg:text-xs"
+      }`}
+    />
   );
 }
 

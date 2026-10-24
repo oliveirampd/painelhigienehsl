@@ -58,6 +58,26 @@ export const createDischarge = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+const updateDischargeServiceOrderSchema = z.object({
+  id: z.string().uuid(),
+  service_order: z.string().trim().max(80).nullable(),
+});
+
+export const updateDischargeServiceOrder = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => updateDischargeServiceOrderSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("discharges")
+      .update({ service_order: data.service_order })
+      .eq("id", data.id);
+    if (error) {
+      console.error("[updateDischargeServiceOrder]", error);
+      throw new Error("Não foi possível salvar a OS.");
+    }
+    return { ok: true as const };
+  });
+
 export const updateDischarge = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => updateDischargeSchema.parse(data))
   .handler(async ({ data }) => {
