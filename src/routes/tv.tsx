@@ -1045,12 +1045,14 @@ function TerminalBedsPanel({
                   kind === "execucao" ? hygieneTargetMinutes(d.bed_number, d.unit) : null;
                 const overtime = target != null && minutes >= target;
                 const dismantle =
-                  kind === "desmontagem"
-                    ? { row: d, startedAt: d.status_updated_at, active: true }
-                    : findDismantleForTerminal(d, dismantles, nowMs);
-                // A desmontagem ativa tem prioridade visual sobre o status "A Caminho".
-                // Mostra também o colaborador da desmontagem quando é diferente do da Alta.
-                const isDismantling = dismantle?.active === true;
+                  kind === "execucao"
+                    ? null
+                    : kind === "desmontagem"
+                      ? { row: d, startedAt: d.status_updated_at, active: true }
+                      : findDismantleForTerminal(d, dismantles, nowMs);
+                // A desmontagem ativa pode substituir visualmente Alta Parada/A Caminho,
+                // mas nunca uma Limpeza Terminal que já entrou em execução.
+                const isDismantling = kind !== "execucao" && dismantle?.active === true;
                 const dismantleName = isDismantling && dismantle.row.assigned_staff_id
                   ? staffMap.get(dismantle.row.assigned_staff_id)?.name
                   : null;
