@@ -6,7 +6,6 @@ import {
   CircleCheck,
   ChevronLeft,
   ChevronRight,
-  Circle,
   X,
   User,
   UserRound,
@@ -515,178 +514,174 @@ function DiariaPage() {
 
   return (
     <div className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-hidden`}>
-      <header className="panel-shell-header flex-none flex flex-col gap-2 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-base lg:text-2xl font-bold tracking-tight">
-            Higiene Diária — Leitos
-          </h1>
-          <PanelNav />
-        </div>
-        <div className="flex items-center gap-3 lg:gap-5 text-xs lg:text-sm">
-          <span className="flex items-center gap-1.5 uppercase text-white/50">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+
+      <header className="panel-shell-header flex-none border-b border-white/10 px-4 py-3 lg:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <h1 className="text-base font-bold tracking-tight lg:text-2xl">Higiene Diária · Leitos</h1>
+            <PanelNav />
+          </div>
+          <div className="flex items-center gap-3 text-xs sm:gap-4">
+            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-emerald-400">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Ao vivo
             </span>
-            ao vivo
+            <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
+            <span className="font-mono text-lg font-semibold tabular-nums lg:text-xl">{clock}</span>
+          </div>
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/45">
+          <span>{ACTIVE_BEDS.length} leitos cadastrados · rotinas do turno atual</span>
+          <span className="font-mono tabular-nums">
+            Atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
           </span>
-          <span className="hidden sm:inline font-mono text-white/35">
-            atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
-          </span>
-          <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
-          <span className="text-lg lg:text-2xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
 
-      <div className="scrollbar-hidden flex flex-none gap-2 overflow-x-auto px-4 py-2.5 lg:grid lg:grid-cols-7 lg:overflow-visible lg:px-6 lg:py-3">
-        <Kpi
-          icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
-          label="Em higiene agora"
-          value={emHigiene.length}
-          color="oklch(0.72 0.16 235)"
-        />
-        <Kpi
-          icon={<BedDouble className="h-4 w-4 animate-linen" />}
-          label="Camareira agora"
-          value={emCamareira.length}
-          color="oklch(0.75 0.17 55)"
-        />
-        <Kpi
-          icon={<CircleCheck className="h-4 w-4" />}
-          label="Concorrentes concluídas"
-          value={concorrentesConcluidas}
-          color="oklch(0.72 0.16 235)"
-        />
-        <Kpi
-          icon={<CircleCheck className="h-4 w-4" />}
-          label="Camareiras concluídas"
-          value={camareirasConcluidas}
-          color="oklch(0.75 0.17 55)"
-        />
-        <Kpi
-          icon={<BrushCleaning className="h-4 w-4" />}
-          label="Faltam higiene"
-          value={faltamHigiene}
-          color="oklch(0.7 0.19 25)"
-        />
-        <Kpi
-          icon={<BedDouble className="h-4 w-4" />}
-          label="Faltam camareira"
-          value={faltamCamareira}
-          color="oklch(0.7 0.19 25)"
-        />
-        <Kpi
-          icon={<Circle className="h-4 w-4" />}
-          label="Total de leitos"
-          value={ACTIVE_BEDS.length}
-          color="oklch(0.7 0.02 260)"
-        />{" "}
-      </div>
+      <section aria-label="Indicadores do turno" className="flex-none px-4 pb-3 pt-3 lg:px-6">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+            Ritmo das rotinas
+          </h2>
+          <span className="text-[11px] text-white/40">Turno atual</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <Kpi
+            icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
+            label="Em higiene agora"
+            value={emHigiene.length}
+            color={CONCORRENTE_COLOR}
+          />
+          <Kpi
+            icon={<BedDouble className="h-4 w-4 animate-linen" />}
+            label="Camareira agora"
+            value={emCamareira.length}
+            color={CAMAREIRA_COLOR}
+          />
+          <Kpi
+            icon={<CircleCheck className="h-4 w-4" />}
+            label="Concorrentes concluídas"
+            value={concorrentesConcluidas}
+            color={CONCORRENTE_COLOR}
+          />
+          <Kpi
+            icon={<CircleCheck className="h-4 w-4" />}
+            label="Camareiras concluídas"
+            value={camareirasConcluidas}
+            color={CAMAREIRA_COLOR}
+          />
+        </div>
+      </section>
 
-      <div className="flex-none px-4 lg:px-6 pb-2">
+      <section aria-label="Cobertura e panorama dos andares" className="flex-none px-4 pb-3 lg:px-6">
         <div
-          className={`grid gap-3 rounded-xl border px-3 py-2.5 lg:grid-cols-[1.1fr_1fr] ${
-            ritmoStatus === "attention"
-              ? "border-amber-400/30 bg-amber-400/[0.06]"
+          className={
+            "rounded-xl border p-3 sm:p-4 " +
+            (ritmoStatus === "attention"
+              ? "border-amber-400/25 bg-amber-400/[0.035]"
               : ritmoStatus === "ahead"
-                ? "border-emerald-400/20 bg-emerald-400/[0.045]"
-                : "border-white/10 bg-white/[0.035]"
-          }`}
+                ? "border-emerald-400/20 bg-emerald-400/[0.03]"
+                : "border-white/10 bg-white/[0.025]")
+          }
         >
-          <div>
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-white/35">Cobertura do turno</div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-3xl font-bold tabular-nums">{coberturaHigiene}%</span>
-                  <span className="text-xs text-white/40">concorrente</span>
-                  {periodo === "tarde" && (
-                    <>
-                      <span className="text-white/20">·</span>
-                      <span className="text-lg font-semibold tabular-nums">{coberturaCamareira}%</span>
-                      <span className="text-xs text-white/40">camareira</span>
-                    </>
-                  )}
-                </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Cobertura do turno
               </div>
-              <div className="text-right text-xs text-white/45">
-                Turno percorrido: <strong className="text-white/70">{ritmoEsperado}%</strong>
-                <div className="mt-0.5">
-                  {ritmoStatus === "attention"
-                    ? "abaixo da referência linear"
-                    : ritmoStatus === "ahead"
-                      ? "acima da referência linear"
-                      : "próximo da referência linear"}
-                </div>
-              </div>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full transition-[width]"
-                style={{
-                  width: `${coberturaHigiene}%`,
-                  background:
-                    ritmoStatus === "attention"
-                      ? "oklch(0.78 0.2 60)"
-                      : "oklch(0.72 0.16 235)",
-                }}
-              />
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-white/35">
-              Andares abaixo da referência do turno
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
-                <button
-                  type="button"
-                  key={`${x.block}-${x.floor}`}
-                  onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-[11px] transition-colors hover:bg-white/10"
-                >
-                  <strong>Bloco {x.block} · {x.floor}º</strong>
-                  <span className={x.pct < ritmoEsperado - 20 ? "text-amber-200" : "text-white/45"}>
-                    {x.pct}%
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-4xl font-bold leading-none tabular-nums">{coberturaHigiene}%</span>
+                <span className="text-xs text-white/50">concorrente</span>
+                {periodo === "tarde" && (
+                  <span className="rounded-md bg-white/[0.055] px-2 py-1 text-xs text-white/70">
+                    Camareira <strong className="tabular-nums">{coberturaCamareira}%</strong>
                   </span>
-                  <span className="text-white/30">· {x.pending} faltam</span>
-                </button>
-              ))}
+                )}
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{
+                    width: coberturaHigiene + "%",
+                    background: ritmoStatus === "attention" ? "oklch(0.78 0.2 60)" : CONCORRENTE_COLOR,
+                  }}
+                />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/50">
+                <span>Turno percorrido: <strong className="text-white/75">{ritmoEsperado}%</strong></span>
+                <span>
+                  {ritmoStatus === "attention"
+                    ? "Abaixo da referência"
+                    : ritmoStatus === "ahead"
+                      ? "Acima da referência"
+                      : "Dentro da referência"}
+                </span>
+              </div>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-              {concentrationText}
-            </p>
+
+            <div className="border-t border-white/10 pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Andares abaixo da referência
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(floorsAtencao.length ? floorsAtencao.slice(0, 5) : floorCoverage.slice(0, 5)).map((x) => (
+                  <button
+                    type="button"
+                    key={x.block + "-" + x.floor}
+                    onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/10 px-2 py-1.5 text-[11px] transition-colors hover:bg-white/10"
+                  >
+                    <strong>{x.floor}{x.block}</strong>
+                    <span className={x.pct < ritmoEsperado - 20 ? "font-semibold text-amber-200" : "text-white/60"}>
+                      {x.pct}%
+                    </span>
+                    <span className="text-white/40">· {x.pending} faltam</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-white/50">{concentrationText}</p>
+            </div>
+          </div>
+
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+                Visão rápida dos andares
+              </span>
+              <span className="text-[10px] text-white/35">deslize para ver todos</span>
+            </div>
+            <div className="scrollbar-hidden flex gap-2 overflow-x-auto pb-1">
+              {floorCoverage.map((x) => {
+                const blockTone = BLOCK_COLOR[x.block];
+                const tone =
+                  x.pct >= 90
+                    ? "oklch(0.66 0.18 150)"
+                    : x.pct >= Math.max(55, ritmoEsperado - 15)
+                      ? "oklch(0.62 0.18 235)"
+                      : "oklch(0.72 0.19 65)";
+                return (
+                  <div
+                    key={"heat-" + x.block + "-" + x.floor}
+                    className="min-w-[86px] shrink-0 rounded-lg border px-2.5 py-2"
+                    style={{
+                      borderColor: colorWash(blockTone, 0.5),
+                      background: colorWash(blockTone, 0.13),
+                    }}
+                    title={"Bloco " + x.block + " · " + x.floor + "º andar · " + x.pct + "% de cobertura"}
+                  >
+                    <div className="text-[10px] font-semibold tracking-wide" style={{ color: blockTone }}>
+                      {x.floor}{x.block}
+                    </div>
+                    <strong className="mt-1 block text-lg font-bold tabular-nums" style={{ color: tone }}>
+                      {x.pct}%
+                    </strong>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex-none px-4 lg:px-6 pb-2">
-        <div className="scrollbar-hidden flex gap-1.5 overflow-x-auto pb-1">
-          {floorCoverage.map((x) => {
-            const tone =
-              x.pct >= 90
-                ? "oklch(0.66 0.18 150)"
-                : x.pct >= Math.max(55, ritmoEsperado - 15)
-                  ? "oklch(0.62 0.18 235)"
-                  : "oklch(0.72 0.19 65)";
-            const blockTone = BLOCK_COLOR[x.block];
-            return (
-              <div
-                key={`heat-${x.block}-${x.floor}`}
-                className="min-w-[78px] rounded-md border px-2 py-1.5"
-                style={{ borderColor: colorWash(blockTone, 0.45), background: colorWash(blockTone, 0.12) }}
-                title={`Bloco ${x.block} ${x.floor}º · ${x.pct}% de cobertura concorrente`}
-              >
-                <div className="text-[9px] uppercase tracking-wide text-white/35">Bloco {x.block}</div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-xs">{x.floor}{x.block}</span>
-                  <strong className="text-sm tabular-nums" style={{ color: tone }}>{x.pct}%</strong>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </section>
 
       <div className="flex-none px-4 pb-2 lg:px-6">
         <div className="panel-surface rounded-xl border p-2.5">
