@@ -4,7 +4,7 @@ import {
   operationalBedKey,
 } from "@/lib/operationalScope";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
    BrushCleaning,
   CirclePause,
@@ -574,7 +574,7 @@ function TvPage() {
       const key = operationalBedKey(d.unit || "", d.bed_number || "");
       if (!latestByBed.has(key)) latestByBed.set(key, d);
     }
-    return Array.from(latestByBed.values()).slice(0, 5);
+    return Array.from(latestByBed.values());
   }, [discharges, turnoAtual.startMs]);
 
   const emExecucaoPorBloco = useMemo(() => {
@@ -703,21 +703,23 @@ function TvPage() {
               </div>
             </div>
             {recentCompleted.length ? (
-              <div className="mt-2 flex min-w-0 gap-1.5 overflow-hidden">
-                {recentCompleted.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5"
-                  >
-                    <span className="truncate text-[10px] font-semibold text-white/75 lg:text-[11px]">
-                      {d.bed_number}
-                    </span>
-                    <span className="shrink-0 font-mono text-[10px] font-semibold tabular-nums text-emerald-200 lg:text-[11px]">
-                      {formatClockTime(d.completed_at!)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <HorizontalAutoScroll resetKey={String(turnoAtual.startMs)}>
+                <div className="mt-2 flex min-w-max gap-1.5 pr-3">
+                  {recentCompleted.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex min-w-[126px] shrink-0 items-center justify-between gap-2 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5"
+                    >
+                      <span className="truncate text-[10px] font-semibold text-white/75 lg:text-[11px]">
+                        {d.bed_number}
+                      </span>
+                      <span className="shrink-0 font-mono text-[10px] font-semibold tabular-nums text-emerald-200 lg:text-[11px]">
+                        {formatClockTime(d.completed_at!)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </HorizontalAutoScroll>
             ) : (
               <div className="mt-2 text-[10px] text-white/35 lg:text-[11px]">
                 Nenhuma higiene finalizada neste turno.
@@ -854,6 +856,86 @@ function TvPage() {
           onClose={() => setSelectedDischarge(null)}
         />
       )}
+    </div>
+  );
+}
+
+function HorizontalAutoScroll({
+  children,
+  resetKey,
+}: {
+  children: ReactNode;
+  resetKey: string;
+}) {
+  const [ref, setRef] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref) return;
+    ref.scrollLeft = 0;
+
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) return;
+
+    const USER_PAUSE_MS = 15_000;
+    let raf = 0;
+    let direction = 1;
+    let edgePause = 110;
+    let pausedUntil = 0;
+    let pos = 0;
+
+    const pauseForUser = () => {
+      pos = ref.scrollLeft;
+      pausedUntil = Date.now() + USER_PAUSE_MS;
+    };
+
+    ref.addEventListener("wheel", pauseForUser, { passive: true });
+    ref.addEventListener("touchstart", pauseForUser, { passive: true });
+    ref.addEventListener("touchmove", pauseForUser, { passive: true });
+    ref.addEventListener("pointerdown", pauseForUser, { passive: true });
+
+    const step = () => {
+      const max = Math.max(0, ref.scrollWidth - ref.clientWidth);
+      if (max > 4) {
+        if (Date.now() < pausedUntil) {
+          pos = ref.scrollLeft;
+        } else if (edgePause > 0) {
+          edgePause -= 1;
+        } else {
+          pos += direction * 0.4;
+          if (pos >= max) {
+            pos = max;
+            direction = -1;
+            edgePause = 110;
+          } else if (pos <= 0) {
+            pos = 0;
+            direction = 1;
+            edgePause = 110;
+          }
+          ref.scrollLeft = Math.floor(pos);
+        }
+      } else {
+        pos = 0;
+        ref.scrollLeft = 0;
+      }
+      raf = requestAnimationFrame(step);
+    };
+
+    raf = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(raf);
+      ref.removeEventListener("wheel", pauseForUser);
+      ref.removeEventListener("touchstart", pauseForUser);
+      ref.removeEventListener("touchmove", pauseForUser);
+      ref.removeEventListener("pointerdown", pauseForUser);
+    };
+  }, [ref, resetKey]);
+
+  return (
+    <div
+      ref={setRef}
+      className="scrollbar-hidden overflow-x-auto overscroll-contain touch-pan-x"
+    >
+      {children}
     </div>
   );
 }
