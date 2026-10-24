@@ -52,11 +52,16 @@ export const Route = createFileRoute("/diaria")({
 
 const BLOCK_ORDER = ["D", "E", "C", "B"] as const;
 const BLOCK_COLOR: Record<(typeof BLOCK_ORDER)[number], string> = {
-  D: "oklch(0.66 0.20 145)",
-  E: "oklch(0.62 0.22 300)",
-  C: "oklch(0.64 0.20 245)",
-  B: "oklch(0.63 0.23 25)",
+  D: "#38761d",
+  E: "#674ea7",
+  C: "#4a86e8",
+  B: "#cc0000",
 };
+
+// Translucidez compatível tanto com as cores oficiais em hexadecimal como com oklch.
+function colorWash(color: string, opacity: number): string {
+  return `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, transparent)`;
+}
 
 const ACTIVE_BEDS = ACTIVE_DAILY_BEDS;
 
@@ -669,12 +674,12 @@ function DiariaPage() {
               <div
                 key={`heat-${x.block}-${x.floor}`}
                 className="min-w-[78px] rounded-md border px-2 py-1.5"
-                style={{ borderColor: blockTone.replace(")", " / 0.48)"), background: blockTone.replace(")", " / 0.10)") }}
+                style={{ borderColor: colorWash(blockTone, 0.45), background: colorWash(blockTone, 0.12) }}
                 title={`Bloco ${x.block} ${x.floor}º · ${x.pct}% de cobertura concorrente`}
               >
                 <div className="text-[9px] uppercase tracking-wide text-white/35">Bloco {x.block}</div>
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-xs">{x.floor}º</span>
+                  <span className="font-mono text-xs">{x.floor}{x.block}</span>
                   <strong className="text-sm tabular-nums" style={{ color: tone }}>{x.pct}%</strong>
                 </div>
               </div>
@@ -704,8 +709,8 @@ function DiariaPage() {
                     aria-pressed={blockFilter === block}
                     className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                     style={{
-                      borderColor: color.replace(")", active ? " / 0.75)" : " / 0.28)"),
-                      background: color.replace(")", active ? " / 0.18)" : " / 0.05)"),
+                      borderColor: colorWash(color, active ? 0.8 : 0.36),
+                      background: colorWash(color, active ? 0.22 : 0.06),
                       color: active ? color : undefined,
                     }}
                   >
@@ -725,7 +730,7 @@ function DiariaPage() {
                   <option value="">Todos andares</option>
                   {availableFloors.map((floor) => (
                     <option key={floor} value={floor}>
-                      {floor}º andar
+                      {floor}{blockFilter} · {floor}º andar
                     </option>
                   ))}
                 </select>
@@ -843,12 +848,19 @@ function DiariaPage() {
         className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:px-6 space-y-6"
       >
         {visibleGroups.map((g) => (
-          <section key={g.block}>
+          <section
+            key={g.block}
+            className="rounded-2xl border p-2.5 sm:p-3 lg:p-4"
+            style={{
+              borderColor: colorWash(BLOCK_COLOR[g.block], 0.3),
+              background: `linear-gradient(115deg, ${colorWash(BLOCK_COLOR[g.block], 0.09)}, ${colorWash(BLOCK_COLOR[g.block], 0.035)})`,
+            }}
+          >
             <h2
-              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border-l-4 px-3 py-2 text-xl lg:text-3xl font-black uppercase tracking-wide"
+              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-l-[6px] px-3 py-3 text-xl font-black uppercase tracking-wide text-white shadow-sm lg:text-3xl"
               style={{
                 borderLeftColor: BLOCK_COLOR[g.block],
-                backgroundColor: BLOCK_COLOR[g.block].replace(")", " / 0.10)"),
+                background: `linear-gradient(100deg, color-mix(in srgb, ${BLOCK_COLOR[g.block]} 48%, #091522), color-mix(in srgb, ${BLOCK_COLOR[g.block]} 19%, #091522))`,
               }}
             >
               <span>Bloco {g.block}</span>
@@ -906,14 +918,14 @@ function DiariaPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedFloor({ block: g.block, floor })}
-                        className={`w-full rounded px-1 py-0.5 text-right font-mono text-[11px] transition-colors ${
-                          floorNeedsAttention
-                            ? "border border-amber-400/25 bg-amber-400/[0.08] text-amber-200"
-                            : "text-white/35 hover:bg-white/10 hover:text-white/70"
-                        }`}
+                        className="w-full rounded-md border px-1 py-1 text-center font-mono text-xs font-bold text-white transition-[filter] hover:brightness-125"
+                        style={{
+                          borderColor: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.9 : 0.65),
+                          background: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.42 : 0.27),
+                        }}
                         title={`Abrir resumo do ${floor}º andar do Bloco ${g.block}`}
                       >
-                        {floor}º
+                        {floor}{g.block}
                       </button>
                       <div className="flex items-end gap-1">
                         <VerticalProgressBar
@@ -1185,7 +1197,7 @@ function FloorDetailSheet({
             >
               Bloco {block}
             </div>
-            <h3 className="mt-0.5 text-xl font-bold">{floor}º andar</h3>
+            <h3 className="mt-0.5 text-xl font-bold">{floor}{block} <span className="text-sm font-normal text-white/45">· {floor}º andar</span></h3>
             <p className="text-xs text-white/40">{beds.length} leitos cadastrados neste andar</p>
           </div>
           <button
@@ -1228,7 +1240,7 @@ function FloorDetailSheet({
           type="button"
           onClick={onFocus}
           className="mt-4 w-full rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-white/10"
-          style={{ borderColor: BLOCK_COLOR[block].replace(")", " / 0.45)") }}
+          style={{ borderColor: colorWash(BLOCK_COLOR[block], 0.5) }}
         >
           Mostrar somente este andar no mapa
         </button>
@@ -1252,8 +1264,8 @@ function FloorMetric({
     <div
       className="rounded-lg border px-3 py-2"
       style={{
-        borderColor: color.replace(")", " / 0.28)"),
-        background: color.replace(")", " / 0.07)"),
+        borderColor: colorWash(color, 0.3),
+        background: colorWash(color, 0.08),
       }}
     >
       <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color }}>
