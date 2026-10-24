@@ -48,6 +48,50 @@ export type DailyBedEvent = {
   count: number;
 };
 
+type EdgeCache = {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+};
+
+function getEdgeCache(): EdgeCache | null {
+  return (
+    globalThis as unknown as { caches?: { default?: EdgeCache } }
+  ).caches?.default ?? null;
+}
+
+function dailyEdgeRequest(shiftStartMs: number): Request {
+  return new Request(`https://painelhigiene.internal/cache/daily/${shiftStartMs}`);
+}
+
+async function readDailyEdgeCache(shiftStartMs: number): Promise<DailyBedEvent[] | null> {
+  const cache = getEdgeCache();
+  if (!cache) return null;
+  try {
+    const response = await cache.match(dailyEdgeRequest(shiftStartMs));
+    return response ? ((await response.json()) as DailyBedEvent[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeDailyEdgeCache(shiftStartMs: number, events: DailyBedEvent[]): Promise<void> {
+  const cache = getEdgeCache();
+  if (!cache) return;
+  try {
+    await cache.put(
+      dailyEdgeRequest(shiftStartMs),
+      new Response(JSON.stringify(events), {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": `public, max-age=${Math.ceil(RESULT_CACHE_TTL_MS / 1000)}`,
+        },
+      }),
+    );
+  } catch {
+    // Cache de borda é otimização; nunca derruba a leitura ao vivo.
+  }
+}
+
 function parseBRT(s: string | null | undefined): Date | null {
   if (!s) return null;
   const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
@@ -283,13 +327,29 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
     return dailyInFlight.promise;
   }
 
+  const edgeEvents = await readDailyEdgeCache(shiftStartMs);
+  if (edgeEvents) {
+    dailyCache = {
+      shiftStartMs,
+      expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
+      events: edgeEvents,
+    };
+    return edgeEvents;
+  }
+
+  // Outra requisição pode ter começado enquanto consultávamos o cache de borda.
+  if (dailyInFlight && dailyInFlight.shiftStartMs === shiftStartMs) {
+    return dailyInFlight.promise;
+  }
+
   const promise = loadDailyBedEventsFresh(shiftStart, shiftEnd)
-    .then((events) => {
+    .then(async (events) => {
       dailyCache = {
         shiftStartMs,
         expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
         events,
       };
+      await writeDailyEdgeCache(shiftStartMs, events);
       return events;
     })
     .catch((error) => {
