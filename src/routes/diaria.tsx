@@ -1331,10 +1331,12 @@ function Legenda({ color, text }: { color: string; text: string }) {
 function LegendaSplit({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className="flex h-2 w-3 overflow-hidden rounded-sm">
-        <span className="h-full w-1/2" style={{ background: CONCORRENTE_COLOR }} />
-        <span className="h-full w-1/2" style={{ background: CAMAREIRA_COLOR }} />
-      </span>
+      <span
+        className="h-2.5 w-4 rounded-full border border-white/15"
+        style={{
+          background: `linear-gradient(115deg, ${CONCORRENTE_COLOR}, color-mix(in srgb, ${CONCORRENTE_COLOR} 50%, ${CAMAREIRA_COLOR}), ${CAMAREIRA_COLOR})`,
+        }}
+      />
       {text}
     </span>
   );
@@ -1410,20 +1412,20 @@ function Kpi({
 }) {
   return (
     <div
-      className="min-w-[138px] rounded-lg border px-3 py-2 lg:min-w-0"
+      className="min-w-0 rounded-xl border px-3 py-3 shadow-sm"
       style={{
-        borderColor: `${color.replace(")", " / 0.3)")}`,
-        background: color.replace(")", " / 0.08)"),
+        borderColor: colorWash(color, 0.34),
+        background: colorWash(color, 0.075),
       }}
     >
       <div
-        className="flex items-center gap-1.5 text-xs lg:text-sm font-semibold uppercase"
+        className="flex min-h-8 items-center gap-2 text-[11px] font-semibold uppercase leading-tight tracking-wide sm:text-xs"
         style={{ color }}
       >
-        {icon}
-        {label}
+        <span className="shrink-0">{icon}</span>
+        <span>{label}</span>
       </div>
-      <div className="text-2xl lg:text-3xl font-bold tabular-nums">{value}</div>
+      <div className="mt-1 text-2xl font-bold tabular-nums lg:text-3xl">{value}</div>
     </div>
   );
 }
@@ -1533,8 +1535,8 @@ function BedTile({
     ? altaColor.replace(")", isDark ? " / 0.24)" : " / 0.12)")
     : both
       ? isDark
-        ? "oklch(0.22 0.025 260)"
-        : "oklch(1 0 0)"
+        ? "oklch(0.20 0.022 260)"
+        : "oklch(0.98 0.006 250)"
       : hasC
         ? CONCORRENTE_COLOR.replace(")", activeC ? " / 0.18)" : " / 0.10)")
         : hasK
@@ -1543,10 +1545,15 @@ function BedTile({
             ? SEM_ROTINA_COLOR.replace(")", " / 0.12)")
             : "oklch(0.965 0.006 250)";
 
+  const dualGradient =
+    !altaColor && both
+      ? `linear-gradient(115deg, ${colorWash(CONCORRENTE_COLOR, isDark ? 0.35 : 0.2)} 0%, ${colorWash(CONCORRENTE_COLOR, 0.16)} 42%, ${colorWash(CAMAREIRA_COLOR, 0.18)} 58%, ${colorWash(CAMAREIRA_COLOR, isDark ? 0.35 : 0.2)} 100%)`
+      : undefined;
+
   const borderColor = altaColor
     ? altaColor.replace(")", " / 0.8)")
     : both
-      ? "oklch(0.9 0.01 260 / 0.55)"
+      ? `color-mix(in srgb, ${CONCORRENTE_COLOR} 50%, ${CAMAREIRA_COLOR})`
       : hasC
         ? CONCORRENTE_COLOR.replace(")", " / 0.65)")
         : hasK
@@ -1559,8 +1566,8 @@ function BedTile({
       : "oklch(0.74 0.02 255)"
     : "oklch(0.20 0.025 255)";
 
-  const splitShadow = both
-    ? `inset 4px 0 0 ${CONCORRENTE_COLOR}, inset -4px 0 0 ${CAMAREIRA_COLOR}`
+  const dualAccent = !altaColor && both
+    ? `inset 0 2px 0 ${colorWash(CONCORRENTE_COLOR, 0.75)}, inset 0 -2px 0 ${colorWash(CAMAREIRA_COLOR, 0.75)}`
     : undefined;
 
   return (
@@ -1568,21 +1575,6 @@ function BedTile({
       data-bed-code={bed}
       className={`flex flex-col items-center gap-0.5 ${justCompleted ? "daily-bed-completed" : ""}`}
     >
-      <div className="flex h-[11px] items-center gap-1 font-mono text-[8px] leading-none tabular-nums">
-        {!altaColor && hasC && (
-          <span style={{ color: CONCORRENTE_COLOR }}>{formatTime(c!.at)}</span>
-        )}
-        {!altaColor && hasC && hasK && <span className="text-white/25">·</span>}
-        {!altaColor && hasK && <span style={{ color: CAMAREIRA_COLOR }}>{formatTime(k!.at)}</span>}
-        {altaColor && (
-          <span
-            className="font-sans font-semibold uppercase tracking-wide"
-            style={{ color: altaColor }}
-          >
-            {altaStatus === "waiting_cleaning" ? "parada" : "alta"}
-          </span>
-        )}
-      </div>
       <div
         title={title}
         onClick={onSelect}
@@ -1597,9 +1589,10 @@ function BedTile({
         style={{
           borderColor,
           background,
+          backgroundImage: dualGradient,
           color: textColor,
           boxShadow: [
-            splitShadow,
+            dualAccent,
             anyActive
               ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.45)")}`
               : null,
@@ -1610,6 +1603,18 @@ function BedTile({
             .join(", ") || undefined,
         }}
       >
+        {altaColor && (
+          <span
+            className="absolute -left-1.5 -top-1.5 rounded-md border px-1 text-[8px] font-bold uppercase leading-[13px]"
+            style={{
+              color: isDark ? "#ffffff" : "#17202b",
+              borderColor: altaColor,
+              background: isDark ? "oklch(0.20 0.022 260)" : "#ffffff",
+            }}
+          >
+            {altaStatus === "waiting_cleaning" ? "parada" : "alta"}
+          </span>
+        )}
         <span className="font-semibold tabular-nums leading-none">{bed}</span>
         <span className="mt-1 flex h-4 items-center justify-center gap-1">
           {altaStatus === "waiting_cleaning" && (
@@ -1633,7 +1638,16 @@ function BedTile({
               style={{ color: CONCORRENTE_COLOR }}
             />
           )}
-          {!altaColor && !anyActive && (hasC || hasK) && (
+          {!altaColor && !anyActive && both && (
+            <span className="flex items-center gap-1">
+              <CircleCheck className="h-3 w-3 opacity-90" />
+              <span className="flex items-center gap-0.5" aria-hidden="true">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: CONCORRENTE_COLOR }} />
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: CAMAREIRA_COLOR }} />
+              </span>
+            </span>
+          )}
+          {!altaColor && !anyActive && !both && (hasC || hasK) && (
             <CircleCheck className="h-3 w-3 opacity-90" />
           )}
           {!altaColor && !anyActive && !hasC && !hasK && (
