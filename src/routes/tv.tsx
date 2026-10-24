@@ -602,7 +602,7 @@ function TvPage() {
 
   return (
     <div
-      className={`${themeClass} scrollbar-hidden min-h-screen lg:h-screen w-screen overflow-y-auto lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
+      className={`${themeClass} scrollbar-hidden min-h-screen w-screen max-w-full overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
@@ -646,10 +646,10 @@ function TvPage() {
         </div>
       </header>
 
-      <div className="flex-none px-4 pt-2.5 lg:px-6">
-        <div className="grid gap-2 lg:grid-cols-2">
+      <div className="min-w-0 max-w-full flex-none overflow-hidden px-4 pt-2.5 lg:px-6">
+        <div className="grid min-w-0 max-w-full gap-2 lg:grid-cols-2">
           <div
-            className={`rounded-xl border px-3 py-2.5 ${
+            className={`min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 ${
               operationState === "critical"
                 ? "border-red-400/35 bg-red-400/[0.08]"
                 : operationState === "attention"
@@ -695,7 +695,7 @@ function TvPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] px-3 py-2.5">
+          <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] px-3 py-2.5">
             <div className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 shrink-0 text-emerald-300" />
               <div className="text-[9px] font-semibold uppercase tracking-widest text-white/45">
@@ -933,7 +933,7 @@ function HorizontalAutoScroll({
   return (
     <div
       ref={setRef}
-      className="scrollbar-hidden overflow-x-auto overscroll-contain touch-pan-x"
+      className="scrollbar-hidden w-full max-w-full overflow-x-hidden overscroll-contain touch-pan-y"
     >
       {children}
     </div>
