@@ -43,14 +43,39 @@ compatibilidade com o cron atual e continua pública. Não deixe sem segredo.
 5. Se o serviço retornar 402, a organização ainda está restrita: aguarde a
    liberação ou consulte o suporte/upgrade. O código não contorna a quota.
 
+## Frequência atual
+
+O sincronizador do Terminal continua sendo chamado **uma vez por minuto** pelo
+cronjob.org. A blindagem abaixo não aumenta a frequência de consultas ao Listo360.
+A etapa de 30 segundos deve ser avaliada separadamente depois de observar duração,
+erros e estabilidade em produção.
+
 ## Salvaguardas implementadas
 
-- Leitos são gravados somente quando o conjunto de campos mudou.
+- Um lock persistido em `sync_runtime_state` impede duas execuções do sync de
+  processarem o mesmo estado ao mesmo tempo.
+- O token do Listo360 é reaproveitado por até 5 minutos enquanto o isolate do
+  Worker permanece aquecido; 401/403 força renovação segura.
+- A janela total de chamadas ao Listo tem orçamento de 25 segundos. Uma origem
+  lenta não fica pendurada até encostar no próximo ciclo do cron.
+- Falhas consecutivas entram em backoff. O cron pode continuar chamando a rota,
+  mas o backend pula ciclos enquanto o backoff estiver ativo.
+- Leitos são gravados somente quando o conjunto de campos de origem mudou.
+- `service_order` é campo exclusivamente manual e nunca entra no payload de
+  atualização do Listo, eliminando corrida com edição de OS.
 - Colaboradores novos são inseridos uma vez; status só muda quando necessário.
 - Datas de origem ausentes reutilizam o horário conhecido quando possível.
-- Se a fonte voltar sem leitos relevantes, não excluímos todos os registros.
+- Respostas vazias ou com queda abrupta de volume são tratadas como suspeitas e
+  não contam como ausência de leito.
+- Um registro precisa faltar em 3 sincronizações e por pelo menos 90 segundos
+  antes de ser removido como órfão.
 - Paginação completa e erros de leitura/escrita falham sem continuar limpando
   registros de forma destrutiva.
+- A resposta do endpoint informa duração total, tempo gasto no Listo, páginas,
+  ausências em observação e se a limpeza de órfãos foi pulada.
+- `sync_runtime_state` guarda último sucesso, duração, falhas consecutivas,
+  backoff e métricas da origem. A tabela tem RLS e não é acessível a
+  `anon`/`authenticated`.
 - O histórico de última Alta e as cores/visuais da TV não foram modificados.
 
 **Observação:** não há garantia de que Realtime ou transferência de dados caiam
