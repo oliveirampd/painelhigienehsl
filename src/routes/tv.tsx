@@ -684,14 +684,14 @@ function TvPage() {
       {shiftFxVersion > 0 && (
         <div
           key={shiftFxVersion}
-          className="tv-shift-wash pointer-events-none fixed inset-0 z-[70] hidden lg:block"
+          className="tv-shift-wash pointer-events-none fixed inset-0 z-[70] block overflow-hidden"
           aria-hidden="true"
         />
       )}
       {completionFx && (
         <div
           key={completionFx.key}
-          className="tv-completion-fx pointer-events-none fixed left-1/2 top-[18%] z-[75] hidden -translate-x-1/2 items-center gap-2 rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-4 py-2 text-emerald-100 shadow-2xl lg:flex"
+          className="tv-completion-fx pointer-events-none fixed left-1/2 top-[14%] z-[75] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-3 py-2 text-emerald-100 shadow-2xl sm:px-4 lg:top-[18%]"
           aria-hidden="true"
         >
           <CircleCheck className="h-5 w-5" />
@@ -1463,7 +1463,7 @@ function TerminalBedsPanel({
                       ) : null}
                     </div>
                     {kind === "execucao" && target != null && (
-                      <div className="tv-card-progress-track hidden h-1 overflow-hidden rounded-full bg-white/10 lg:block">
+                      <div className="tv-card-progress-track h-1 overflow-hidden rounded-full bg-white/10">
                         <div
                           className="tv-card-progress-fill h-full rounded-full"
                           style={{
