@@ -515,7 +515,7 @@ function DiariaPage() {
   return (
     <div
       ref={mainRef}
-      className={`${themeClass} scrollbar-hidden min-h-screen w-full flex flex-col overflow-y-auto font-sans bg-background text-foreground lg:h-screen lg:overflow-y-auto`}
+      className={`${themeClass} scrollbar-hidden min-h-screen w-full max-w-full flex flex-col overflow-x-hidden overflow-y-auto font-sans ${isDark ? "bg-[#050505]" : "bg-background"} text-foreground lg:h-screen lg:overflow-y-auto`}
     >
 
       <header className="panel-shell-header flex-none border-b border-white/10 px-4 py-3 lg:px-6">
