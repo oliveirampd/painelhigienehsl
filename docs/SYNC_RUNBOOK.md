@@ -21,21 +21,31 @@ Uma chave publicável NÃO substitui `SUPABASE_SERVICE_ROLE_KEY`.
 A senha antiga continua presente em commits anteriores: removê-la do código
 atual não a revoga. É obrigatório alterar a senha no Listo360.
 
-## No cronjob.org
+## Agendador atual: Supabase Cron
 
-- URL: `https://painelhigienehsl.williamx2k20x.workers.dev/api/public/hooks/sync-listo360`
-- Método: GET ou POST
-- Cabeçalho HTTP: `X-Cron-Secret: <mesmo valor de SYNC_CRON_SECRET>`
+O agendador oficial do Terminal é o job `listo-terminal-sync` no Supabase Cron.
 
-A proteção do endpoint é ativada assim que `SYNC_CRON_SECRET` existir no
-ambiente do Worker. Sem esse segredo, a rota mantém temporariamente a
-compatibilidade com o cron atual e continua pública. Não deixe sem segredo.
+- Frequência atual: **1 minuto** (`* * * * *`)
+- Destino: `POST https://painelhigienehsl.williamx2k20x.workers.dev/api/public/hooks/sync-listo360`
+- Extensões: `pg_cron` + `pg_net`
+- Timeout HTTP: 35 segundos
+- Segredo do scheduler: `terminal_sync_cron_secret`, armazenado no Supabase Vault
+- Cabeçalho enviado: `X-Cron-Secret`
+
+O Worker exige `SYNC_CRON_SECRET`. Chamadas sem o segredo correto recebem
+`401 Não autorizado`. Isso neutraliza o antigo cronjob.org sem precisar
+alterar a lógica do Terminal.
+
+O cronjob.org não é mais o agendador oficial. Se for necessário rollback,
+desative o job `listo-terminal-sync` e remova/ajuste temporariamente
+`SYNC_CRON_SECRET` no Worker antes de reativar um scheduler externo.
 
 ## Validação após a liberação do Supabase
 
 1. Confirme que as quatro variáveis secretas estão configuradas no ambiente
-   do Worker. O app depende delas para executar o cron.
-2. Execute uma única vez o agendamento e confira `ok: true` na resposta.
+   do Worker e que o Vault contém `terminal_sync_cron_secret`.
+2. Confirme que o job `listo-terminal-sync` está ativo e confira `HTTP 200`
+   / `ok: true` em `net._http_response`.
 3. Verifique `leitos_alterados`, `leitos_inalterados`,
    `colaboradores_novos` e `removidos_orfaos`. Em execução sem novidades,
    `leitos_alterados` deve chegar a zero.
@@ -45,10 +55,13 @@ compatibilidade com o cron atual e continua pública. Não deixe sem segredo.
 
 ## Frequência atual
 
-O sincronizador do Terminal continua sendo chamado **uma vez por minuto** pelo
-cronjob.org. A blindagem abaixo não aumenta a frequência de consultas ao Listo360.
-A etapa de 30 segundos deve ser avaliada separadamente depois de observar duração,
-erros e estabilidade em produção.
+O sincronizador do Terminal continua sendo chamado **uma vez por minuto**, agora
+pelo Supabase Cron. A troca de scheduler não aumenta a frequência de consultas ao
+Listo360. A etapa de 30 segundos continua separada e só deve ser feita depois de
+observar duração, erros e estabilidade em produção.
+
+O histórico do agendamento fica em `cron.job_run_details`. As respostas HTTP
+assíncronas do `pg_net` ficam temporariamente em `net._http_response`.
 
 ## Salvaguardas implementadas
 
