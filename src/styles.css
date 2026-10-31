@@ -612,48 +612,44 @@
   50% { filter: brightness(1.18); }
 }
 
-@media (min-width: 1024px) {
-  /* Fundo e superfícies mais escuros somente no TV desktop.
-     Não altera KPI cards, cards de leito nem linhas de colaboradores. */
-  .tv-terminal-page {
-    background-color: #030405 !important;
-  }
-  .tv-terminal-page .panel-shell-header {
-    background-color: #050608 !important;
-    border-color: rgba(255,255,255,0.08);
-  }
-  .tv-terminal-page .panel-surface {
-    background-color: #080a0d !important;
-    border-color: rgba(255,255,255,0.085) !important;
-  }
-  .tv-terminal-page .terminal-panel-content {
-    background-color: #040506 !important;
-  }
-  .tv-terminal-page .panel-paused-table-head {
-    background-color: #0b0d10 !important;
-    box-shadow: inset 0 -1px rgba(255,255,255,0.08);
-  }
+/* Fundo e superfícies profundas em TV e mobile.
+   Cards de KPI, cards de leito e linhas operacionais mantêm suas cores próprias. */
+.tv-terminal-page {
+  background-color: #030405 !important;
+}
+.tv-terminal-page .panel-shell-header {
+  background-color: #050608 !important;
+  border-color: rgba(255,255,255,0.08);
+}
+.tv-terminal-page .panel-surface {
+  background-color: #080a0d !important;
+  border-color: rgba(255,255,255,0.085) !important;
+}
+.tv-terminal-page .terminal-panel-content {
+  background-color: #040506 !important;
+}
+.tv-terminal-page .panel-paused-table-head {
+  background-color: #0b0d10 !important;
+  box-shadow: inset 0 -1px rgba(255,255,255,0.08);
 }
 
-@media (min-width: 1024px) {
-  /* Mesmo acabamento profundo do Terminal, exclusivo da Diária no desktop.
-     Cards de KPI e cards de leito mantêm suas cores próprias. */
-  .dark.daily-panel-page {
-    background-color: #030405 !important;
-  }
-  .dark.daily-panel-page .panel-shell-header {
-    background-color: #050608 !important;
-    border-color: rgba(255,255,255,0.08);
-  }
-  .dark.daily-panel-page .panel-surface,
-  .dark.daily-panel-page .daily-overview-surface,
-  .dark.daily-panel-page .daily-map-surface {
-    background: #080a0d !important;
-    border-color: rgba(255,255,255,0.085) !important;
-  }
+/* Mesmo acabamento profundo do Terminal na Diária, inclusive mobile.
+   KPI cards e cards de leito continuam com suas cores próprias. */
+.dark.daily-panel-page {
+  background-color: #030405 !important;
+}
+.dark.daily-panel-page .panel-shell-header {
+  background-color: #050608 !important;
+  border-color: rgba(255,255,255,0.08);
+}
+.dark.daily-panel-page .panel-surface,
+.dark.daily-panel-page .daily-overview-surface,
+.dark.daily-panel-page .daily-map-surface {
+  background: #080a0d !important;
+  border-color: rgba(255,255,255,0.085) !important;
 }
 
-@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference) {
   .tv-card-enter {
     animation: tv-card-enter 680ms cubic-bezier(0.22, 1, 0.36, 1);
     transform-origin: center bottom;
@@ -695,5 +691,36 @@
   }
   .tv-progress-glow {
     animation: tv-progress-glow 3.6s ease-in-out infinite;
+  }
+}
+
+
+@media (max-width: 1023px) and (prefers-reduced-motion: no-preference) {
+  .tv-card-enter {
+    animation-duration: 520ms;
+  }
+  .tv-card-status-change {
+    animation-duration: 580ms;
+  }
+  .tv-status-pill-morph {
+    animation-duration: 420ms;
+  }
+  .tv-critical-breathe {
+    animation-duration: 3.6s;
+  }
+  .tv-kpi-value-change {
+    animation-duration: 420ms;
+  }
+  .tv-operation-state-change {
+    animation-duration: 520ms;
+  }
+  .tv-recent-completed-in {
+    animation-duration: 560ms;
+  }
+  .tv-staff-row-in {
+    animation-duration: 360ms;
+  }
+  .tv-card-progress-fill {
+    transition-duration: 650ms, 200ms;
   }
 }
