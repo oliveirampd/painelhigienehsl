@@ -515,7 +515,7 @@ function DiariaPage() {
   return (
     <div
       ref={mainRef}
-      className={`${themeClass} scrollbar-hidden min-h-screen w-full max-w-full flex flex-col overflow-x-hidden overflow-y-auto font-sans ${isDark ? "bg-[#050505]" : "bg-background"} text-foreground lg:h-screen lg:overflow-y-auto`}
+      className={`${themeClass} daily-panel-page scrollbar-hidden min-h-screen w-full max-w-full flex flex-col overflow-x-hidden overflow-y-auto font-sans ${isDark ? "bg-[#050505]" : "bg-background"} text-foreground lg:h-screen lg:overflow-y-auto`}
     >
 
       <header className="panel-shell-header flex-none border-b border-white/10 px-4 py-3 lg:px-6">
@@ -582,7 +582,7 @@ function DiariaPage() {
       <section aria-label="Cobertura e panorama dos andares" className="flex-none px-4 pb-3 lg:px-6">
         <div
           className={
-            "rounded-xl border p-3 sm:p-4 " +
+            "daily-overview-surface rounded-xl border p-3 sm:p-4 " +
             (ritmoStatus === "attention"
               ? "border-amber-400/25 bg-amber-400/[0.035]"
               : ritmoStatus === "ahead"
@@ -850,7 +850,7 @@ function DiariaPage() {
         {visibleGroups.map((g) => (
           <section
             key={g.block}
-            className="rounded-2xl border p-2.5 sm:p-3 lg:p-4"
+            className="daily-map-surface rounded-2xl border p-2.5 sm:p-3 lg:p-4"
             style={{
               borderColor: colorWash(BLOCK_COLOR[g.block], 0.3),
               background: `linear-gradient(115deg, ${colorWash(BLOCK_COLOR[g.block], 0.09)}, ${colorWash(BLOCK_COLOR[g.block], 0.035)})`,
