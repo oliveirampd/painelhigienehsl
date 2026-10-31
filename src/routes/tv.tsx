@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { updateDischarge, updateDischargeServiceOrder } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
+import { SyncCounter } from "@/components/SyncCounter";
 import { ThemePicker } from "@/components/ThemePicker";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 import { AutoScroll } from "@/components/AutoScroll";
@@ -197,10 +198,9 @@ function TvPage() {
   const [shiftFxVersion, setShiftFxVersion] = useState(0);
   const prevTurnoStartRef = useRef<number | null>(null);
 
-  // Marca quando os dados mudaram pela última vez, pra mostrar "sincronizado há Xs"
-  const lastSyncRef = useRef<number>(Date.now());
+  // Realça visualmente quando chegam dados novos. O contador do topo tem
+  // relógio próprio e acompanha o ciclo recorrente de 1 minuto do sincronizador.
   useEffect(() => {
-    lastSyncRef.current = Date.now();
     if (didSyncOnceRef.current) setSyncPulseVersion((v) => v + 1);
     else didSyncOnceRef.current = true;
   }, [discharges, staff]);
@@ -717,11 +717,13 @@ function TvPage() {
           </span>
           <span
             key={syncPulseVersion}
-            className={`hidden sm:inline text-[10px] text-white/35 font-mono ${
-              syncPulseVersion > 0 ? "tv-sync-pulse" : ""
-            }`}
+            className={syncPulseVersion > 0 ? "tv-sync-pulse max-w-full" : "max-w-full"}
           >
-            sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
+            <SyncCounter
+              cadenceSeconds={60}
+              cadenceLabel="atualiza a cada 1min"
+              alignToClock
+            />
           </span>
           <button
             type="button"
