@@ -1,156 +1,249 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5";
-  };
+    PostgrestVersion: "14.15"
+  }
   public: {
     Tables: {
       discharge_predictions: {
         Row: {
-          id: number;
-          bed_number: string;
-          unit: string;
-          source_sector: string;
-          probability_text: string;
-          probability_value: number | null;
-          predicted_time: string | null;
-          predicted_at: string | null;
-          imported_at: string;
-          expires_at: string | null;
-        };
+          bed_number: string
+          expires_at: string | null
+          id: number
+          imported_at: string
+          predicted_at: string | null
+          predicted_time: string | null
+          probability_text: string
+          probability_value: number | null
+          source_sector: string
+          unit: string
+        }
         Insert: {
-          id?: number;
-          bed_number: string;
-          unit: string;
-          source_sector: string;
-          probability_text: string;
-          probability_value?: number | null;
-          predicted_time?: string | null;
-          predicted_at?: string | null;
-          imported_at?: string;
-          expires_at?: string | null;
-        };
+          bed_number: string
+          expires_at?: string | null
+          id?: never
+          imported_at?: string
+          predicted_at?: string | null
+          predicted_time?: string | null
+          probability_text: string
+          probability_value?: number | null
+          source_sector: string
+          unit: string
+        }
         Update: {
-          id?: number;
-          bed_number?: string;
-          unit?: string;
-          source_sector?: string;
-          probability_text?: string;
-          probability_value?: number | null;
-          predicted_time?: string | null;
-          predicted_at?: string | null;
-          imported_at?: string;
-          expires_at?: string | null;
-        };
-        Relationships: [];
-      };
+          bed_number?: string
+          expires_at?: string | null
+          id?: never
+          imported_at?: string
+          predicted_at?: string | null
+          predicted_time?: string | null
+          probability_text?: string
+          probability_value?: number | null
+          source_sector?: string
+          unit?: string
+        }
+        Relationships: []
+      }
       discharges: {
         Row: {
-          assigned_staff_id: string | null;
-          bed_number: string;
-          completed_at: string | null;
-          created_at: string;
-          external_id: string | null;
-          id: string;
-          last_answer_id: number | null;
-          pause_reason: string | null;
-          priority: boolean;
-          service_order: string | null;
-          status: Database["public"]["Enums"]["discharge_status"];
-          status_updated_at: string;
-          unit: string;
-        };
+          assigned_staff_id: string | null
+          bed_number: string
+          completed_at: string | null
+          created_at: string
+          external_id: string | null
+          id: string
+          last_answer_id: string | null
+          pause_reason: string | null
+          priority: boolean
+          service_order: string | null
+          status: Database["public"]["Enums"]["discharge_status"]
+          status_updated_at: string
+          unit: string
+        }
         Insert: {
-          assigned_staff_id?: string | null;
-          bed_number: string;
-          completed_at?: string | null;
-          created_at?: string;
-          external_id?: string | null;
-          id?: string;
-          last_answer_id?: number | null;
-          pause_reason?: string | null;
-          priority?: boolean;
-          service_order?: string | null;
-          status?: Database["public"]["Enums"]["discharge_status"];
-          status_updated_at?: string;
-          unit: string;
-        };
+          assigned_staff_id?: string | null
+          bed_number: string
+          completed_at?: string | null
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_answer_id?: string | null
+          pause_reason?: string | null
+          priority?: boolean
+          service_order?: string | null
+          status?: Database["public"]["Enums"]["discharge_status"]
+          status_updated_at?: string
+          unit: string
+        }
         Update: {
-          assigned_staff_id?: string | null;
-          bed_number?: string;
-          completed_at?: string | null;
-          created_at?: string;
-          external_id?: string | null;
-          id?: string;
-          last_answer_id?: number | null;
-          pause_reason?: string | null;
-          priority?: boolean;
-          service_order?: string | null;
-          status?: Database["public"]["Enums"]["discharge_status"];
-          status_updated_at?: string;
-          unit?: string;
-        };
+          assigned_staff_id?: string | null
+          bed_number?: string
+          completed_at?: string | null
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_answer_id?: string | null
+          pause_reason?: string | null
+          priority?: boolean
+          service_order?: string | null
+          status?: Database["public"]["Enums"]["discharge_status"]
+          status_updated_at?: string
+          unit?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "discharges_assigned_staff_id_fkey";
-            columns: ["assigned_staff_id"];
-            isOneToOne: false;
-            referencedRelation: "staff";
-            referencedColumns: ["id"];
+            foreignKeyName: "discharges_assigned_staff_id_fkey"
+            columns: ["assigned_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
           },
-        ];
-      };
+        ]
+      }
+      last_completed_discharges: {
+        Row: {
+          bed_key: string
+          bed_number: string
+          completed_at: string
+          duration_minutes: number | null
+          recorded_at: string
+          source_answer_id: number
+          staff_name: string | null
+          started_at: string | null
+          unit: string
+        }
+        Insert: {
+          bed_key: string
+          bed_number: string
+          completed_at: string
+          duration_minutes?: number | null
+          recorded_at?: string
+          source_answer_id: number
+          staff_name?: string | null
+          started_at?: string | null
+          unit: string
+        }
+        Update: {
+          bed_key?: string
+          bed_number?: string
+          completed_at?: string
+          duration_minutes?: number | null
+          recorded_at?: string
+          source_answer_id?: number
+          staff_name?: string | null
+          started_at?: string | null
+          unit?: string
+        }
+        Relationships: []
+      }
       staff: {
         Row: {
-          created_at: string;
-          current_discharge_id: string | null;
-          external_id: string | null;
-          id: string;
-          name: string;
-          status: Database["public"]["Enums"]["staff_status"];
-          status_updated_at: string;
-        };
+          created_at: string
+          current_discharge_id: string | null
+          external_id: string | null
+          id: string
+          name: string
+          status: Database["public"]["Enums"]["staff_status"]
+          status_updated_at: string
+        }
         Insert: {
-          created_at?: string;
-          current_discharge_id?: string | null;
-          external_id?: string | null;
-          id?: string;
-          name: string;
-          status?: Database["public"]["Enums"]["staff_status"];
-          status_updated_at?: string;
-        };
+          created_at?: string
+          current_discharge_id?: string | null
+          external_id?: string | null
+          id?: string
+          name: string
+          status?: Database["public"]["Enums"]["staff_status"]
+          status_updated_at?: string
+        }
         Update: {
-          created_at?: string;
-          current_discharge_id?: string | null;
-          external_id?: string | null;
-          id?: string;
-          name?: string;
-          status?: Database["public"]["Enums"]["staff_status"];
-          status_updated_at?: string;
-        };
+          created_at?: string
+          current_discharge_id?: string | null
+          external_id?: string | null
+          id?: string
+          name?: string
+          status?: Database["public"]["Enums"]["staff_status"]
+          status_updated_at?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "staff_current_discharge_fk";
-            columns: ["current_discharge_id"];
-            isOneToOne: false;
-            referencedRelation: "discharges";
-            referencedColumns: ["id"];
+            foreignKeyName: "staff_current_discharge_fk"
+            columns: ["current_discharge_id"]
+            isOneToOne: false
+            referencedRelation: "discharges"
+            referencedColumns: ["id"]
           },
-        ];
-      };
-    };
+        ]
+      }
+      sync_runtime_state: {
+        Row: {
+          backoff_until: string
+          consecutive_failures: number
+          key: string
+          last_answers_count: number | null
+          last_duration_ms: number | null
+          last_error: string | null
+          last_finished_at: string | null
+          last_pages: number | null
+          last_relevant_count: number | null
+          last_started_at: string | null
+          last_success_at: string | null
+          lock_until: string
+          missing_external_ids: Json
+          updated_at: string
+        }
+        Insert: {
+          backoff_until?: string
+          consecutive_failures?: number
+          key: string
+          last_answers_count?: number | null
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_finished_at?: string | null
+          last_pages?: number | null
+          last_relevant_count?: number | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          lock_until?: string
+          missing_external_ids?: Json
+          updated_at?: string
+        }
+        Update: {
+          backoff_until?: string
+          consecutive_failures?: number
+          key?: string
+          last_answers_count?: number | null
+          last_duration_ms?: number | null
+          last_error?: string | null
+          last_finished_at?: string | null
+          last_pages?: number | null
+          last_relevant_count?: number | null
+          last_started_at?: string | null
+          last_success_at?: string | null
+          lock_until?: string
+          missing_external_ids?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+    }
     Views: {
-      [_ in never]: never;
-    };
+      [_ in never]: never
+    }
     Functions: {
       replace_discharge_predictions: {
-        Args: { p_rows: Json; p_expires_at: string };
-        Returns: number;
-      };
-    };
+        Args: { p_expires_at: string; p_rows: Json }
+        Returns: number
+      }
+    }
     Enums: {
       discharge_status:
         | "waiting_cleaning"
@@ -159,126 +252,137 @@ export type Database = {
         | "paused"
         | "maintenance"
         | "completed"
-        | "completed_with_issues";
+        | "completed_with_issues"
       staff_status:
-        "available" | "assigned" | "coffee_break" | "lunch_break" | "dinner_break" | "off_duty";
-    };
+        | "available"
+        | "assigned"
+        | "coffee_break"
+        | "lunch_break"
+        | "dinner_break"
+        | "off_duty"
+    }
     CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
-};
+      [_ in never]: never
+    }
+  }
+}
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R;
+      Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R;
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
       }
       ? R
       : never
-    : never;
+    : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I;
+      Insert: infer I
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I;
+        Insert: infer I
       }
       ? I
       : never
-    : never;
+    : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U;
+      Update: infer U
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U;
+        Update: infer U
       }
       ? U
       : never
-    : never;
+    : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never;
+    : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals;
+    schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
+  schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never;
+    : never
 
 export const Constants = {
   public: {
@@ -302,5 +406,4 @@ export const Constants = {
       ],
     },
   },
-} as const;
-
+} as const

@@ -26,5 +26,7 @@ jobs:
         run: node tests/predictions.test.mjs
       - name: Test priority XLS parser
         run: node tests/predictions-xls.test.mjs
+      - name: Test Listo sync safeguards
+        run: node tests/listo-sync-safety.test.mjs
       - name: Build
         run: bun run build
