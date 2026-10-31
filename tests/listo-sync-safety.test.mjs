@@ -1,0 +1,71 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import ts from "typescript";
+
+const source = fs.readFileSync("src/lib/listoSyncSafety.ts", "utf8");
+const js = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const api = await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
+
+assert.equal(api.isSuspiciousPartialResponse(0, 100), true);
+assert.equal(api.isSuspiciousPartialResponse(64, 100), true);
+assert.equal(api.isSuspiciousPartialResponse(65, 100), false);
+assert.equal(api.isSuspiciousPartialResponse(5, null), false);
+
+const t0 = Date.parse("2026-10-31T12:00:00.000Z");
+let state = {};
+let result = api.updateMissingSyncState({
+  previous: state,
+  freshIds: new Set(["listo:a"]),
+  staleIds: ["listo:b"],
+  nowMs: t0,
+  allowMissIncrement: true,
+});
+assert.equal(result.next["listo:b"].count, 1);
+assert.deepEqual(result.deleteIds, []);
+
+result = api.updateMissingSyncState({
+  previous: result.next,
+  freshIds: new Set(["listo:a"]),
+  staleIds: ["listo:b"],
+  nowMs: t0 + 60_000,
+  allowMissIncrement: true,
+});
+assert.equal(result.next["listo:b"].count, 2);
+assert.deepEqual(result.deleteIds, []);
+
+result = api.updateMissingSyncState({
+  previous: result.next,
+  freshIds: new Set(["listo:a"]),
+  staleIds: ["listo:b"],
+  nowMs: t0 + 120_000,
+  allowMissIncrement: true,
+});
+assert.equal(result.next["listo:b"].count, 3);
+assert.deepEqual(result.deleteIds, ["listo:b"]);
+
+const partial = api.updateMissingSyncState({
+  previous: result.next,
+  freshIds: new Set(["listo:a"]),
+  staleIds: ["listo:c"],
+  nowMs: t0 + 180_000,
+  allowMissIncrement: false,
+});
+assert.equal(partial.next["listo:c"], undefined);
+
+const recovered = api.updateMissingSyncState({
+  previous: result.next,
+  freshIds: new Set(["listo:b"]),
+  staleIds: [],
+  nowMs: t0 + 180_000,
+  allowMissIncrement: true,
+});
+assert.equal(recovered.next["listo:b"], undefined);
+
+assert.equal(api.computeSyncBackoffMs(1), 55_000);
+assert.equal(api.computeSyncBackoffMs(2), 115_000);
+assert.equal(api.computeSyncBackoffMs(3), 235_000);
+assert.equal(api.computeSyncBackoffMs(1, 429), 115_000);
+
+console.log("listo sync safety tests passed");
