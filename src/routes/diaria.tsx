@@ -24,6 +24,7 @@ import { isExcludedUnit } from "@/lib/operationalScope";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
+import { SyncCounter } from "@/components/SyncCounter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useActiveDischarges } from "@/hooks/useActiveDischarges";
 import { usePanelTheme } from "@/hooks/usePanelTheme";
@@ -538,9 +539,11 @@ function DiariaPage() {
         </div>
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/45">
           <span>{ACTIVE_BEDS.length} leitos cadastrados · rotinas do turno atual</span>
-          <span className="font-mono tabular-nums">
-            Atualizado há {Math.max(0, Math.round((Date.now() - lastAt) / 1000))}s
-          </span>
+          <SyncCounter
+            lastAt={lastAt}
+            cadenceSeconds={30}
+            cadenceLabel="atualiza a cada 30s"
+          />
         </div>
       </header>
 
