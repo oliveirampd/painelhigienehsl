@@ -5,9 +5,49 @@ import {
   isTerminalUtiBoxUnit,
   operationalBedKey,
 } from "@/lib/operationalScope";
+import {
+  computeSyncBackoffMs,
+  isSuspiciousPartialResponse,
+  parseMissingSyncState,
+  removeMissingSyncIds,
+  updateMissingSyncState,
+} from "@/lib/listoSyncSafety";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
 const ESTABLISHMENT_ID = 1;
+const TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+const LISTO_REQUEST_BUDGET_MS = 25 * 1000;
+const SYNC_LOCK_LEASE_MS = 50 * 1000;
+const EPOCH_ISO = new Date(0).toISOString();
+
+let tokenCache: { token: string; expiresAt: number } | null = null;
+
+class ListoHttpError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ListoHttpError";
+    this.status = status;
+  }
+}
+
+type SyncRuntimeState = {
+  key: string;
+  lock_until: string;
+  backoff_until: string;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  last_success_at: string | null;
+  last_duration_ms: number | null;
+  last_answers_count: number | null;
+  last_relevant_count: number | null;
+  last_pages: number | null;
+  consecutive_failures: number;
+  last_error: string | null;
+  missing_external_ids: unknown;
+  updated_at: string;
+};
 
 type ListoAnswer = {
   id: number;
@@ -114,45 +154,105 @@ function unitOf(a: ListoAnswer): string {
   return [a.sectorName, a.sectorDescription].filter(Boolean).join(" · ") || "—";
 }
 
-async function login(): Promise<string> {
+async function fetchWithDeadline(
+  url: string,
+  init: RequestInit,
+  deadlineMs: number,
+  label: string,
+): Promise<Response> {
+  const remainingMs = deadlineMs - Date.now();
+  if (remainingMs <= 0) throw new Error(`Tempo limite do Listo excedido antes de ${label}`);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), remainingMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`Tempo limite do Listo excedido em ${label}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function login(
+  forceRefresh = false,
+  deadlineMs = Date.now() + LISTO_REQUEST_BUDGET_MS,
+): Promise<string> {
+  if (!forceRefresh && tokenCache && tokenCache.expiresAt > Date.now()) {
+    return tokenCache.token;
+  }
   if (!process.env.LISTO360_EMAIL || !process.env.LISTO360_PASSWORD) {
     throw new Error("Credenciais Listo360 ausentes: configure LISTO360_EMAIL e LISTO360_PASSWORD nos segredos do Cloudflare");
   }
-  const res = await fetch(`${LISTO_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      email: process.env.LISTO360_EMAIL,
-      password: process.env.LISTO360_PASSWORD,
-    }),
-  });
-  if (!res.ok) throw new Error(`Login Listo360 falhou: ${res.status}`);
+
+  const res = await fetchWithDeadline(
+    `${LISTO_BASE}/auth/login`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: process.env.LISTO360_EMAIL,
+        password: process.env.LISTO360_PASSWORD,
+      }),
+    },
+    deadlineMs,
+    forceRefresh ? "login-refresh" : "login",
+  );
+  if (!res.ok) throw new ListoHttpError(`Login Listo360 falhou: ${res.status}`, res.status);
   const data = (await res.json()) as { token?: string; accessToken?: string };
   const token = data.token || data.accessToken;
   if (!token) throw new Error("Login Listo360 sem token");
+  tokenCache = { token, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS };
   return token;
 }
 
-async function fetchAnswers(token: string): Promise<ListoAnswer[]> {
+async function fetchAnswers(deadlineMs: number): Promise<{
+  answers: ListoAnswer[];
+  pages: number;
+  durationMs: number;
+}> {
+  const startedAt = Date.now();
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 19);
   const all: ListoAnswer[] = [];
   const pageSize = 500;
+  let pages = 0;
+  let token = await login(false, deadlineMs);
+
   for (let page = 1; page <= 50; page++) {
     const url = `${LISTO_BASE}/answer/all-answers?establishmentId=${ESTABLISHMENT_ID}&pageSize=${pageSize}&pageNumber=${page}&startDate=${fmt(start)}&endDate=${fmt(end)}`;
-    const res = await fetch(url, {
-      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-    });
-    if (!res.ok) throw new Error(`all-answers p${page} ${res.status}`);
+    let res = await fetchWithDeadline(
+      url,
+      { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+      deadlineMs,
+      `answers-page-${page}`,
+    );
+
+    if (res.status === 401 || res.status === 403) {
+      token = await login(true, deadlineMs);
+      res = await fetchWithDeadline(
+        url,
+        { headers: { authorization: `Bearer ${token}`, accept: "application/json" } },
+        deadlineMs,
+        `answers-page-${page}-retry`,
+      );
+    }
+
+    if (!res.ok) throw new ListoHttpError(`all-answers p${page} ${res.status}`, res.status);
     const body = (await res.json()) as ListoAnswer[] | { data?: ListoAnswer[] };
     const rows = Array.isArray(body) ? body : (body.data ?? []);
+    pages = page;
     all.push(...rows);
     if (rows.length < pageSize) break;
     // Evita persistir/limpar leitos com uma resposta truncada do Listo.
     if (page === 50) throw new Error("Listo360 excedeu o limite seguro de paginação");
   }
-  return all;
+
+  return { answers: all, pages, durationMs: Date.now() - startedAt };
 }
 
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
@@ -176,13 +276,65 @@ async function handle(request: Request) {
     }
   }
 
+  const syncStartedAt = Date.now();
+  let supabase: Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"] | null = null;
+  let runtimeState: SyncRuntimeState | null = null;
+  let lockAcquired = false;
+
   try {
     // O cliente admin central adapta os cabeçalhos tanto para a chave JWT
     // service_role quanto para a nova sb_secret_ (não usa Bearer com chave opaca).
-    const { supabaseAdmin: supabase } = await import("@/integrations/supabase/client.server");
+    ({ supabaseAdmin: supabase } = await import("@/integrations/supabase/client.server"));
 
-    const token = await login();
-    const answers = await fetchAnswers(token);
+    const nowIso = new Date(syncStartedAt).toISOString();
+    const stateResult = await supabase
+      .from("sync_runtime_state")
+      .select("*")
+      .eq("key", "listo360")
+      .single();
+    if (stateResult.error) throw stateResult.error;
+    runtimeState = stateResult.data as SyncRuntimeState;
+
+    const backoffUntilMs = new Date(runtimeState.backoff_until).getTime();
+    if (Number.isFinite(backoffUntilMs) && backoffUntilMs > syncStartedAt) {
+      const retryAfterSeconds = Math.ceil((backoffUntilMs - syncStartedAt) / 1000);
+      console.warn("[sync-listo360]", {
+        skipped: true,
+        reason: "backoff",
+        retryAfterSeconds,
+      });
+      return Response.json({
+        ok: true,
+        skipped: true,
+        reason: "backoff",
+        retry_after_s: retryAfterSeconds,
+      });
+    }
+
+    const lockUntil = new Date(syncStartedAt + SYNC_LOCK_LEASE_MS).toISOString();
+    const lockResult = await supabase
+      .from("sync_runtime_state")
+      .update({
+        lock_until: lockUntil,
+        last_started_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq("key", "listo360")
+      .lte("lock_until", nowIso)
+      .select("*")
+      .maybeSingle();
+    if (lockResult.error) throw lockResult.error;
+    if (!lockResult.data) {
+      console.warn("[sync-listo360]", { skipped: true, reason: "sync_in_progress" });
+      return Response.json({ ok: true, skipped: true, reason: "sync_in_progress" });
+    }
+
+    runtimeState = lockResult.data as SyncRuntimeState;
+    lockAcquired = true;
+
+    const deadlineMs = Date.now() + LISTO_REQUEST_BUDGET_MS;
+    const source = await fetchAnswers(deadlineMs);
+    const answers = source.answers;
 
     const bedAnswers = answers.filter(isTerminalBed);
     const boxAnswers = answers.filter(isTerminalUtiBox);
@@ -279,7 +431,6 @@ async function handle(request: Request) {
         status: DischargeStatus;
         priority: boolean;
         pause_reason: string | null;
-        service_order: string | null;
         assigned_staff_id: string | null;
         status_updated_at: string;
         last_answer_id: number | null;
@@ -288,7 +439,7 @@ async function handle(request: Request) {
       while (true) {
         const { data, error } = await supabase
           .from("discharges")
-          .select("external_id, bed_number, unit, status, priority, pause_reason, service_order, assigned_staff_id, status_updated_at, last_answer_id, completed_at")
+          .select("external_id, bed_number, unit, status, priority, pause_reason, assigned_staff_id, status_updated_at, last_answer_id, completed_at")
           .like("external_id", "listo:%")
           .order("external_id", { ascending: true })
           .range(from, from + pageSize - 1);
@@ -474,15 +625,14 @@ async function handle(request: Request) {
       };
     };
 
+    // Campo manual como service_order fica deliberadamente fora do payload.
+    // Assim, uma edição feita durante o sync nunca pode ser sobrescrita por uma
+    // cópia antiga lida no início da execução.
     const dischargeRowsWithDebugRaw = [
       ...bedAnswersDedup.map((a) => buildRow(a, "answer")),
       ...boxAnswersDedup.map((a) => buildRow(a, "box")),
       ...dismantleAnswersDedup.map((a) => buildRow(a, "desmont")),
-    ].map((row) => ({
-      ...row,
-      // Campo manual do painel: nunca deve ser apagado pelo sync do Listo.
-      service_order: existingByExternalId.get(row.external_id)?.service_order ?? null,
-    }));
+    ];
 
     // A limpeza terminal é posterior à desmontagem no fluxo operacional.
     // Quando a terminal inicia ou conclui, encerra a desmontagem correspondente
@@ -641,27 +791,41 @@ async function handle(request: Request) {
       console.error("[sync-listo360:last-completed]", historyError);
     }
 
-    // Limpa registros órfãos: leitos que não vieram mais nesta sincronização
-    // (inclui registros antigos, de antes da deduplicação, com external_id por id).
+    // Limpa registros órfãos com tolerância a respostas parciais.
+    // Um item precisa faltar em 3 sincronizações e por pelo menos 90s antes de
+    // ser removido. Se o volume relevante cair abruptamente, nem contabilizamos
+    // a ausência naquela rodada.
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
     const staleIds = existingDischarges
       .map((d) => d.external_id)
       .filter((id) => !freshIds.has(id));
+    const suspiciousPartial = isSuspiciousPartialResponse(
+      relevant.length,
+      runtimeState.last_relevant_count,
+    );
+    const previousMissing = parseMissingSyncState(runtimeState.missing_external_ids);
+    const missingUpdate = updateMissingSyncState({
+      previous: previousMissing,
+      freshIds,
+      staleIds,
+      nowMs: Date.now(),
+      allowMissIncrement: !suspiciousPartial,
+    });
+    let missingState = missingUpdate.next;
+    const deleteIds = suspiciousPartial ? [] : missingUpdate.deleteIds;
 
-    // Se a API do Listo responder sem nenhum leito relevante, não conclua que
-    // todos os leitos desapareceram. Um retorno vazio/transitório não deve
-    // esvaziar a TV e disparar centenas de eventos DELETE.
-    const cleanupSkipped = relevant.length === 0;
     let removedCount = 0;
-    if (!cleanupSkipped) {
-      for (let i = 0; i < staleIds.length; i += 100) {
-        const chunk = staleIds.slice(i, i + 100);
-        const removed = await supabase.from("discharges")
-          .delete().in("external_id", chunk);
-        if (removed.error) throw removed.error;
-        removedCount += chunk.length;
-      }
+    for (let i = 0; i < deleteIds.length; i += 100) {
+      const chunk = deleteIds.slice(i, i + 100);
+      const removed = await supabase.from("discharges")
+        .delete().in("external_id", chunk);
+      if (removed.error) throw removed.error;
+      removedCount += chunk.length;
     }
+    if (deleteIds.length) {
+      missingState = removeMissingSyncIds(missingState, deleteIds);
+    }
+    const cleanupSkipped = suspiciousPartial;
 
     // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
     const activeIds = new Set(
@@ -698,8 +862,46 @@ async function handle(request: Request) {
       .slice(0, 8)
       .map((d) => ({ external_id: d.external_id, status: d.status, _debug: d._debug }));
 
+    const finishedAt = Date.now();
+    const durationMs = finishedAt - syncStartedAt;
+    const finishedIso = new Date(finishedAt).toISOString();
+    const stateUpdate = await supabase
+      .from("sync_runtime_state")
+      .update({
+        lock_until: EPOCH_ISO,
+        backoff_until: EPOCH_ISO,
+        last_finished_at: finishedIso,
+        last_success_at: finishedIso,
+        last_duration_ms: durationMs,
+        last_answers_count: answers.length,
+        last_relevant_count: relevant.length,
+        last_pages: source.pages,
+        consecutive_failures: 0,
+        last_error: null,
+        missing_external_ids: missingState,
+        updated_at: finishedIso,
+      })
+      .eq("key", "listo360");
+    if (stateUpdate.error) throw stateUpdate.error;
+    lockAcquired = false;
+
+    console.info("[sync-listo360]", {
+      ok: true,
+      durationMs,
+      listoDurationMs: source.durationMs,
+      pages: source.pages,
+      answers: answers.length,
+      relevant: relevant.length,
+      changedRows: changedRows.length,
+      removedCount,
+      suspiciousPartial,
+    });
+
     return Response.json({
       ok: true,
+      duration_ms: durationMs,
+      listo_duration_ms: source.durationMs,
+      listo_pages: source.pages,
       answers: answers.length,
       terminal: bedAnswersDedup.length,
       terminal_bruto: bedAnswers.length,
@@ -711,15 +913,54 @@ async function handle(request: Request) {
       leitos_alterados: changedRows.length,
       leitos_inalterados: dischargeRows.length - changedRows.length,
       removidos_orfaos: removedCount,
-      limpeza_pulada_fonte_sem_leitos: cleanupSkipped,
+      limpeza_pulada_resposta_suspeita: cleanupSkipped,
+      ausencias_em_observacao: Object.keys(missingState).length,
       ultimas_altas_atualizadas: lastCompletedUpdated,
       erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,
-      at: new Date().toISOString(),
+      at: finishedIso,
     });
   } catch (err) {
-    console.error("[sync-listo360]", err);
-    return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
+    const error = err as Error;
+    const httpStatus = err instanceof ListoHttpError ? err.status : null;
+    const failures = (runtimeState?.consecutive_failures ?? 0) + 1;
+    const backoffMs = computeSyncBackoffMs(failures, httpStatus);
+
+    if (supabase && lockAcquired) {
+      const finishedAt = Date.now();
+      const finishedIso = new Date(finishedAt).toISOString();
+      const release = await supabase
+        .from("sync_runtime_state")
+        .update({
+          lock_until: EPOCH_ISO,
+          backoff_until: new Date(finishedAt + backoffMs).toISOString(),
+          last_finished_at: finishedIso,
+          last_duration_ms: finishedAt - syncStartedAt,
+          consecutive_failures: failures,
+          last_error: error.message.slice(0, 1000),
+          updated_at: finishedIso,
+        })
+        .eq("key", "listo360");
+      if (release.error) {
+        console.error("[sync-listo360:release-lock]", release.error);
+      }
+    }
+
+    console.error("[sync-listo360]", {
+      error: error.message,
+      httpStatus,
+      consecutiveFailures: failures,
+      backoffMs,
+      durationMs: Date.now() - syncStartedAt,
+    });
+    return Response.json(
+      {
+        ok: false,
+        error: error.message,
+        backoff_s: Math.ceil(backoffMs / 1000),
+      },
+      { status: 500 },
+    );
   }
 }
 
