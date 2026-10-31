@@ -1,11 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { BarChart3, BedDouble, Building2, Tv } from "lucide-react";
+import { BedDouble, Tv } from "lucide-react";
 
 const ITEMS = [
   { to: "/tv", label: "Terminal", icon: Tv },
   { to: "/diaria", label: "Diária", icon: BedDouble },
-  { to: "/terminal-geral", label: "Geral", icon: Building2 },
-  { to: "/gestao", label: "Gestão", icon: BarChart3 },
 ] as const;
 
 export function PanelNav({ compact = false }: { compact?: boolean }) {
