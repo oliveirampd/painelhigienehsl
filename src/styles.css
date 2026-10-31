@@ -635,6 +635,24 @@
   }
 }
 
+@media (min-width: 1024px) {
+  /* Mesmo acabamento profundo do Terminal, exclusivo da Diária no desktop.
+     Cards de KPI e cards de leito mantêm suas cores próprias. */
+  .dark.daily-panel-page {
+    background-color: #030405 !important;
+  }
+  .dark.daily-panel-page .panel-shell-header {
+    background-color: #050608 !important;
+    border-color: rgba(255,255,255,0.08);
+  }
+  .dark.daily-panel-page .panel-surface,
+  .dark.daily-panel-page .daily-overview-surface,
+  .dark.daily-panel-page .daily-map-surface {
+    background: #080a0d !important;
+    border-color: rgba(255,255,255,0.085) !important;
+  }
+}
+
 @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
   .tv-card-enter {
     animation: tv-card-enter 680ms cubic-bezier(0.22, 1, 0.36, 1);
