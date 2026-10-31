@@ -190,12 +190,27 @@ function TvPage() {
   const { theme, setTheme, isDark, themeClass } = useTerminalTheme();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
+  const [syncPulseVersion, setSyncPulseVersion] = useState(0);
+  const didSyncOnceRef = useRef(false);
+  const [completionFx, setCompletionFx] = useState<{ bed: string; key: number } | null>(null);
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [shiftFxVersion, setShiftFxVersion] = useState(0);
+  const prevTurnoStartRef = useRef<number | null>(null);
 
   // Marca quando os dados mudaram pela última vez, pra mostrar "sincronizado há Xs"
   const lastSyncRef = useRef<number>(Date.now());
   useEffect(() => {
     lastSyncRef.current = Date.now();
+    if (didSyncOnceRef.current) setSyncPulseVersion((v) => v + 1);
+    else didSyncOnceRef.current = true;
   }, [discharges, staff]);
+
+  useEffect(
+    () => () => {
+      if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
+    },
+    [],
+  );
 
   // Detecta leitos cujo status mudou desde a última leitura, pra dar um flash
   // rápido de destaque. Usa uma "versão" por leito (não um timer) — cada mudança
@@ -204,18 +219,35 @@ function TvPage() {
   // outra atualização chegando no meio do caminho (era isso que prendia o flash).
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
+  const entryVersionRef = useRef<Map<string, number>>(new Map());
   const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
     const isFirstRun = prev.size === 0;
     let mudou = false;
     for (const d of discharges) {
-      const before = prev.get(d.external_id ?? "");
+      const externalId = d.external_id ?? "";
+      const before = prev.get(externalId);
+      if (!isFirstRun && before === undefined && externalId) {
+        entryVersionRef.current.set(
+          externalId,
+          (entryVersionRef.current.get(externalId) ?? 0) + 1,
+        );
+        mudou = true;
+      }
       if (before !== undefined && before !== d.status) {
         flashVersionRef.current.set(
-          d.external_id ?? "",
-          (flashVersionRef.current.get(d.external_id ?? "") ?? 0) + 1,
+          externalId,
+          (flashVersionRef.current.get(externalId) ?? 0) + 1,
         );
+        if (
+          d.status === "completed" &&
+          ["waiting_cleaning", "en_route", "in_progress"].includes(before)
+        ) {
+          setCompletionFx({ bed: d.bed_number, key: Date.now() });
+          if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
+          completionTimerRef.current = setTimeout(() => setCompletionFx(null), 1800);
+        }
         mudou = true;
       }
     }
@@ -225,6 +257,7 @@ function TvPage() {
 
 
   const flashVersions = flashVersionRef.current;
+  const entryVersions = entryVersionRef.current;
 
   const filtered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isTerminalDisplayLocation(d)),
@@ -531,6 +564,14 @@ function TvPage() {
   // Fonte única: discharges.completed_at, direto do banco — nunca depende de um
   // "limpar" local, pra ser sempre 100% fiel ao que realmente aconteceu.
   const turnoAtual = useMemo(() => turnoAtualBRT(now), [now]);
+  useEffect(() => {
+    const previous = prevTurnoStartRef.current;
+    if (previous !== null && previous !== turnoAtual.startMs) {
+      setShiftFxVersion((v) => v + 1);
+    }
+    prevTurnoStartRef.current = turnoAtual.startMs;
+  }, [turnoAtual.startMs]);
+
   const concluidasHojePorBloco = useMemo(() => {
     const done = discharges.filter(
       (d) =>
@@ -577,6 +618,37 @@ function TvPage() {
     return Array.from(latestByBed.values());
   }, [discharges, turnoAtual.startMs]);
 
+  const recentCompletionVersionRef = useRef<Map<string, number>>(new Map());
+  const previousCompletionAtRef = useRef<Map<string, string>>(new Map());
+  const recentCompletionInitializedRef = useRef(false);
+  const [, forceRecentCompletionRerender] = useState(0);
+  useEffect(() => {
+    let changed = false;
+    const next = new Map<string, string>();
+    for (const d of recentCompleted) {
+      const key = operationalBedKey(d.unit || "", d.bed_number || "");
+      const completedAt = d.completed_at ?? "";
+      next.set(key, completedAt);
+      const before = previousCompletionAtRef.current.get(key);
+      if (
+        recentCompletionInitializedRef.current &&
+        completedAt &&
+        before !== completedAt
+      ) {
+        recentCompletionVersionRef.current.set(
+          key,
+          (recentCompletionVersionRef.current.get(key) ?? 0) + 1,
+        );
+        changed = true;
+      }
+    }
+    previousCompletionAtRef.current = next;
+    recentCompletionInitializedRef.current = true;
+    if (changed) forceRecentCompletionRerender((v) => v + 1);
+  }, [recentCompleted]);
+
+  const recentCompletionVersions = recentCompletionVersionRef.current;
+
   const emExecucaoPorBloco = useMemo(() => {
     let de = 0;
     let b = 0;
@@ -602,13 +674,32 @@ function TvPage() {
 
   return (
     <div
-      className={`${themeClass} scrollbar-hidden min-h-screen w-screen max-w-full overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
+      className={`${themeClass} tv-terminal-page scrollbar-hidden min-h-screen w-screen max-w-full overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
         className="absolute top-0 left-0 right-0 h-[2px]"
         style={{ backgroundColor: "oklch(0.62 0.18 235)" }}
       />
+      {shiftFxVersion > 0 && (
+        <div
+          key={shiftFxVersion}
+          className="tv-shift-wash pointer-events-none fixed inset-0 z-[70] hidden lg:block"
+          aria-hidden="true"
+        />
+      )}
+      {completionFx && (
+        <div
+          key={completionFx.key}
+          className="tv-completion-fx pointer-events-none fixed left-1/2 top-[18%] z-[75] hidden -translate-x-1/2 items-center gap-2 rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-4 py-2 text-emerald-100 shadow-2xl lg:flex"
+          aria-hidden="true"
+        >
+          <CircleCheck className="h-5 w-5" />
+          <span className="text-xs font-semibold uppercase tracking-wider">
+            {completionFx.bed} finalizado
+          </span>
+        </div>
+      )}
       <header className="panel-shell-header flex-none flex flex-col gap-1.5 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
@@ -624,7 +715,12 @@ function TvPage() {
             </span>
             ao vivo
           </span>
-          <span className="hidden sm:inline text-[10px] text-white/35 font-mono">
+          <span
+            key={syncPulseVersion}
+            className={`hidden sm:inline text-[10px] text-white/35 font-mono ${
+              syncPulseVersion > 0 ? "tv-sync-pulse" : ""
+            }`}
+          >
             sincronizado há {Math.max(0, Math.round((now - lastSyncRef.current) / 1000))}s
           </span>
           <button
@@ -649,7 +745,8 @@ function TvPage() {
       <div className="min-w-0 max-w-full flex-none overflow-hidden px-4 pt-2.5 lg:px-6">
         <div className="grid min-w-0 max-w-full gap-2 lg:grid-cols-2">
           <div
-            className={`min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 ${
+            key={operationState}
+            className={`tv-operation-state-change min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 ${
               operationState === "critical"
                 ? "border-red-400/35 bg-red-400/[0.08]"
                 : operationState === "attention"
@@ -705,10 +802,15 @@ function TvPage() {
             {recentCompleted.length ? (
               <HorizontalAutoScroll resetKey={String(turnoAtual.startMs)}>
                 <div className="mt-2 flex min-w-max gap-1.5 pr-3">
-                  {recentCompleted.map((d) => (
+                  {recentCompleted.map((d) => {
+                    const recentKey = operationalBedKey(d.unit || "", d.bed_number || "");
+                    const recentVersion = recentCompletionVersions.get(recentKey) ?? 0;
+                    return (
                     <div
-                      key={d.id}
-                      className="flex min-w-[126px] shrink-0 items-center justify-between gap-2 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5"
+                      key={`${d.id}-recent-v${recentVersion}`}
+                      className={`flex min-w-[126px] shrink-0 items-center justify-between gap-2 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5 ${
+                        recentVersion > 0 ? "tv-recent-completed-in" : ""
+                      }`}
                     >
                       <span className="truncate text-[10px] font-semibold text-white/75 lg:text-[11px]">
                         {d.bed_number}
@@ -717,7 +819,8 @@ function TvPage() {
                         {formatClockTime(d.completed_at!)}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </HorizontalAutoScroll>
             ) : (
@@ -781,6 +884,7 @@ function TvPage() {
           nowMs={now}
           staffMap={staffMap}
           flashVersions={flashVersions}
+          entryVersions={entryVersions}
           worstId={worstCase?.id}
           onSelect={setSelectedDischarge}
           className={
@@ -902,7 +1006,9 @@ function HorizontalAutoScroll({
         } else if (edgePause > 0) {
           edgePause -= 1;
         } else {
-          pos += direction * 0.4;
+          const distanceToEdge = Math.min(pos, max - pos);
+          const easing = Math.max(0.35, Math.min(1, distanceToEdge / 90));
+          pos += direction * 0.46 * easing;
           if (pos >= max) {
             pos = max;
             direction = -1;
@@ -988,7 +1094,8 @@ function KpiCard({
       </div>
       <div className="flex items-baseline gap-1.5">
         <div
-          className="text-2xl lg:text-4xl tabular-nums leading-none"
+          key={display ?? value}
+          className="tv-kpi-value-change text-2xl lg:text-4xl tabular-nums leading-none"
           style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
         >
           {display ?? value}
@@ -1083,6 +1190,7 @@ function TerminalBedsPanel({
   nowMs,
   staffMap,
   flashVersions,
+  entryVersions,
   worstId,
   onSelect,
   className,
@@ -1094,6 +1202,7 @@ function TerminalBedsPanel({
   nowMs: number;
   staffMap: Map<string, Staff>;
   flashVersions?: Map<string, number>;
+  entryVersions?: Map<string, number>;
   worstId?: string;
   onSelect?: (discharge: Discharge) => void;
   className?: string;
@@ -1230,6 +1339,7 @@ function TerminalBedsPanel({
               {cards.map(({ d, kind }) => {
                 const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
                 const version = flashVersions?.get(d.external_id ?? "") ?? 0;
+                const entryVersion = entryVersions?.get(d.external_id ?? "") ?? 0;
                 const isWorst = worstId && d.id === worstId;
                 const minutes = elapsedMinutes(d.status_updated_at, nowMs);
                 const target =
@@ -1262,7 +1372,9 @@ function TerminalBedsPanel({
                     }}
                     className={`relative flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 ${
                       onSelect ? "cursor-pointer hover:-translate-y-0.5 hover:bg-white/[0.05]" : ""
-                    } ${version > 0 ? "flash-row" : ""}`}
+                    } ${entryVersion > 0 ? "tv-card-enter" : ""} ${
+                      version > 0 ? "tv-card-status-change flash-row" : ""
+                    } ${overtime || isWorst ? "tv-critical-breathe" : ""}`}
                     style={{
                       borderColor: base.replace(")", " / 0.45)"),
                       background: base.replace(")", " / 0.14)"),
@@ -1317,7 +1429,9 @@ function TerminalBedsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
-                        className="rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
+                        className={`rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide ${
+                          version > 0 ? "tv-status-pill-morph" : ""
+                        }`}
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
                       >
                         {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
@@ -1348,6 +1462,17 @@ function TerminalBedsPanel({
                         </span>
                       ) : null}
                     </div>
+                    {kind === "execucao" && target != null && (
+                      <div className="tv-card-progress-track hidden h-1 overflow-hidden rounded-full bg-white/10 lg:block">
+                        <div
+                          className="tv-card-progress-fill h-full rounded-full"
+                          style={{
+                            width: `${Math.min(100, Math.round((minutes / target) * 100))}%`,
+                            background: overtime ? OVERDUE_COLOR : base,
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1763,7 +1888,7 @@ function StaffPanel({
                 return (
                   <li
                     key={staff.id}
-                    className="flex flex-col gap-1.5 rounded-md px-3 py-2 border"
+                    className="tv-staff-row-in flex flex-col gap-1.5 rounded-md px-3 py-2 border"
                     style={{
                       background:
                         kind === "desmontando"
@@ -1807,7 +1932,7 @@ function StaffPanel({
                       <div>
                         <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                           <div
-                            className="h-full rounded-full transition-[width]"
+                            className="tv-progress-glow h-full rounded-full transition-[width] duration-700 ease-out"
                             style={{
                               width: `${pct}%`,
                               background: overTarget
