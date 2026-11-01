@@ -8,6 +8,20 @@
     "binding": "ASSETS",
     "directory": ".output/public"
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TERMINAL_SYNC_DO",
+        "class_name": "TerminalSyncDurableObject"
+      }
+    ]
+  },
+  "exports": {
+    "TerminalSyncDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,

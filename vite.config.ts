@@ -12,4 +12,16 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // "cloudflare:workers" is provided by the Workers runtime. Keeping it
+    // external prevents the generic SSR build from trying to resolve it as npm.
+    ssr: {
+      external: ["cloudflare:workers"],
+    },
+    build: {
+      rolldownOptions: {
+        external: ["cloudflare:workers"],
+      },
+    },
+  },
 });
