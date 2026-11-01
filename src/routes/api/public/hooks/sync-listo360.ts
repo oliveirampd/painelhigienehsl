@@ -8,11 +8,9 @@ import {
 } from "@/lib/operationalScope";
 import {
   computeSyncBackoffMs,
+  formatListoDateBRT,
   isSuspiciousPartialResponse,
-  parseMissingSyncState,
-  removeMissingSyncIds,
   selectRelevantBaseline,
-  updateMissingSyncState,
 } from "@/lib/listoSyncSafety";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
@@ -219,7 +217,7 @@ async function fetchAnswers(deadlineMs: number): Promise<{
   const startedAt = Date.now();
   const end = new Date();
   const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 19);
+  const fmt = formatListoDateBRT;
   const all: ListoAnswer[] = [];
   const pageSize = 500;
   let pages = 0;
@@ -480,16 +478,9 @@ export async function handleListo360Sync(request: Request) {
 
     const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
 
-    // Limites de "travado" por status — depois disso, vira "completed" sozinho e some
-    // do painel/control, sem precisar de ninguém clicar em nada. Não é o Listo que
-    // fecha o registro, é só o nosso painel que para de mostrar.
-    const STALE_LIMIT_MIN: Partial<Record<DischargeStatus, number>> = {
-      in_progress: 4 * 60, // Em Limpeza Terminal: 4h
-      en_route: 40, // A Caminho: 40min
-      waiting_cleaning: 20 * 60, // Altas Paradas: 20h
-      paused: 4 * 24 * 60, // Leitos Pausados: 4 dias
-    };
-
+    // O painel é operacional: tempo excessivo nunca vira conclusão inventada.
+    // Se a origem continuar marcando o leito como ativo, preservamos esse estado
+    // e tratamos a duração elevada como anomalia visual/operacional, não como alta.
     const buildRow = (a: ListoAnswer, kind: "answer" | "box" | "desmont") => {
       const rawStatus = mapStatus(a);
       const assigned = a.userName ? (staffByName.get(a.userName.trim()) ?? null) : null;
@@ -612,13 +603,10 @@ export async function handleListo360Sync(request: Request) {
         ).toISOString();
       }
 
-      // Registro travado (parado além do limite pra esse status) -> conclui sozinho
-      const ageMin = (Date.now() - new Date(statusUpdatedAt).getTime()) / 60000;
-      const limit = STALE_LIMIT_MIN[rawStatus];
-      const status: DischargeStatus =
-        limit !== undefined && ageMin >= limit ? "completed" : rawStatus;
+      const status: DischargeStatus = rawStatus;
 
-      // Horário real da conclusão: usa endTime do Listo quando disponível.
+      // Só existe conclusão quando a própria origem informa conclusão. Resolução
+      // manual continua sendo preservada acima como completed_with_issues.
       const completedAt: string | null =
         status === "completed"
           ? (
@@ -628,10 +616,6 @@ export async function handleListo360Sync(request: Request) {
               (prevRow?.completed_at ? new Date(prevRow.completed_at) : new Date(statusUpdatedAt))
             ).toISOString()
           : null;
-
-      if (status === "completed" && status !== rawStatus) {
-        debugInfo = `auto-concluido (travado ha ${Math.round(ageMin / 60)}h, limite era ${Math.round((limit ?? 0) / 60)}h)`;
-      }
 
       return {
         external_id: externalId,
@@ -814,45 +798,30 @@ export async function handleListo360Sync(request: Request) {
       console.error("[sync-listo360:last-completed]", historyError);
     }
 
-    // Limpa registros órfãos com tolerância a respostas parciais.
-    // Um item precisa faltar em 3 sincronizações e por pelo menos 90s antes de
-    // ser removido. Se o volume relevante cair abruptamente, nem contabilizamos
-    // a ausência naquela rodada.
+    // Ausência numa janela histórica NÃO é confirmação de resolução.
+    // Mantemos registros que não vieram nesta rodada, inclusive tombstones
+    // completed/completed_with_issues, porque eles guardam decisões reais do
+    // Listo ou do operador. O external_id é estável por leito/tipo, então isso
+    // não cria crescimento histórico ilimitado.
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
-    const staleIds = existingDischarges
-      .map((d) => d.external_id)
-      .filter((id) => !freshIds.has(id));
+    const absentRows = existingDischarges.filter((d) => !freshIds.has(d.external_id));
     const suspiciousPartial = isSuspiciousPartialResponse(
       relevant.length,
       runtimeState.last_relevant_count,
     );
-    const previousMissing = parseMissingSyncState(runtimeState.missing_external_ids);
-    const missingUpdate = updateMissingSyncState({
-      previous: previousMissing,
-      freshIds,
-      staleIds,
-      nowMs: Date.now(),
-      allowMissIncrement: !suspiciousPartial,
-    });
-    let missingState = missingUpdate.next;
-    const deleteIds = suspiciousPartial ? [] : missingUpdate.deleteIds;
-
-    let removedCount = 0;
-    for (let i = 0; i < deleteIds.length; i += 100) {
-      const chunk = deleteIds.slice(i, i + 100);
-      const removed = await supabase.from("discharges")
-        .delete().in("external_id", chunk);
-      if (removed.error) throw removed.error;
-      removedCount += chunk.length;
-    }
-    if (deleteIds.length) {
-      missingState = removeMissingSyncIds(missingState, deleteIds);
-    }
-    const cleanupSkipped = suspiciousPartial;
+    const preservedAbsentCount = absentRows.length;
+    const removedCount = 0;
+    const cleanupSkipped = true;
+    const missingState = {};
 
     // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
+    const reconciledByExternalId = new Map(
+      existingDischarges.map((d) => [d.external_id, d]),
+    );
+    for (const row of dischargeRows) reconciledByExternalId.set(row.external_id, row);
+
     const activeIds = new Set(
-      dischargeRows
+      Array.from(reconciledByExternalId.values())
         .filter((d) => d.status === "in_progress")
         .map((d) => d.assigned_staff_id)
         .filter(Boolean) as string[],
@@ -924,6 +893,7 @@ export async function handleListo360Sync(request: Request) {
       relevant: relevant.length,
       changedRows: changedRows.length,
       removedCount,
+      preservedAbsentCount,
       suspiciousPartial,
     });
 
@@ -943,8 +913,9 @@ export async function handleListo360Sync(request: Request) {
       leitos_alterados: changedRows.length,
       leitos_inalterados: dischargeRows.length - changedRows.length,
       removidos_orfaos: removedCount,
+      ausencias_preservadas: preservedAbsentCount,
       limpeza_pulada_resposta_suspeita: cleanupSkipped,
-      ausencias_em_observacao: Object.keys(missingState).length,
+      ausencias_em_observacao: 0,
       ultimas_altas_atualizadas: lastCompletedUpdated,
       erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,
