@@ -1,3 +1,4 @@
+import { env as cloudflareEnv } from "cloudflare:workers";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   isTerminalBoxLocation,
@@ -258,11 +259,32 @@ async function fetchAnswers(deadlineMs: number): Promise<{
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
   server: {
     handlers: {
-      GET: ({ request }) => handleListo360Sync(request),
-      POST: ({ request }) => handleListo360Sync(request),
+      GET: ({ request }) => forwardListo360Sync(request),
+      POST: ({ request }) => forwardListo360Sync(request),
     },
   },
 });
+
+type TerminalSyncNamespace = {
+  idFromName(name: string): unknown;
+  get(id: unknown): { fetch(request: Request): Promise<Response> };
+};
+
+async function forwardListo360Sync(request: Request): Promise<Response> {
+  const namespace = (cloudflareEnv as unknown as { TERMINAL_SYNC_DO?: TerminalSyncNamespace })
+    .TERMINAL_SYNC_DO;
+
+  if (!namespace) {
+    console.error("[sync-listo360] TERMINAL_SYNC_DO binding ausente");
+    return Response.json(
+      { ok: false, error: "Executor de sincronização indisponível" },
+      { status: 503 },
+    );
+  }
+
+  const id = namespace.idFromName("listo360");
+  return namespace.get(id).fetch(request);
+}
 
 export async function handleListo360Sync(request: Request) {
   // Pode ser habilitado sem mudar a URL do cron. Configure a mesma chave no
