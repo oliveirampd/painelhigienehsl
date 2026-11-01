@@ -188,6 +188,7 @@ export type Database = {
           backoff_until: string
           consecutive_failures: number
           key: string
+          last_active_source: Json
           last_answers_count: number | null
           last_duration_ms: number | null
           last_error: string | null
@@ -204,6 +205,7 @@ export type Database = {
           backoff_until?: string
           consecutive_failures?: number
           key: string
+          last_active_source?: Json
           last_answers_count?: number | null
           last_duration_ms?: number | null
           last_error?: string | null
@@ -220,6 +222,7 @@ export type Database = {
           backoff_until?: string
           consecutive_failures?: number
           key?: string
+          last_active_source?: Json
           last_answers_count?: number | null
           last_duration_ms?: number | null
           last_error?: string | null

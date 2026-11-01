@@ -46,6 +46,7 @@ type SyncRuntimeState = {
   consecutive_failures: number;
   last_error: string | null;
   missing_external_ids: unknown;
+  last_active_source: unknown;
   updated_at: string;
 };
 
@@ -854,6 +855,25 @@ export async function handleListo360Sync(request: Request) {
       .slice(0, 8)
       .map((d) => ({ external_id: d.external_id, status: d.status, _debug: d._debug }));
 
+    // Snapshot operacional da origem: permite distinguir "veio do Listo agora"
+    // de "foi preservado do estado anterior". Backend-only, sem Realtime.
+    const activeSourceSnapshot = dischargeRows
+      .filter((d) =>
+        d.status === "waiting_cleaning" ||
+        d.status === "en_route" ||
+        d.status === "in_progress" ||
+        d.status === "paused" ||
+        d.status === "maintenance"
+      )
+      .map((d) => ({
+        external_id: d.external_id,
+        bed_number: d.bed_number,
+        unit: d.unit,
+        status: d.status,
+        last_answer_id: d.last_answer_id,
+        status_updated_at: d.status_updated_at,
+      }));
+
     const finishedAt = Date.now();
     const durationMs = finishedAt - syncStartedAt;
     const finishedIso = new Date(finishedAt).toISOString();
@@ -878,6 +898,7 @@ export async function handleListo360Sync(request: Request) {
         consecutive_failures: 0,
         last_error: null,
         missing_external_ids: missingState,
+        last_active_source: activeSourceSnapshot,
         updated_at: finishedIso,
       })
       .eq("key", "listo360");
@@ -894,6 +915,7 @@ export async function handleListo360Sync(request: Request) {
       changedRows: changedRows.length,
       removedCount,
       preservedAbsentCount,
+      activeSourceCount: activeSourceSnapshot.length,
       suspiciousPartial,
     });
 
