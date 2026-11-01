@@ -1,3 +1,9 @@
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+export function formatListoDateBRT(date: Date): string {
+  return new Date(date.getTime() - BRT_OFFSET_MS).toISOString().slice(0, 19);
+}
+
 export type MissingSyncRecord = {
   count: number;
   firstMissingAt: string;
