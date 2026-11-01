@@ -87,7 +87,7 @@ export function ThemePicker({
         aria-expanded={open}
         aria-haspopup="true"
         title="Selecionar tema do Terminal"
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/20 bg-white/[0.06] px-2.5 py-1.5 text-xs font-semibold text-white/85 transition-colors hover:bg-white/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-white/20 bg-white/[0.06] px-2 py-1.5 text-[11px] font-semibold text-white/85 transition-colors hover:bg-white/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:gap-1.5 sm:px-2.5 sm:text-xs"
       >
         <Palette className="h-4 w-4" aria-hidden="true" />
         <span className="hidden sm:inline">Temas</span>
