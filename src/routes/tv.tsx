@@ -697,18 +697,18 @@ function TvPage() {
           </span>
         </div>
       )}
-      <header className="panel-shell-header flex-none flex flex-col gap-1.5 border-b border-white/15 px-4 py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-base sm:text-lg lg:text-2xl font-bold tracking-tight leading-tight">
+      <header className="panel-shell-header flex-none flex flex-col gap-1.5 border-b border-white/15 px-3 py-2 sm:px-4 sm:py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+          <h1 className="min-w-0 text-[15px] font-bold leading-tight tracking-tight sm:text-lg lg:text-2xl">
             Painel de Higienização Terminal
           </h1>
           <PanelNav />
-          <a href="/control" className="inline-flex min-h-9 items-center rounded-md border border-white/20 px-2 text-xs text-white/75">
+          <a href="/control" className="inline-flex min-h-9 items-center rounded-md border border-white/20 px-2 text-[11px] text-white/75 sm:text-xs">
             Acesso do operador
           </a>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 lg:justify-end lg:gap-4">
-          <span className="flex items-center gap-1.5 text-xs lg:text-xs uppercase tracking-widest text-white/50">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5 sm:gap-3 lg:justify-end lg:gap-4">
+          <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-white/50 sm:gap-1.5 sm:text-xs">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
@@ -730,7 +730,7 @@ function TvPage() {
             aria-pressed={exceptionsOnly}
             onClick={() => setExceptionsOnly((v) => !v)}
             title="Mostrar somente exceções na grade principal"
-            className={`flex min-h-9 items-center gap-1 rounded-md border px-2 py-1 text-xs uppercase tracking-wide transition-colors active:scale-95 ${
+            className={`flex min-h-9 items-center gap-1 rounded-md border px-2 py-1 text-[10px] uppercase tracking-wide transition-colors active:scale-95 sm:text-xs ${
               exceptionsOnly
                 ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
                 : "border-white/15 text-white/55 hover:bg-white/10"
@@ -740,7 +740,7 @@ function TvPage() {
           </button>
 
           <ThemePicker theme={theme} onChange={setTheme} />
-          <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
+          <span className="font-mono text-lg tabular-nums sm:text-xl lg:text-3xl">{clock}</span>
         </div>
       </header>
       {(error || loading) && (
@@ -815,7 +815,7 @@ function TvPage() {
                     return (
                     <div
                       key={`${d.id}-recent-v${recentVersion}`}
-                      className={`flex min-w-[126px] shrink-0 items-center justify-between gap-2 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5 ${
+                      className={`flex min-w-[112px] shrink-0 items-center justify-between gap-1.5 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5 sm:min-w-[126px] sm:gap-2 ${
                         recentVersion > 0 ? "tv-recent-completed-in" : ""
                       }`}
                     >
@@ -1093,20 +1093,20 @@ function KpiCard({
         : "oklch(0.72 0.17 155)"; // melhorou
   return (
     <div
-      className="panel-kpi-card rounded-xl px-3 lg:px-4 py-2 lg:py-2 border flex flex-col lg:flex-row lg:items-center lg:justify-between gap-0.5 lg:gap-0"
+      className="panel-kpi-card flex flex-col gap-0.5 rounded-xl border px-2.5 py-2 sm:px-3 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:px-4"
       style={{
         ["--panel-accent" as string]: accent,
         backgroundColor: accent.replace(")", " / 0.12)"),
         borderColor: accent.replace(")", " / 0.42)"),
       }}
     >
-      <div className="text-xs lg:text-xs uppercase tracking-widest text-white/70 font-medium leading-tight">
+      <div className="text-[10px] font-medium uppercase leading-tight tracking-widest text-white/70 sm:text-xs">
         {label}
       </div>
       <div className="flex items-baseline gap-1.5">
         <div
           key={display ?? value}
-          className="tv-kpi-value-change text-2xl lg:text-4xl tabular-nums leading-none"
+          className="tv-kpi-value-change text-xl tabular-nums leading-none sm:text-2xl lg:text-4xl"
           style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
         >
           {display ?? value}
@@ -1275,7 +1275,7 @@ function TerminalBedsPanel({
     >
       <div className="flex-none px-4 py-2 border-b border-white/10">
         <div className="flex items-baseline gap-2">
-          <h2 className="text-base font-bold flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-bold sm:text-base">
             <BrushCleaning className="w-4 h-4 text-white/60" />
             Leitos em Higienização
           </h2>
@@ -1304,8 +1304,8 @@ function TerminalBedsPanel({
             </span>
           </div>
           {/* Altas paradas por bloco — sempre visível, mobile incluso. */}
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-xs lg:text-xs font-semibold uppercase tracking-wide text-white/40 whitespace-nowrap">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:flex-nowrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40 sm:whitespace-nowrap sm:text-xs">
               Altas paradas por bloco:
             </span>
             {(
@@ -1321,14 +1321,14 @@ function TerminalBedsPanel({
               <span
                 key={label}
                 title={`Altas paradas no Bloco ${label}`}
-                className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs leading-tight"
+                className="inline-flex min-w-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-[10px] leading-tight sm:text-xs"
                 style={{
                   borderColor: KIND_COLOR.parada.replace(")", " / 0.4)"),
                   background: KIND_COLOR.parada.replace(")", " / 0.12)"),
                 }}
               >
                 <span className="font-semibold uppercase tracking-wide text-white/60">
-                  Bloco {label}
+                  <span className="hidden sm:inline">Bloco </span>{label}
                 </span>
                 <span
                   className="font-bold tabular-nums"
@@ -1346,7 +1346,7 @@ function TerminalBedsPanel({
           <div className="p-4 text-center text-white/40 text-sm">Nenhum leito em higienização.</div>
         ) : (
           <AutoScroll>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 p-3">
+            <div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 sm:gap-2 sm:p-3 lg:grid-cols-4 xl:grid-cols-5">
               {cards.map(({ d, kind }) => {
                 const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
                 const version = flashVersions?.get(d.external_id ?? "") ?? 0;
@@ -1381,7 +1381,7 @@ function TerminalBedsPanel({
                     onKeyDown={(e) => {
                       if (onSelect && (e.key === "Enter" || e.key === " ")) onSelect(d);
                     }}
-                    className={`relative flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 ${
+                    className={`relative flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${
                       onSelect ? "cursor-pointer hover:-translate-y-0.5 hover:bg-white/[0.05]" : ""
                     } ${entryVersion > 0 ? "tv-card-enter" : ""} ${
                       version > 0 ? "tv-card-status-change flash-row" : ""
@@ -1393,7 +1393,7 @@ function TerminalBedsPanel({
                   >
                     {isWorst && (
                       <span
-                        className="panel-critical-badge absolute -top-1.5 -right-1.5 rounded-[3px] border px-1 py-px text-xs font-semibold uppercase tracking-wide"
+                        className="panel-critical-badge absolute -right-1 -top-1 rounded-[3px] border px-1 py-px text-[9px] font-semibold uppercase tracking-wide sm:-right-1.5 sm:-top-1.5 sm:text-xs"
                         style={{
                           borderColor: "oklch(0.7 0.2 25 / 0.5)",
                           background: "oklch(0.98 0.01 250)",
@@ -1404,11 +1404,11 @@ function TerminalBedsPanel({
                       </span>
                     )}
                     <div className="flex items-baseline justify-between gap-1">
-                      <span className="font-bold text-base lg:text-xl tabular-nums truncate">
+                      <span className="truncate text-sm font-bold tabular-nums sm:text-base lg:text-xl">
                         {d.bed_number}
                       </span>
                       {(kind !== "parada" || isDismantling) && (
-                        <span className="font-mono tabular-nums text-sm shrink-0 text-white/80">
+                        <span className="shrink-0 font-mono text-xs tabular-nums text-white/80 sm:text-sm">
                           {formatElapsed(isDismantling ? dismantle.startedAt : d.status_updated_at, nowMs)}
                         </span>
                       )}
@@ -1416,22 +1416,22 @@ function TerminalBedsPanel({
                     <div className="flex-1 flex flex-col items-center justify-center py-1 text-center min-h-[48px]">
                       {kind === "parada" && !isDismantling ? (
                         <>
-                          <span className="text-xs lg:text-xs font-semibold uppercase tracking-widest text-white/55">
+                          <span className="text-[10px] font-semibold uppercase tracking-widest text-white/55 sm:text-xs">
                             Aguardando há
                           </span>
                           <span
-                            className="font-mono tabular-nums text-xl lg:text-2xl font-bold leading-none mt-1"
+                            className="mt-1 font-mono text-lg font-bold leading-none tabular-nums sm:text-xl lg:text-2xl"
                             style={{ color: base }}
                           >
                             {formatElapsed(d.status_updated_at, nowMs)}
                           </span>
-                          <span className="mt-1 text-xs lg:text-xs text-white/55 leading-tight line-clamp-1">
+                          <span className="mt-1 line-clamp-1 text-[11px] leading-tight text-white/55 sm:text-xs">
                             {d.unit || "Unidade não informada"}
                           </span>
                         </>
                       ) : (
                         <span
-                          className="text-[13px] lg:text-[15px] font-bold leading-tight line-clamp-2"
+                          className="line-clamp-2 text-[12px] font-bold leading-tight sm:text-[13px] lg:text-[15px]"
                           style={{ color: displayName ? base : "rgba(255,255,255,0.4)" }}
                         >
                           {displayName ?? "sem colaborador"}
@@ -1440,7 +1440,7 @@ function TerminalBedsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
-                        className={`rounded px-1 py-px text-xs font-semibold uppercase tracking-wide ${
+                        className={`rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
@@ -1448,16 +1448,16 @@ function TerminalBedsPanel({
                         {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
                       {isDismantling ? (
-                        <span className="shrink-0 font-mono tabular-nums text-xs lg:text-xs text-white/65">
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/65 sm:text-xs">
                           Início {formatClockTime(dismantle.startedAt)}
                         </span>
                       ) : kind === "execucao" ? (
-                        <span className="shrink-0 font-mono tabular-nums text-xs lg:text-xs text-white/55">
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/55 sm:text-xs">
                           Início {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : dismantle ? (
                         <span
-                          className="font-mono tabular-nums text-xs shrink-0"
+                          className="shrink-0 font-mono text-[10px] tabular-nums sm:text-xs"
                           style={{
                             color: dismantle.active
                               ? KIND_COLOR.desmontagem
@@ -1468,7 +1468,7 @@ function TerminalBedsPanel({
                           {formatClockTime(dismantle.startedAt)}
                         </span>
                       ) : kind === "parada" ? (
-                        <span className="font-mono tabular-nums text-xs text-white/50 shrink-0">
+                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/50 sm:text-xs">
                           Registro {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : null}
