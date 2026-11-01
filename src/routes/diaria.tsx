@@ -22,6 +22,7 @@ import {
 } from "@/lib/dailyScope";
 import { isExcludedUnit } from "@/lib/operationalScope";
 import { useCarouselScroll } from "@/hooks/useCarouselScroll";
+import { useModalFocus } from "@/hooks/useModalFocus";
 import { UpdatesModal } from "@/components/UpdatesModal";
 import { PanelNav } from "@/components/PanelNav";
 import { SyncCounter } from "@/components/SyncCounter";
@@ -122,13 +123,14 @@ const isAltaTerminal = (externalId: string | null) =>
   (externalId || "").startsWith("listo:answer:");
 
 function DiariaPage() {
-  const mainRef = useCarouselScroll<HTMLElement>();
+  const mainRef = useCarouselScroll<HTMLDivElement>();
   const { isDark, themeClass, toggleTheme } = usePanelTheme();
-  const discharges = useActiveDischarges();
+  const { discharges, error: activeDischargesError } = useActiveDischarges();
   const [events, setEvents] = useState<DailyBedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [lastAt, setLastAt] = useState<number>(Date.now());
+  const [lastAt, setLastAt] = useState<number | null>(null);
+  const [stale, setStale] = useState(false);
   const [clock, setClock] = useState("");
   const [periodo, setPeriodo] = useState<Periodo>(() => periodoAtualBRT());
   const [selectedBed, setSelectedBed] = useState<{
@@ -191,8 +193,9 @@ function DiariaPage() {
         }
         previousStatuses.current = nextStatuses;
         setEvents(res.events);
-        setLastAt(Date.now());
-        setErro(null);
+        setLastAt(res.at ? Date.parse(res.at) : null);
+        setStale(res.stale);
+        setErro(res.stale ? "Dados anteriores: não foi possível consultar o Listo agora." : null);
       } catch {
         if (alive) setErro("Não foi possível atualizar agora.");
       } finally {
@@ -495,7 +498,8 @@ function DiariaPage() {
     window.setTimeout(() => {
       document
         .querySelector(`[data-bed-code="${bed.n}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+        ?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center", inline: "nearest" });
+      (document.querySelector(`[data-bed-code="${bed.n}"] [role="button"]`) as HTMLElement | null)?.focus({ preventScroll: true });
     }, 80);
     window.setTimeout(() => setHighlightedBed((current) => (current === bed.n ? null : current)), 4500);
   }
@@ -537,22 +541,25 @@ function DiariaPage() {
             <span className="font-mono text-lg font-semibold tabular-nums lg:text-xl">{clock}</span>
           </div>
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/45">
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-white/45">
           <span>{ACTIVE_BEDS.length} leitos cadastrados · rotinas do turno atual</span>
-          <SyncCounter
-            lastAt={lastAt}
-            cadenceSeconds={30}
-            cadenceLabel="atualiza a cada 30s"
-          />
+          {stale || lastAt === null ? (
+            <span role="status" className="text-amber-200">
+              {stale ? "Dados anteriores" : "Aguardando atualização"}
+              {lastAt !== null && ` · última consulta ${new Date(lastAt).toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" })}`}
+            </span>
+          ) : (
+            <SyncCounter lastAt={lastAt} cadenceSeconds={30} cadenceLabel="atualiza a cada 30s" />
+          )}
         </div>
       </header>
 
       <section aria-label="Indicadores do turno" className="flex-none px-4 pb-3 pt-3 lg:px-6">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
             Ritmo das rotinas
           </h2>
-          <span className="text-[11px] text-white/40">Turno atual</span>
+          <span className="text-xs text-white/40">Turno atual</span>
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <Kpi
@@ -595,7 +602,7 @@ function DiariaPage() {
         >
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
                 Cobertura do turno
               </div>
               <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -616,7 +623,7 @@ function DiariaPage() {
                   }}
                 />
               </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white/50">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-white/50">
                 <span>Turno percorrido: <strong className="text-white/75">{ritmoEsperado}%</strong></span>
                 <span>
                   {ritmoStatus === "attention"
@@ -629,7 +636,7 @@ function DiariaPage() {
             </div>
 
             <div className="border-t border-white/10 pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/50">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
                 Andares abaixo da referência
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -638,7 +645,7 @@ function DiariaPage() {
                     type="button"
                     key={x.block + "-" + x.floor}
                     onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/10 px-2 py-1.5 text-[11px] transition-colors hover:bg-white/10"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-black/10 px-2 py-1.5 text-xs transition-colors hover:bg-white/10"
                   >
                     <strong>{x.floor}{x.block}</strong>
                     <span className={x.pct < ritmoEsperado - 20 ? "font-semibold text-amber-200" : "text-white/60"}>
@@ -648,16 +655,16 @@ function DiariaPage() {
                   </button>
                 ))}
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-white/50">{concentrationText}</p>
+              <p className="mt-2 text-xs leading-relaxed text-white/50">{concentrationText}</p>
             </div>
           </div>
 
           <div className="mt-3 border-t border-white/10 pt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
                 Visão rápida dos andares
               </span>
-              <span className="text-[10px] text-white/35">deslize para ver todos</span>
+              <span className="text-xs text-white/35">deslize para ver todos</span>
             </div>
             <div className="scrollbar-hidden flex gap-2 overflow-x-auto pb-1">
               {floorCoverage.map((x) => {
@@ -678,7 +685,7 @@ function DiariaPage() {
                     }}
                     title={"Bloco " + x.block + " · " + x.floor + "º andar · " + x.pct + "% de cobertura"}
                   >
-                    <div className="text-[10px] font-semibold tracking-wide" style={{ color: blockTone }}>
+                    <div className="text-xs font-semibold tracking-wide" style={{ color: blockTone }}>
                       {x.floor}{x.block}
                     </div>
                     <strong className="mt-1 block text-lg font-bold tabular-nums" style={{ color: tone }}>
@@ -696,7 +703,7 @@ function DiariaPage() {
         <div className="panel-surface rounded-xl border p-2.5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="scrollbar-hidden flex min-w-0 items-center gap-1.5 overflow-x-auto">
-              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-white/35">
+              <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-white/35">
                 Bloco
               </span>
               {(["all", ...BLOCK_ORDER] as BlockFilter[]).map((block) => {
@@ -711,7 +718,7 @@ function DiariaPage() {
                       setFloorFilter(null);
                     }}
                     aria-pressed={blockFilter === block}
-                    className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                    className="min-h-10 min-w-9 shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                     style={{
                       borderColor: colorWash(color, active ? 0.8 : 0.36),
                       background: colorWash(color, active ? 0.22 : 0.06),
@@ -729,7 +736,7 @@ function DiariaPage() {
                   onChange={(event) =>
                     setFloorFilter(event.target.value ? Number(event.target.value) : null)
                   }
-                  className="panel-select h-8 shrink-0 rounded-md border border-white/15 px-2 text-xs outline-none"
+                  className="panel-select min-h-9 shrink-0 rounded-md border border-white/15 px-2 text-xs outline-none"
                 >
                   <option value="">Todos andares</option>
                   {availableFloors.map((floor) => (
@@ -754,7 +761,7 @@ function DiariaPage() {
                   key={value}
                   onClick={() => setRoutineFilter(value)}
                   aria-pressed={routineFilter === value}
-                  className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                  className={`min-h-9 shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
                     routineFilter === value
                       ? "border-sky-400/45 bg-sky-400/10 font-semibold"
                       : "border-white/10 text-white/55 hover:bg-white/10"
@@ -775,7 +782,7 @@ function DiariaPage() {
                   key={value}
                   onClick={() => setViewMode(value)}
                   aria-pressed={viewMode === value}
-                  className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                  className={`min-h-9 shrink-0 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
                     viewMode === value
                       ? "border-emerald-400/45 bg-emerald-400/10 font-semibold"
                       : "border-white/10 text-white/55 hover:bg-white/10"
@@ -794,12 +801,12 @@ function DiariaPage() {
                   onChange={(event) => setBedSearch(event.target.value)}
                   inputMode="numeric"
                   placeholder="Buscar leito"
-                  className="h-8 w-full rounded-md border border-white/15 bg-black/10 pl-8 pr-2 text-sm outline-none placeholder:text-white/30 focus:border-sky-400/50"
+                  className="h-9 w-full rounded-md border border-white/15 bg-black/10 pl-8 pr-2 text-sm outline-none placeholder:text-white/30 focus:border-sky-400/50"
                 />
               </div>
               <button
                 type="submit"
-                className="h-8 rounded-md border border-sky-400/35 bg-sky-400/10 px-2.5 text-xs font-semibold"
+                className="h-9 min-w-9 rounded-md border border-sky-400/35 bg-sky-400/10 px-2.5 text-xs font-semibold"
               >
                 Ir
               </button>
@@ -808,14 +815,15 @@ function DiariaPage() {
                   type="button"
                   onClick={clearMapFilters}
                   title="Limpar filtros"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/45 hover:bg-white/10"
+                  aria-label="Limpar filtros"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-white/10 text-white/45 hover:bg-white/10"
                 >
                   <XCircle className="h-4 w-4" />
                 </button>
               )}
             </form>
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-white/40">
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-white/40">
             <span>
               {visibleGroups.reduce((sum, group) => sum + group.beds.length, 0)} de {ACTIVE_BEDS.length} leitos exibidos
             </span>
@@ -841,10 +849,11 @@ function DiariaPage() {
         <Legenda color={ALTA_PARADA_COLOR} text="Alta parada" />
         <Legenda color={ALTA_EXECUCAO_COLOR} text="Alta em higienização" />
         {erro && <span className="text-[oklch(0.7_0.18_25)] normal-case">{erro}</span>}
+        {activeDischargesError && <span role="status" className="text-amber-200 normal-case">{activeDischargesError}</span>}
         {loading && <span className="normal-case">carregando…</span>}
       </div>
 
-      <div className="flex-none px-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/30 lg:px-6">
+      <div className="flex-none px-4 pb-1 text-xs font-semibold uppercase tracking-widest text-white/30 lg:px-6">
         Mapa de leitos · clique no andar para resumo · rolagem automática na TV
       </div>
       <main
@@ -921,7 +930,7 @@ function DiariaPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedFloor({ block: g.block, floor })}
-                        className="w-full rounded-md border px-1 py-1 text-center font-mono text-xs font-bold text-white transition-[filter] hover:brightness-125"
+                        className="min-h-9 w-full rounded-md border px-1 py-1 text-center font-mono text-xs font-bold text-white transition-[filter] hover:brightness-125"
                         style={{
                           borderColor: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.9 : 0.65),
                           background: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.42 : 0.27),
@@ -1028,6 +1037,7 @@ function BedDetailSheet({
   periodo: Periodo;
   onClose: () => void;
 }) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
   const c = events?.concorrente;
   const k = events?.camareira;
 
@@ -1059,13 +1069,15 @@ function BedDetailSheet({
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         aria-modal="true"
         aria-label={`Detalhes do leito ${bed}`}
         className="scrollbar-hidden max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+            <div className="text-xs font-semibold uppercase tracking-widest text-white/35">
               Situação da Diária
             </div>
             <h3 className="mt-0.5 text-xl font-bold">Leito {bed}</h3>
@@ -1073,30 +1085,31 @@ function BedDetailSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="Fechar detalhes do leito"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <section className="rounded-xl border border-white/10 bg-black/10 p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+          <div className="text-xs font-semibold uppercase tracking-widest text-white/35">
             O que falta / situação atual
           </div>
           <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
             <div>
-              <div className="text-[10px] uppercase text-white/35">Concorrente</div>
+              <div className="text-xs uppercase text-white/35">Concorrente</div>
               <strong className="text-sm">{currentLabel(c, concurrentEligible)}</strong>
             </div>
             <div>
-              <div className="text-[10px] uppercase text-white/35">Camareira</div>
+              <div className="text-xs uppercase text-white/35">Camareira</div>
               <strong className="text-sm">{currentLabel(k)}</strong>
               {!k && periodo !== "tarde" && (
-                <div className="mt-0.5 text-[10px] text-white/35">fora do destaque do período atual</div>
+                <div className="mt-0.5 text-xs text-white/35">fora do destaque do período atual</div>
               )}
             </div>
             <div>
-              <div className="text-[10px] uppercase text-white/35">Alta terminal</div>
+              <div className="text-xs uppercase text-white/35">Alta terminal</div>
               <strong className="text-sm">
                 {altaStatus === "waiting_cleaning"
                   ? "Alta parada"
@@ -1146,6 +1159,7 @@ function FloorDetailSheet({
   onFocus: () => void;
   onClose: () => void;
 }) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1188,6 +1202,8 @@ function FloorDetailSheet({
       <div
         onClick={(event) => event.stopPropagation()}
         role="dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         aria-modal="true"
         aria-label={`Resumo do ${floor}º andar do Bloco ${block}`}
         className="w-full max-w-md rounded-t-2xl border border-white/15 bg-[oklch(0.19_0.02_265)] p-4 lg:rounded-2xl"
@@ -1195,7 +1211,7 @@ function FloorDetailSheet({
         <div className="flex items-start justify-between gap-3">
           <div>
             <div
-              className="text-[10px] font-semibold uppercase tracking-widest"
+              className="text-xs font-semibold uppercase tracking-widest"
               style={{ color: BLOCK_COLOR[block] }}
             >
               Bloco {block}
@@ -1206,7 +1222,8 @@ function FloorDetailSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-white/45 hover:bg-white/10 hover:text-white"
+            aria-label="Fechar resumo do andar"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -1271,11 +1288,11 @@ function FloorMetric({
         background: colorWash(color, 0.08),
       }}
     >
-      <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color }}>
+      <div className="text-xs font-semibold uppercase tracking-wide" style={{ color }}>
         {label}
       </div>
       <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
-      <div className="mt-0.5 truncate text-[10px] text-white/40" title={detail}>
+      <div className="mt-0.5 truncate text-xs text-white/40" title={detail}>
         {detail}
       </div>
     </div>
@@ -1371,7 +1388,7 @@ function ProgressBar({
         />
       </span>
       <span
-        className="w-9 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/50"
+        className="w-9 shrink-0 text-right font-mono text-xs tabular-nums text-white/50"
         title={label}
       >
         {pct}%
@@ -1427,7 +1444,7 @@ function Kpi({
       }}
     >
       <div
-        className="flex min-h-8 items-center gap-2 text-[11px] font-semibold uppercase leading-tight tracking-wide sm:text-xs"
+        className="flex min-h-8 items-center gap-2 text-xs font-semibold uppercase leading-tight tracking-wide sm:text-xs"
         style={{ color }}
       >
         <span className="shrink-0">{icon}</span>
@@ -1591,7 +1608,7 @@ function BedTile({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") onSelect?.();
         }}
-        className={`relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-[11px] font-mono transition-colors cursor-pointer active:scale-95 ${
+        className={`relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-xs font-mono transition-colors cursor-pointer active:scale-95 ${
           anyActive ? "animate-bed-blink" : ""
         }`}
         style={{
@@ -1613,7 +1630,7 @@ function BedTile({
       >
         {altaColor && (
           <span
-            className="absolute -left-1.5 -top-1.5 rounded-md border px-1 text-[8px] font-bold uppercase leading-[13px]"
+            className="absolute -left-1.5 -top-1.5 rounded-md border px-1 text-xs font-bold uppercase leading-[13px]"
             style={{
               color: isDark ? "#ffffff" : "#17202b",
               borderColor: altaColor,
@@ -1664,7 +1681,7 @@ function BedTile({
         </span>
         {repeatBadge && (
           <span
-            className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-[9px] font-bold leading-[14px] text-black"
+            className="absolute -right-1.5 -top-1.5 rounded-full px-1 text-xs font-bold leading-[14px] text-black"
             style={{ background: "oklch(0.85 0.15 95)" }}
             title="Rotina repetida neste turno"
           >

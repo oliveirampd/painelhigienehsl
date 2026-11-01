@@ -11,7 +11,7 @@ export function SyncCounter({
   cadenceSeconds: number;
   alignToClock?: boolean;
 }) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
 
   useEffect(() => {
     setNow(Date.now());
@@ -26,7 +26,7 @@ export function SyncCounter({
   const cycleProgress = Math.min(100, (elapsedSeconds / cadenceSeconds) * 100);
 
   return (
-    <span className="relative inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-full border border-white/10 bg-white/[0.035] px-2 py-1 font-mono text-[9px] text-white/45 sm:text-[10px]">
+    <span className="relative inline-flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-full border border-white/10 bg-white/[0.035] px-2 py-1 font-mono text-xs text-white/45 sm:text-xs">
       <span
         aria-hidden="true"
         className="absolute inset-y-0 left-0 bg-sky-400/[0.06] transition-[width] duration-300"

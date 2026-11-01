@@ -35,7 +35,7 @@ async function verifyImportCode(supplied: string) {
 }
 
 export const uploadDischargePredictions = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => importInput.parse(data))
+  .validator((data: unknown) => importInput.parse(data))
   .handler(async ({ data }) => {
     await verifyImportCode(data.code);
     const rows = normalizePriorityRows(data.rows);

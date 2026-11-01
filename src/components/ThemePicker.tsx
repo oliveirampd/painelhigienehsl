@@ -87,7 +87,7 @@ export function ThemePicker({
         aria-expanded={open}
         aria-haspopup="true"
         title="Selecionar tema do Terminal"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-semibold text-white/85 transition-colors hover:bg-white/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/20 bg-white/[0.06] px-2.5 py-1.5 text-xs font-semibold text-white/85 transition-colors hover:bg-white/[0.12] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         <Palette className="h-4 w-4" aria-hidden="true" />
         <span className="hidden sm:inline">Temas</span>
@@ -99,7 +99,7 @@ export function ThemePicker({
           role="group"
           aria-label="Temas do Terminal"
         >
-          <p className="px-2 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
+          <p className="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-white/55">
             Aparência da TV
           </p>
           {THEMES.map((item) => (
@@ -131,12 +131,12 @@ export function ThemePicker({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-semibold text-white">{item.name}</span>
-                <span className="block text-[10px] leading-normal text-white/65">{item.detail}</span>
+                <span className="block text-xs leading-normal text-white/65">{item.detail}</span>
               </span>
               {theme === item.id && <Check className="h-4 w-4 shrink-0 text-white" aria-hidden="true" />}
             </button>
           ))}
-          <p className="px-2 pt-2 text-[10px] text-white/45">
+          <p className="px-2 pt-2 text-xs text-white/45">
             Apenas no Terminal · salvo neste dispositivo
           </p>
         </div>

@@ -18,6 +18,7 @@ import {
   type StaffStatus,
 } from "@/lib/hospital";
 import { toast } from "sonner";
+import { OperatorGate } from "@/components/OperatorAccess";
 
 export const Route = createFileRoute("/control")({
   head: () => ({
@@ -26,7 +27,7 @@ export const Route = createFileRoute("/control")({
       { name: "description", content: "Painel do operador: atribuir equipe, atualizar status de leitos e gerenciar pausas." },
     ],
   }),
-  component: ControlPage,
+  component: () => <OperatorGate><ControlPage /></OperatorGate>,
 });
 
 const DISCHARGE_STATUSES: DischargeStatus[] = [

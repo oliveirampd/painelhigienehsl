@@ -36,9 +36,8 @@ O Worker exige `SYNC_CRON_SECRET`. Chamadas sem o segredo correto recebem
 `401 Não autorizado`. Isso neutraliza o antigo cronjob.org sem precisar
 alterar a lógica do Terminal.
 
-O cronjob.org não é mais o agendador oficial. Se for necessário rollback,
-desative o job `listo-terminal-sync` e remova/ajuste temporariamente
-`SYNC_CRON_SECRET` no Worker antes de reativar um scheduler externo.
+O cronjob.org não é mais o agendador oficial. Não remova
+`SYNC_CRON_SECRET`: sem ele a rota falha fechada com HTTP 503.
 
 ## Validação após a liberação do Supabase
 
@@ -47,18 +46,16 @@ desative o job `listo-terminal-sync` e remova/ajuste temporariamente
 2. Confirme que o job `listo-terminal-sync` está ativo e confira `HTTP 200`
    / `ok: true` em `net._http_response`.
 3. Verifique `leitos_alterados`, `leitos_inalterados`,
-   `colaboradores_novos` e `removidos_orfaos`. Em execução sem novidades,
-   `leitos_alterados` deve chegar a zero.
+   `colaboradores_novos` e `ausencias_preservadas`. Em execução sem novidades,
+   `leitos_alterados` deve chegar a zero e `removidos_orfaos` deve ser zero.
 4. Acompanhe Realtime Messages e Egress no painel Supabase durante o turno.
 5. Se o serviço retornar 402, a organização ainda está restrita: aguarde a
    liberação ou consulte o suporte/upgrade. O código não contorna a quota.
 
 ## Frequência atual
 
-O sincronizador do Terminal continua sendo chamado **uma vez por minuto**, agora
-pelo Supabase Cron. A troca de scheduler não aumenta a frequência de consultas ao
-Listo360. A etapa de 30 segundos continua separada e só deve ser feita depois de
-observar duração, erros e estabilidade em produção.
+O sincronizador do Terminal continua sendo chamado **uma vez por minuto** pelo
+Supabase Cron. Não altere essa cadência sem uma decisão operacional específica.
 
 O histórico do agendamento fica em `cron.job_run_details`. As respostas HTTP
 assíncronas do `pg_net` ficam temporariamente em `net._http_response`.
@@ -80,12 +77,11 @@ assíncronas do `pg_net` ficam temporariamente em `net._http_response`.
 - Datas de origem ausentes reutilizam o horário conhecido quando possível.
 - Respostas vazias ou com queda abrupta de volume são tratadas como suspeitas e
   não contam como ausência de leito.
-- Um registro precisa faltar em 3 sincronizações e por pelo menos 90 segundos
-  antes de ser removido como órfão.
+- Ausência na janela consultada não exclui nem conclui registros operacionais.
 - Paginação completa e erros de leitura/escrita falham sem continuar limpando
   registros de forma destrutiva.
-- A resposta do endpoint informa duração total, tempo gasto no Listo, páginas,
-  ausências em observação e se a limpeza de órfãos foi pulada.
+- A resposta do endpoint informa duração total, tempo gasto no Listo, páginas
+  e quantas ausências foram preservadas.
 - `sync_runtime_state` guarda último sucesso, duração, falhas consecutivas,
   backoff e métricas da origem. A tabela tem RLS e não é acessível a
   `anon`/`authenticated`.
@@ -93,3 +89,29 @@ assíncronas do `pg_net` ficam temporariamente em `net._http_response`.
 
 **Observação:** não há garantia de que Realtime ou transferência de dados caiam
 a zero. Mensagens referentes a mudanças reais continuam sendo necessárias.
+
+## Acesso de operador
+
+As funções de escrita do Controle exigem uma sessão Supabase Auth válida e
+`app_metadata.painel_role` igual a `operator` ou `admin`. Atribua esse campo
+somente pela administração do Supabase, nunca por `user_metadata` editável
+pelo próprio usuário. A tela `/control` oferece o login. TV e Diária continuam
+acessíveis sem login. Na TV, a resolução pública só passa `paused` ou
+`maintenance` para `completed_with_issues`; a edição pública de OS só alcança
+essas pendências abertas. O upload de previsões continua protegido pelo código
+de importação. A proteção CSRF cobre as server functions. Essas ações públicas
+não identificam o operador; acompanhe as alterações no banco.
+
+Em 01/11/2026, o Supabase de produção não possuía contas Auth. O Controle não
+está em uso e ficará sem acesso de escrita até o cadastro posterior de uma
+conta de operador, conforme decisão operacional. Ao retomá-lo, atribua o papel
+via administração e teste login, escrita autorizada e recusa de conta sem o
+papel.
+
+## Lock do sync
+
+A liberação e a finalização condicionam a atualização a `lock_until` adquirido
+pela execução. Uma execução atrasada não deve limpar o lock de outra. O lease
+é de 50 segundos; monitore `last_duration_ms` e erros de lock. Se a duração
+se aproximar desse limite, revise o lease e a renovação antes de elevar a
+carga de trabalho do sync.

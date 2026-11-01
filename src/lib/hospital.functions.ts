@@ -42,8 +42,10 @@ const updateDischargeSchema = z.object({
 });
 
 export const createDischarge = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => createDischargeSchema.parse(data))
+  .validator((data: unknown) => createDischargeSchema.parse(data))
   .handler(async ({ data }) => {
+    const { assertOperator } = await import("@/lib/operatorAuth.server");
+    await assertOperator();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("discharges").insert({
       ...data,
@@ -64,23 +66,48 @@ const updateDischargeServiceOrderSchema = z.object({
 });
 
 export const updateDischargeServiceOrder = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => updateDischargeServiceOrderSchema.parse(data))
+  .validator((data: unknown) => updateDischargeServiceOrderSchema.parse(data))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin
+    const { data: updated, error } = await supabaseAdmin
       .from("discharges")
       .update({ service_order: data.service_order })
-      .eq("id", data.id);
-    if (error) {
+      .eq("id", data.id)
+      .in("status", ["paused", "maintenance"])
+      .select("id")
+      .maybeSingle();
+    if (error || !updated) {
       console.error("[updateDischargeServiceOrder]", error);
       throw new Error("Não foi possível salvar a OS.");
     }
     return { ok: true as const };
   });
 
-export const updateDischarge = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => updateDischargeSchema.parse(data))
+/** Ação pública e limitada da TV: resolve apenas pendências ainda abertas. */
+export const resolvePausedDischarge = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ id: z.string().uuid() }).strict().parse(data))
   .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: updated, error } = await supabaseAdmin
+      .from("discharges")
+      .update({
+        status: "completed_with_issues",
+        pause_reason: null,
+        status_updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id)
+      .in("status", ["paused", "maintenance"])
+      .select("id")
+      .maybeSingle();
+    if (error || !updated) throw new Error("Pendência já resolvida ou indisponível.");
+    return { ok: true as const };
+  });
+
+export const updateDischarge = createServerFn({ method: "POST" })
+  .validator((data: unknown) => updateDischargeSchema.parse(data))
+  .handler(async ({ data }) => {
+    const { assertOperator } = await import("@/lib/operatorAuth.server");
+    await assertOperator();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("discharges")
@@ -94,10 +121,12 @@ export const updateDischarge = createServerFn({ method: "POST" })
   });
 
 export const createStaff = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z.object({ name: z.string().trim().min(1).max(120) }).parse(data),
   )
   .handler(async ({ data }) => {
+    const { assertOperator } = await import("@/lib/operatorAuth.server");
+    await assertOperator();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("staff").insert({ name: data.name });
     if (error) {
@@ -108,10 +137,12 @@ export const createStaff = createServerFn({ method: "POST" })
   });
 
 export const updateStaffStatus = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z.object({ id: z.string().uuid(), status: staffStatus }).parse(data),
   )
   .handler(async ({ data }) => {
+    const { assertOperator } = await import("@/lib/operatorAuth.server");
+    await assertOperator();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin
       .from("staff")
@@ -130,8 +161,10 @@ const clearCompletionsSchema = z.object({
 
 /** Limpa o histórico de conclusões (zera `completed_at`) do dia ou dos últimos 30 min. */
 export const clearCompletions = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => clearCompletionsSchema.parse(data))
+  .validator((data: unknown) => clearCompletionsSchema.parse(data))
   .handler(async ({ data }) => {
+    const { assertOperator } = await import("@/lib/operatorAuth.server");
+    await assertOperator();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let since: string;
     if (data.scope === "recent") {
