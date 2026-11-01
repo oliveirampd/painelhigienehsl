@@ -115,3 +115,8 @@ export function computeSyncBackoffMs(
   if (consecutiveFailures === 2) return 115_000;
   return 235_000;
 }
+/** A resolução manual só pode ser reaberta por um início explícito posterior. */
+export function hasProvenNewCycle(sourceStart: Date | null, resolvedAt: string): boolean {
+  const resolvedMs = Date.parse(resolvedAt);
+  return !!sourceStart && Number.isFinite(resolvedMs) && sourceStart.getTime() > resolvedMs;
+}

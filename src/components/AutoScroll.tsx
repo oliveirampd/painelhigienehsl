@@ -41,6 +41,8 @@ export function AutoScroll({ children }: { children: ReactNode }) {
     ref.addEventListener("touchstart", pauseForUser, { passive: true });
     ref.addEventListener("touchmove", pauseForUser, { passive: true });
     ref.addEventListener("pointerdown", pauseForUser, { passive: true });
+    ref.addEventListener("focusin", pauseForUser);
+    ref.addEventListener("keydown", pauseForUser);
 
     const ro = new ResizeObserver(recheck);
     ro.observe(ref);
@@ -82,6 +84,8 @@ export function AutoScroll({ children }: { children: ReactNode }) {
       ref.removeEventListener("touchstart", pauseForUser);
       ref.removeEventListener("touchmove", pauseForUser);
       ref.removeEventListener("pointerdown", pauseForUser);
+      ref.removeEventListener("focusin", pauseForUser);
+      ref.removeEventListener("keydown", pauseForUser);
     };
   }, [ref]);
 

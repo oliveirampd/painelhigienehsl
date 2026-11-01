@@ -21,6 +21,7 @@ export function useCarouselScroll<T extends HTMLElement>() {
     if (!el) return;
 
     const mql = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let raf = 0;
     let dir = 1;
     let edgePause = 0;
@@ -30,10 +31,12 @@ export function useCarouselScroll<T extends HTMLElement>() {
       pausedUntil = Date.now() + PAUSE_AFTER_WHEEL_MS;
     };
     el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onWheel, { passive: true });
+    el.addEventListener("focusin", onWheel);
 
     const step = () => {
       const needs = el.scrollHeight > el.clientHeight + 4;
-      if (mql.matches && needs && Date.now() >= pausedUntil) {
+      if (mql.matches && !reducedMotion.matches && needs && Date.now() >= pausedUntil) {
         if (edgePause > 0) {
           edgePause -= 1;
         } else {
@@ -59,6 +62,8 @@ export function useCarouselScroll<T extends HTMLElement>() {
     return () => {
       cancelAnimationFrame(raf);
       el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onWheel);
+      el.removeEventListener("focusin", onWheel);
     };
   }, []);
 

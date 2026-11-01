@@ -173,7 +173,7 @@ export function DischargePredictionsPanel({
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#ff687b]/45 bg-[#ef354f]/15 text-[#ff8e9d] hover:bg-[#ef354f]/25 text-[10px] lg:text-xs font-semibold transition-colors"
+            className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#ff687b]/45 bg-[#ef354f]/15 text-[#ff8e9d] hover:bg-[#ef354f]/25 text-xs lg:text-xs font-semibold transition-colors"
             title="Importar XLS do aplicativo de prioridades"
           >
             <FileUp className="w-3.5 h-3.5" />
@@ -225,16 +225,16 @@ export function DischargePredictionsPanel({
                       </span>
                     </div>
                     {predictionDay && predictionDay !== todayBrt && (
-                      <span className="text-[10px] font-semibold text-white/65">
+                      <span className="text-xs font-semibold text-white/65">
                         Previsão de {predictionDay}
                       </span>
                     )}
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="inline-flex rounded-md border border-[#ffaeae]/35 bg-[#71304d]/40 px-2 py-1 text-[10px] lg:text-[11px] font-semibold leading-tight text-[#ffd6df]">
+                      <span className="inline-flex rounded-md border border-[#ffaeae]/35 bg-[#71304d]/40 px-2 py-1 text-xs lg:text-xs font-semibold leading-tight text-[#ffd6df]">
                         {p.probability_text}
                       </span>
                       {overdue && (
-                        <span className="inline-flex rounded-md border border-amber-300/50 bg-amber-500/25 px-2 py-1 text-[10px] lg:text-[11px] font-extrabold text-amber-100">
+                        <span className="inline-flex rounded-md border border-amber-300/50 bg-amber-500/25 px-2 py-1 text-xs lg:text-xs font-extrabold text-amber-100">
                           Alta atrasada
                         </span>
                       )}
@@ -298,7 +298,7 @@ export function DischargePredictionsPanel({
             )}
             {!pending.eligible && (
               <p className="text-xs text-amber-200">
-                {pending.belaVista === 0
+                {pending.total === 0
                   ? "O XLS não contém registros."
                   : "Nenhum leito com horário válido passou pelas regras de exclusão e formato de leito."}
                 {" "}Nenhum dado anterior será alterado.

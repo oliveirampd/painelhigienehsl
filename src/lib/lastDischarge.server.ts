@@ -49,7 +49,7 @@ export async function loadLastCompletedDischarge(
   return {
     bedNumber: data.bed_number,
     unit: data.unit,
-    sourceAnswerId: data.last_answer_id,
+    sourceAnswerId: Number(data.last_answer_id),
     staffName,
     startedAt,
     completedAt: data.completed_at,

@@ -9,6 +9,7 @@ import {
 import {
   computeSyncBackoffMs,
   formatListoDateBRT,
+  hasProvenNewCycle,
   isSuspiciousPartialResponse,
   selectRelevantBaseline,
 } from "@/lib/listoSyncSafety";
@@ -287,10 +288,13 @@ async function forwardListo360Sync(request: Request): Promise<Response> {
 }
 
 export async function handleListo360Sync(request: Request) {
-  // Pode ser habilitado sem mudar a URL do cron. Configure a mesma chave no
-  // agendador e no Cloudflare (X-Cron-Secret). Sem a chave, mantém compatibilidade.
+  // A rota privilegiada só funciona com o segredo configurado dos dois lados.
   const cronSecret = process.env.SYNC_CRON_SECRET;
-  if (cronSecret) {
+  if (!cronSecret) {
+    console.error("[sync-listo360] SYNC_CRON_SECRET ausente");
+    return Response.json({ ok: false, error: "Sincronização não configurada" }, { status: 503 });
+  }
+  {
     const supplied = request.headers.get("x-cron-secret") ??
       request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
     if (supplied !== cronSecret) {
@@ -302,6 +306,24 @@ export async function handleListo360Sync(request: Request) {
   let supabase: Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"] | null = null;
   let runtimeState: SyncRuntimeState | null = null;
   let lockAcquired = false;
+  let ownedLockUntil: string | null = null;
+
+  async function ensureLockLease() {
+    if (!supabase || !ownedLockUntil) throw new Error("Lock do sync não adquirido");
+    const nowMs = Date.now();
+    if (Date.parse(ownedLockUntil) <= nowMs) throw new Error("Lock do sync expirado");
+    if (Date.parse(ownedLockUntil) - nowMs > 20_000) return;
+    const extendedUntil = new Date(nowMs + SYNC_LOCK_LEASE_MS).toISOString();
+    const { data, error } = await supabase.from("sync_runtime_state")
+      .update({ lock_until: extendedUntil })
+      .eq("key", "listo360")
+      .eq("lock_until", ownedLockUntil)
+      .gt("lock_until", new Date(nowMs).toISOString())
+      .select("lock_until")
+      .maybeSingle();
+    if (error || !data) throw new Error("Lock do sync perdido durante a renovação");
+    ownedLockUntil = data.lock_until;
+  }
 
   try {
     // O cliente admin central adapta os cabeçalhos tanto para a chave JWT
@@ -353,6 +375,7 @@ export async function handleListo360Sync(request: Request) {
 
     runtimeState = lockResult.data as SyncRuntimeState;
     lockAcquired = true;
+    ownedLockUntil = lockUntil;
 
     const deadlineMs = Date.now() + LISTO_REQUEST_BUDGET_MS;
     const source = await fetchAnswers(deadlineMs);
@@ -380,6 +403,7 @@ export async function handleListo360Sync(request: Request) {
     const nowBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
     if (nowBRT.getUTCHours() === 0 && nowBRT.getUTCMinutes() < 5 &&
         staffAll.some((s) => s.external_id?.startsWith("painel:staff:"))) {
+      await ensureLockLease();
       const reset = await supabase.from("staff")
         .delete().like("external_id", "painel:staff:%");
       if (reset.error) throw reset.error;
@@ -395,6 +419,7 @@ export async function handleListo360Sync(request: Request) {
       }))
       .filter((row) => !knownStaffIds.has(row.external_id));
     if (newStaffRows.length) {
+      await ensureLockLease();
       const inserted = await supabase.from("staff").upsert(newStaffRows, {
         onConflict: "external_id",
         ignoreDuplicates: true,
@@ -455,11 +480,11 @@ export async function handleListo360Sync(request: Request) {
         pause_reason: string | null;
         assigned_staff_id: string | null;
         status_updated_at: string;
-        last_answer_id: number | null;
+        last_answer_id: string | null;
         completed_at: string | null;
       }[] = [];
       while (true) {
-        const { data, error } = await supabase
+        const { data, error } = await supabase!
           .from("discharges")
           .select("external_id, bed_number, unit, status, priority, pause_reason, assigned_staff_id, status_updated_at, last_answer_id, completed_at")
           .like("external_id", "listo:%")
@@ -494,38 +519,27 @@ export async function handleListo360Sync(request: Request) {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Só pra "Leitos Pausados": se já foi resolvido (manual via botão "concluir"
-      // -> completed_with_issues, ou automático -> completed), só volta a
-      // aparecer se o Listo mostrar um horário realmente mais novo — sem isso, a
-      // mesma pendência antiga reaparecia toda hora mesmo já resolvida (o Listo
-      // continua mandando a mesma resposta "pausada" de antes, sem novidade real).
-      // As outras categorias (Em Limpeza, A Caminho, Altas Paradas) não têm essa
-      // trava — funcionam do jeito simples de sempre.
+      // Uma resolução manual só é reaberta por início explícito de novo ciclo.
+      // Uma data de edição, conclusão tardia ou answer id novo não prova isso.
       if (
-        rawStatus === "paused" &&
         prevRow &&
-        (prevRow.status === "completed" || prevRow.status === "completed_with_issues")
+        (prevRow.status === "completed_with_issues" ||
+          (prevRow.status === "completed" && rawStatus !== "completed")) &&
+        !hasProvenNewCycle(parseBRT(a.startTime), prevRow.status_updated_at)
       ) {
-        const ref = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date) ?? new Date();
-        const semNovidade = ref.getTime() <= new Date(prevRow.status_updated_at).getTime();
-        if (semNovidade) {
           return {
             external_id: externalId,
-            bed_number: bed,
-            unit,
-            // Preserva o status exato de antes — nunca "promove" um
-            // completed_with_issues (resolução manual) pra completed (alta
-            // real), senão volta a contar errado no contador de altas.
+            bed_number: prevRow.bed_number,
+            unit: prevRow.unit,
             status: prevRow.status as DischargeStatus,
-            priority: !!a.isPriority,
-            pause_reason: extractComment(a.answerComment),
-            assigned_staff_id: assigned,
+            priority: prevRow.priority,
+            pause_reason: prevRow.pause_reason,
+            assigned_staff_id: prevRow.assigned_staff_id,
             status_updated_at: prevRow.status_updated_at,
             completed_at: prevRow.completed_at,
-            last_answer_id: a.id,
-            _debug: "mantido resolvido (Leitos Pausados sem novidade real do Listo)",
+            last_answer_id: prevRow.last_answer_id,
+            _debug: "mantida resolução manual sem prova de novo ciclo",
           };
-        }
       }
 
       // Uma desmontagem antiga pode continuar aparecendo como "em andamento" no
@@ -562,7 +576,7 @@ export async function handleListo360Sync(request: Request) {
             assigned_staff_id: assigned ?? prevRow.assigned_staff_id,
             status_updated_at: prevRow.status_updated_at,
             completed_at: prevRow.completed_at,
-            last_answer_id: a.id,
+            last_answer_id: String(a.id),
             _debug: "mantida desmontagem concluída (fonte antiga sem novo ciclo)",
           };
         }
@@ -628,7 +642,7 @@ export async function handleListo360Sync(request: Request) {
         assigned_staff_id: assigned,
         status_updated_at: statusUpdatedAt,
         completed_at: completedAt,
-        last_answer_id: a.id,
+        last_answer_id: String(a.id),
         _debug: debugInfo,
       };
     };
@@ -712,6 +726,7 @@ export async function handleListo360Sync(request: Request) {
     });
 
     if (changedRows.length) {
+      await ensureLockLease();
       const { error } = await supabase
         .from("discharges")
         .upsert(changedRows, { onConflict: "external_id" });
@@ -730,7 +745,7 @@ export async function handleListo360Sync(request: Request) {
           external_id: string;
           unit: string;
           bed_number: string;
-          last_answer_id: number;
+          last_answer_id: string;
           assigned_staff_id: string | null;
           status: "completed";
           priority: false;
@@ -753,7 +768,7 @@ export async function handleListo360Sync(request: Request) {
           external_id: `snapshot:last-completed:${bedKey}`,
           unit,
           bed_number: bed,
-          last_answer_id: answer.id,
+          last_answer_id: String(answer.id),
           assigned_staff_id: answer.userName
             ? (staffByName.get(answer.userName.trim()) ?? null)
             : null,
@@ -785,6 +800,7 @@ export async function handleListo360Sync(request: Request) {
         });
 
         if (updates.length) {
+          await ensureLockLease();
           const { error: updateError } = await supabase
             .from("discharges")
             .upsert(updates, { onConflict: "external_id" });
@@ -837,12 +853,14 @@ export async function handleListo360Sync(request: Request) {
           s.external_id?.startsWith("listo:user:") && s.status === "assigned")
         .map((s) => s.id);
       if (toAssign.length) {
+        await ensureLockLease();
         const assigned = await supabase.from("staff")
           .update({ status: "assigned" }).in("id", toAssign)
           .neq("status", "assigned");
         if (assigned.error) throw assigned.error;
       }
       if (toFree.length) {
+        await ensureLockLease();
         const freed = await supabase.from("staff")
           .update({ status: "available" })
           .in("id", toFree).eq("status", "assigned");
@@ -874,6 +892,7 @@ export async function handleListo360Sync(request: Request) {
         status_updated_at: d.status_updated_at,
       }));
 
+    await ensureLockLease();
     const finishedAt = Date.now();
     const durationMs = finishedAt - syncStartedAt;
     const finishedIso = new Date(finishedAt).toISOString();
@@ -901,8 +920,12 @@ export async function handleListo360Sync(request: Request) {
         last_active_source: activeSourceSnapshot,
         updated_at: finishedIso,
       })
-      .eq("key", "listo360");
+      .eq("key", "listo360")
+      .eq("lock_until", ownedLockUntil)
+      .select("key")
+      .maybeSingle();
     if (stateUpdate.error) throw stateUpdate.error;
+    if (!stateUpdate.data) throw new Error("Lock do sync perdido antes da finalização");
     lockAcquired = false;
 
     console.info("[sync-listo360]", {
@@ -963,7 +986,8 @@ export async function handleListo360Sync(request: Request) {
           last_error: error.message.slice(0, 1000),
           updated_at: finishedIso,
         })
-        .eq("key", "listo360");
+        .eq("key", "listo360")
+        .eq("lock_until", ownedLockUntil!);
       if (release.error) {
         console.error("[sync-listo360:release-lock]", release.error);
       }

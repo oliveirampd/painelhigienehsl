@@ -80,12 +80,17 @@ assert.equal(api.computeSyncBackoffMs(1), 55_000);
 assert.equal(api.computeSyncBackoffMs(2), 115_000);
 assert.equal(api.computeSyncBackoffMs(3), 235_000);
 assert.equal(api.computeSyncBackoffMs(1, 429), 115_000);
+assert.equal(api.hasProvenNewCycle(new Date(t0 + 1), new Date(t0).toISOString()), true);
+assert.equal(api.hasProvenNewCycle(new Date(t0), new Date(t0).toISOString()), false);
+assert.equal(api.hasProvenNewCycle(null, new Date(t0).toISOString()), false);
 
 const syncSource = fs.readFileSync("src/routes/api/public/hooks/sync-listo360.ts", "utf8");
 assert.match(syncSource, /formatListoDateBRT/);
 assert.doesNotMatch(syncSource, /\.delete\(\)\.in\("external_id"/);
 assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
 assert.match(syncSource, /completed_with_issues/);
+assert.match(syncSource, /if \(!cronSecret\)/);
+assert.match(syncSource, /\.eq\("lock_until", ownedLockUntil/);
 assert.match(syncSource, /preservedAbsentCount/);
 
 console.log("listo sync safety tests passed");

@@ -5,7 +5,7 @@ import type { LastCompletedDischarge } from "@/lib/lastDischarge.server";
 export type { LastCompletedDischarge } from "@/lib/lastDischarge.server";
 
 export const getLastCompletedDischarge = createServerFn({ method: "GET" })
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         unit: z.string().trim().min(1).max(160),

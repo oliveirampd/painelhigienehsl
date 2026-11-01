@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
-import { updateDischarge, updateDischargeServiceOrder } from "@/lib/hospital.functions";
+import { resolvePausedDischarge, updateDischargeServiceOrder } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
 import { SyncCounter } from "@/components/SyncCounter";
 import { ThemePicker } from "@/components/ThemePicker";
@@ -52,7 +52,6 @@ export const Route = createFileRoute("/tv")({
 const isTerminalBox = (d: Discharge) => (d.external_id || "").startsWith("listo:box:");
 const isTerminal = (d: Discharge) =>
   (d.external_id || "").startsWith("listo:answer:") || isTerminalBox(d);
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const isDesmont = (d: Discharge) => (d.external_id || "").startsWith("listo:desmont:");
 const isLastCompletedSnapshot = (d: Discharge) =>
   (d.external_id || "").startsWith("snapshot:last-completed:");
@@ -185,7 +184,7 @@ function hygieneTargetMinutes(bedNumber: string, unit: string): number {
 }
 
 function TvPage() {
-  const { discharges, staff } = useHospitalData();
+  const { discharges, staff, loading, error } = useHospitalData();
   const now = useNow(15000);
   const clock = useClock();
   const { theme, setTheme, isDark, themeClass } = useTerminalTheme();
@@ -300,9 +299,8 @@ function TvPage() {
     [filtered],
   );
 
-  // Leitos Pausados: "Pendente" no Listo (motivo/comentário), só as de hoje
+  // Pendências permanecem até uma resolução explícita, mesmo após 24 horas.
   const completedIssues = useMemo(() => {
-    const cutoff = now - ONE_DAY_MS;
     return filtered
       .filter(
         // Só "paused" de verdade (ainda bloqueado). "completed_with_issues" é o
@@ -310,13 +308,12 @@ function TvPage() {
         // verdade (ver CompleteButton) — some da lista assim que resolvido.
         (d) =>
           isTerminal(d) &&
-          d.status === "paused" &&
-          new Date(d.status_updated_at).getTime() >= cutoff,
+          (d.status === "paused" || d.status === "maintenance"),
       )
       .sort(
         (a, b) => new Date(b.status_updated_at).getTime() - new Date(a.status_updated_at).getTime(),
       );
-  }, [filtered, now]);
+  }, [filtered]);
 
   // Desmontagens chegam pelo mesmo realtime. Se a limpeza terminal daquele ciclo
   // já começou ou terminou, a desmontagem não pode "ressuscitar" por um status
@@ -666,7 +663,7 @@ function TvPage() {
 
   // 5) Horário noturno (22h-6h, Brasília) — escurece um pouco a tela pra cansar
   // menos a vista/o painel de madrugada.
-  const horaBRT = new Date(Date.now() - 3 * 60 * 60 * 1000).getUTCHours();
+  const horaBRT = new Date(now - 3 * 60 * 60 * 1000).getUTCHours();
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
 
@@ -706,9 +703,12 @@ function TvPage() {
             Painel de Higienização Terminal
           </h1>
           <PanelNav />
+          <a href="/control" className="inline-flex min-h-9 items-center rounded-md border border-white/20 px-2 text-xs text-white/75">
+            Acesso do operador
+          </a>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3 lg:justify-end lg:gap-4">
-          <span className="flex items-center gap-1.5 text-[9px] lg:text-[10px] uppercase tracking-widest text-white/50">
+          <span className="flex items-center gap-1.5 text-xs lg:text-xs uppercase tracking-widest text-white/50">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
@@ -730,7 +730,7 @@ function TvPage() {
             aria-pressed={exceptionsOnly}
             onClick={() => setExceptionsOnly((v) => !v)}
             title="Mostrar somente exceções na grade principal"
-            className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] uppercase tracking-wide transition-colors active:scale-95 ${
+            className={`flex min-h-9 items-center gap-1 rounded-md border px-2 py-1 text-xs uppercase tracking-wide transition-colors active:scale-95 ${
               exceptionsOnly
                 ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
                 : "border-white/15 text-white/55 hover:bg-white/10"
@@ -743,6 +743,11 @@ function TvPage() {
           <span className="text-xl lg:text-3xl font-mono tabular-nums">{clock}</span>
         </div>
       </header>
+      {(error || loading) && (
+        <p role="status" className="px-4 py-2 text-sm text-amber-200 lg:px-6">
+          {error ?? "Carregando dados do painel…"}
+        </p>
+      )}
 
       <div className="min-w-0 max-w-full flex-none overflow-hidden px-4 pt-2.5 lg:px-6">
         <div className="grid min-w-0 max-w-full gap-2 lg:grid-cols-2">
@@ -766,7 +771,7 @@ function TvPage() {
                   />
                 )}
                 <div className="min-w-0">
-                  <div className="text-[9px] uppercase tracking-widest text-white/40">
+                  <div className="text-xs uppercase tracking-widest text-white/40">
                     Situação da operação
                   </div>
                   <div className="text-sm font-bold uppercase">
@@ -778,14 +783,14 @@ function TvPage() {
                   </div>
                 </div>
               </div>
-              <span className="shrink-0 text-[10px] text-white/45 lg:text-xs">
+              <span className="shrink-0 text-xs text-white/45 lg:text-xs">
                 Fila 15m:{" "}
                 <strong className={queueDelta15 > 0 ? "text-amber-200" : "text-white/75"}>
                   {queueDelta15 > 0 ? `+${queueDelta15}` : queueDelta15}
                 </strong>
               </span>
             </div>
-            <div className="mt-1.5 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[10px] text-white/60 lg:text-[11px]">
+            <div className="mt-1.5 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-white/60 lg:text-xs">
               {operationAttention.slice(0, 2).map((item) => (
                 <span key={item} className="truncate">
                   • {item}
@@ -797,7 +802,7 @@ function TvPage() {
           <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] px-3 py-2.5">
             <div className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 shrink-0 text-emerald-300" />
-              <div className="text-[9px] font-semibold uppercase tracking-widest text-white/45">
+              <div className="text-xs font-semibold uppercase tracking-widest text-white/45">
                 Finalizados recentes
               </div>
             </div>
@@ -814,10 +819,10 @@ function TvPage() {
                         recentVersion > 0 ? "tv-recent-completed-in" : ""
                       }`}
                     >
-                      <span className="truncate text-[10px] font-semibold text-white/75 lg:text-[11px]">
+                      <span className="truncate text-xs font-semibold text-white/75 lg:text-xs">
                         {d.bed_number}
                       </span>
-                      <span className="shrink-0 font-mono text-[10px] font-semibold tabular-nums text-emerald-200 lg:text-[11px]">
+                      <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-emerald-200 lg:text-xs">
                         {formatClockTime(d.completed_at!)}
                       </span>
                     </div>
@@ -826,7 +831,7 @@ function TvPage() {
                 </div>
               </HorizontalAutoScroll>
             ) : (
-              <div className="mt-2 text-[10px] text-white/35 lg:text-[11px]">
+              <div className="mt-2 text-xs text-white/35 lg:text-xs">
                 Nenhuma higiene finalizada neste turno.
               </div>
             )}
@@ -906,7 +911,7 @@ function TvPage() {
           showServiceOrder
           showComplete
           hideCount
-          empty="Nenhum leito pausado hoje."
+          empty="Nenhum leito com pendência aberta."
           flashVersions={flashVersions}
           worstId={worstCase?.id}
           className={
@@ -927,7 +932,7 @@ function TvPage() {
         />
       </div>
 
-      <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-[11px] text-white/40">
+      <div className="hidden lg:flex flex-none items-center justify-center gap-5 px-6 py-1.5 border-t border-white/10 text-xs text-white/40">
         <span className="inline-flex items-center gap-1.5">
           <BadgeCheck className="h-3.5 w-3.5 text-[oklch(0.72_0.16_150)]" />
           {TURNO_LABEL[turnoAtual.label]}:{" "}
@@ -999,6 +1004,8 @@ function HorizontalAutoScroll({
     ref.addEventListener("touchstart", pauseForUser, { passive: true });
     ref.addEventListener("touchmove", pauseForUser, { passive: true });
     ref.addEventListener("pointerdown", pauseForUser, { passive: true });
+    ref.addEventListener("focusin", pauseForUser);
+    ref.addEventListener("keydown", pauseForUser);
 
     const step = () => {
       const max = Math.max(0, ref.scrollWidth - ref.clientWidth);
@@ -1036,13 +1043,15 @@ function HorizontalAutoScroll({
       ref.removeEventListener("touchstart", pauseForUser);
       ref.removeEventListener("touchmove", pauseForUser);
       ref.removeEventListener("pointerdown", pauseForUser);
+      ref.removeEventListener("focusin", pauseForUser);
+      ref.removeEventListener("keydown", pauseForUser);
     };
   }, [ref, resetKey]);
 
   return (
     <div
       ref={setRef}
-      className="scrollbar-hidden w-full max-w-full overflow-x-hidden overscroll-contain touch-pan-y"
+      className="scrollbar-hidden w-full max-w-full overflow-x-auto overscroll-contain"
     >
       {children}
     </div>
@@ -1091,7 +1100,7 @@ function KpiCard({
         borderColor: accent.replace(")", " / 0.42)"),
       }}
     >
-      <div className="text-[9px] lg:text-[11px] uppercase tracking-widest text-white/70 font-medium leading-tight">
+      <div className="text-xs lg:text-xs uppercase tracking-widest text-white/70 font-medium leading-tight">
         {label}
       </div>
       <div className="flex items-baseline gap-1.5">
@@ -1272,7 +1281,7 @@ function TerminalBedsPanel({
           </h2>
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-1.5">
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] lg:text-xs font-medium text-white/55">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs lg:text-xs font-medium text-white/55">
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full" style={{ background: KIND_COLOR.execucao }} />
               Em execução
@@ -1296,7 +1305,7 @@ function TerminalBedsPanel({
           </div>
           {/* Altas paradas por bloco — sempre visível, mobile incluso. */}
           <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-[10px] lg:text-[11px] font-semibold uppercase tracking-wide text-white/40 whitespace-nowrap">
+            <span className="text-xs lg:text-xs font-semibold uppercase tracking-wide text-white/40 whitespace-nowrap">
               Altas paradas por bloco:
             </span>
             {(
@@ -1312,7 +1321,7 @@ function TerminalBedsPanel({
               <span
                 key={label}
                 title={`Altas paradas no Bloco ${label}`}
-                className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-[11px] leading-tight"
+                className="inline-flex items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs leading-tight"
                 style={{
                   borderColor: KIND_COLOR.parada.replace(")", " / 0.4)"),
                   background: KIND_COLOR.parada.replace(")", " / 0.12)"),
@@ -1384,7 +1393,7 @@ function TerminalBedsPanel({
                   >
                     {isWorst && (
                       <span
-                        className="panel-critical-badge absolute -top-1.5 -right-1.5 rounded-[3px] border px-1 py-px text-[8px] font-semibold uppercase tracking-wide"
+                        className="panel-critical-badge absolute -top-1.5 -right-1.5 rounded-[3px] border px-1 py-px text-xs font-semibold uppercase tracking-wide"
                         style={{
                           borderColor: "oklch(0.7 0.2 25 / 0.5)",
                           background: "oklch(0.98 0.01 250)",
@@ -1407,7 +1416,7 @@ function TerminalBedsPanel({
                     <div className="flex-1 flex flex-col items-center justify-center py-1 text-center min-h-[48px]">
                       {kind === "parada" && !isDismantling ? (
                         <>
-                          <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-widest text-white/55">
+                          <span className="text-xs lg:text-xs font-semibold uppercase tracking-widest text-white/55">
                             Aguardando há
                           </span>
                           <span
@@ -1416,7 +1425,7 @@ function TerminalBedsPanel({
                           >
                             {formatElapsed(d.status_updated_at, nowMs)}
                           </span>
-                          <span className="mt-1 text-[10px] lg:text-[11px] text-white/55 leading-tight line-clamp-1">
+                          <span className="mt-1 text-xs lg:text-xs text-white/55 leading-tight line-clamp-1">
                             {d.unit || "Unidade não informada"}
                           </span>
                         </>
@@ -1431,7 +1440,7 @@ function TerminalBedsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
-                        className={`rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide ${
+                        className={`rounded px-1 py-px text-xs font-semibold uppercase tracking-wide ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
@@ -1439,16 +1448,16 @@ function TerminalBedsPanel({
                         {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
                       {isDismantling ? (
-                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/65">
+                        <span className="shrink-0 font-mono tabular-nums text-xs lg:text-xs text-white/65">
                           Início {formatClockTime(dismantle.startedAt)}
                         </span>
                       ) : kind === "execucao" ? (
-                        <span className="shrink-0 font-mono tabular-nums text-[9px] lg:text-[10px] text-white/55">
+                        <span className="shrink-0 font-mono tabular-nums text-xs lg:text-xs text-white/55">
                           Início {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : dismantle ? (
                         <span
-                          className="font-mono tabular-nums text-[10px] shrink-0"
+                          className="font-mono tabular-nums text-xs shrink-0"
                           style={{
                             color: dismantle.active
                               ? KIND_COLOR.desmontagem
@@ -1459,7 +1468,7 @@ function TerminalBedsPanel({
                           {formatClockTime(dismantle.startedAt)}
                         </span>
                       ) : kind === "parada" ? (
-                        <span className="font-mono tabular-nums text-[10px] text-white/50 shrink-0">
+                        <span className="font-mono tabular-nums text-xs text-white/50 shrink-0">
                           Registro {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : null}
@@ -1525,7 +1534,7 @@ function BedsPanel({
       {isWorst && (
         <span
           title="Caso ativo há mais tempo no recorte operacional"
-          className="shrink-0 rounded-[3px] border px-1 py-px text-[8px] lg:text-[9px] font-semibold uppercase tracking-wide"
+          className="shrink-0 rounded-[3px] border px-1 py-px text-xs lg:text-xs font-semibold uppercase tracking-wide"
           style={{
             borderColor: "oklch(0.7 0.2 25 / 0.5)",
             color: "oklch(0.78 0.19 25)",
@@ -1547,10 +1556,10 @@ function BedsPanel({
             {icon}
             {title}
           </h2>
-          {!hideCount && <span className="text-[11px] text-white/50">{rows.length}</span>}
+          {!hideCount && <span className="text-xs text-white/50">{rows.length}</span>}
         </div>
         {caption && (
-          <div className="hidden lg:block text-[10px] text-white/30 mt-0.5">{caption}</div>
+          <div className="hidden lg:block text-xs text-white/30 mt-0.5">{caption}</div>
         )}
       </div>
       <div className="terminal-panel-content flex-1 min-h-0 min-w-0 overflow-hidden">
@@ -1580,7 +1589,7 @@ function BedsPanel({
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span
-                            className="font-mono text-[11px] font-semibold tabular-nums text-white/85"
+                            className="font-mono text-xs font-semibold tabular-nums text-white/85"
                             title="Horário do registro da pausa no painel"
                           >
                             {formatClockTime(d.status_updated_at)}
@@ -1591,10 +1600,10 @@ function BedsPanel({
 
                       {showReason && (
                         <div className="mt-1.5 min-w-0">
-                          <div className="text-[9px] font-semibold uppercase tracking-wider text-white/35">
+                          <div className="text-xs font-semibold uppercase tracking-wider text-white/35">
                             Motivo
                           </div>
-                          <div className="break-words text-[11px] leading-snug text-white/90">
+                          <div className="break-words text-xs leading-snug text-white/90">
                             {d.pause_reason || <span className="text-white/40">—</span>}
                           </div>
                         </div>
@@ -1608,14 +1617,14 @@ function BedsPanel({
                         }`}
                       >
                         <div className="min-w-0">
-                          <div className="text-[9px] font-semibold uppercase tracking-wider text-white/35">
+                          <div className="text-xs font-semibold uppercase tracking-wider text-white/35">
                             Colaborador
                           </div>
-                          <div className="truncate text-[11px] text-white/80">{name || "—"}</div>
+                          <div className="truncate text-xs text-white/80">{name || "—"}</div>
                         </div>
                         {showServiceOrder && (
                           <div className="min-w-0">
-                            <div className="text-[9px] font-semibold uppercase tracking-wider text-white/35">
+                            <div className="text-xs font-semibold uppercase tracking-wider text-white/35">
                               OS
                             </div>
                             <ServiceOrderEditor discharge={d} compact />
@@ -1628,7 +1637,7 @@ function BedsPanel({
               </div>
 
               <table className="hidden w-full table-fixed text-sm md:table">
-                <thead className="panel-paused-table-head sticky top-0 bg-card text-[10px] uppercase tracking-widest text-white/70">
+                <thead className="panel-paused-table-head sticky top-0 bg-card text-xs uppercase tracking-widest text-white/70">
                   <tr>
                     <th className="w-[18%] px-2 py-1.5 text-left lg:px-3">Leito / Box</th>
                     <th className="w-[15%] whitespace-nowrap px-2 py-1.5 text-left">
@@ -1665,13 +1674,13 @@ function BedsPanel({
                           {renderBedLabel(d, isWorst)}
                         </td>
                         <td
-                          className="whitespace-nowrap border-t border-white/5 px-2 py-1.5 font-mono text-[11px] font-semibold tabular-nums text-white/85 lg:text-xs"
+                          className="whitespace-nowrap border-t border-white/5 px-2 py-1.5 font-mono text-xs font-semibold tabular-nums text-white/85 lg:text-xs"
                           title="Horário do registro da pausa no painel"
                         >
                           {formatClockTime(d.status_updated_at)}
                         </td>
                         {showReason ? (
-                          <td className="border-t border-white/5 px-2.5 py-1.5 text-[11px] text-white/90 lg:px-3 lg:text-xs">
+                          <td className="border-t border-white/5 px-2.5 py-1.5 text-xs text-white/90 lg:px-3 lg:text-xs">
                             <div className="line-clamp-2 break-words">
                               {d.pause_reason || <span className="text-white/40">—</span>}
                             </div>
@@ -1686,7 +1695,7 @@ function BedsPanel({
                             <ServiceOrderEditor discharge={d} />
                           </td>
                         )}
-                        <td className="truncate border-t border-white/5 px-2.5 py-1.5 text-[11px] lg:px-4 lg:text-xs">
+                        <td className="truncate border-t border-white/5 px-2.5 py-1.5 text-xs lg:px-4 lg:text-xs">
                           {name || "—"}
                         </td>
                         {showComplete && (
@@ -1764,7 +1773,7 @@ function ServiceOrderEditor({
         }
       }}
       className={`w-full min-w-0 rounded-md border border-white/15 bg-black/15 px-2 font-mono tabular-nums text-white/90 outline-none transition-colors placeholder:text-white/30 focus:border-sky-300/60 focus:bg-sky-300/[0.06] disabled:opacity-50 ${
-        compact ? "h-8 text-[12px]" : "h-7 text-[11px] lg:text-xs"
+        compact ? "h-8 text-[12px]" : "h-7 text-xs lg:text-xs"
       }`}
     />
   );
@@ -1781,9 +1790,7 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
       // (clique do colaborador), não uma confirmação real da Listo de que a
       // higienização terminal aconteceu — então não pode contar como "alta
       // concluída" (ver concluidasHojePorBloco, que exige status === "completed").
-      await updateDischarge({
-        data: { id: dischargeId, patch: { status: "completed_with_issues", pause_reason: null } },
-      });
+      await resolvePausedDischarge({ data: { id: dischargeId } });
       toast.success("Leito marcado como concluído.");
     } catch (err) {
       console.error(err);
@@ -1799,7 +1806,8 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
       onClick={handleClick}
       disabled={saving}
       title="Marcar leito como concluído (pausa resolvida)"
-      className="inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors disabled:opacity-40"
+      aria-label="Marcar leito como concluído com pendências"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors disabled:opacity-40"
       style={{
         borderColor: "oklch(0.55 0.15 155 / 0.5)",
         color: "oklch(0.72 0.16 150)",
@@ -1838,9 +1846,9 @@ function StaffPanel({
             <UsersRound className="w-4 h-4 text-white/60" />
             Colaboradores
           </h2>
-          <span className="text-[11px] text-white/50">{rows.length}</span>
+          <span className="text-xs text-white/50">{rows.length}</span>
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px] lg:text-[10px]">
+        <div className="mt-1 flex flex-wrap items-center gap-1 text-xs lg:text-xs">
           <span className="mr-0.5 font-semibold uppercase tracking-wide text-white/35">
             Em execução:
           </span>
@@ -1909,7 +1917,7 @@ function StaffPanel({
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="font-semibold truncate text-sm">{staff.name}</div>
-                        <div className="text-[11px] text-white/60 truncate">
+                        <div className="text-xs text-white/60 truncate">
                           <StatusPill kind={kind} />
                           {bed ? <span className="ml-1">· {bed}</span> : null}
                         </div>
@@ -1924,7 +1932,7 @@ function StaffPanel({
                           >
                             {formatElapsed(start, nowMs)}
                           </span>
-                          <span className="font-mono tabular-nums text-[10px] text-white/40">
+                          <span className="font-mono tabular-nums text-xs text-white/40">
                             início {formatClockTime(start)}
                           </span>
                         </div>
@@ -1943,7 +1951,7 @@ function StaffPanel({
                             }}
                           />
                         </div>
-                        <div className="mt-0.5 text-right text-[9px] font-mono text-white/35">
+                        <div className="mt-0.5 text-right text-xs font-mono text-white/35">
                           meta {target}min{overTarget ? " · estourou" : ""}
                         </div>
                       </div>
@@ -1969,7 +1977,7 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
         ? "oklch(0.75 0.15 245)"
         : "oklch(0.7 0.02 265)";
   return (
-    <span className="uppercase tracking-widest text-[10px] font-semibold" style={{ color }}>
+    <span className="uppercase tracking-widest text-xs font-semibold" style={{ color }}>
       {label}
     </span>
   );

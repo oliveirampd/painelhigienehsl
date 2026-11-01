@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MapPin, UserRound, X } from "lucide-react";
+import { useModalFocus } from "@/hooks/useModalFocus";
 
 import {
   getLastCompletedDischarge,
@@ -31,6 +32,7 @@ export function DischargeTimelineModal({
   nowMs: number;
   onClose: () => void;
 }) {
+  const dialogRef = useModalFocus<HTMLDivElement>();
   const [lastCompleted, setLastCompleted] = useState<LastCompletedDischarge | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -84,6 +86,8 @@ export function DischargeTimelineModal({
     >
       <div
         role="dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         aria-modal="true"
         aria-label="Visão operacional do leito"
         className="scrollbar-hidden max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/15 bg-[oklch(0.18_0.025_265)] p-4 shadow-2xl sm:rounded-2xl"
@@ -91,7 +95,7 @@ export function DischargeTimelineModal({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+            <div className="text-xs font-semibold uppercase tracking-widest text-white/35">
               Visão operacional do leito
             </div>
             <h3 className="mt-1 text-2xl font-bold">{discharge.bed_number}</h3>
@@ -104,7 +108,7 @@ export function DischargeTimelineModal({
             type="button"
             onClick={onClose}
             aria-label="Fechar detalhes do leito"
-            className="rounded-full p-1.5 text-white/45 hover:bg-white/10 hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white/45 hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -120,7 +124,7 @@ export function DischargeTimelineModal({
           <div className="mt-3 flex items-start gap-2 text-sm">
             <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-white/30">
+              <div className="text-xs uppercase tracking-wide text-white/30">
                 Colaborador alocado
               </div>
               <div className={effectiveStaff ? "font-semibold text-white/85" : "text-white/45"}>
@@ -145,7 +149,7 @@ export function DischargeTimelineModal({
         </div>
 
         <section className="panel-surface mt-4 rounded-xl border p-3">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-white/35">
+          <div className="text-xs font-semibold uppercase tracking-widest text-white/35">
             Histórico do leito
           </div>
           <h4 className="mt-1 font-semibold">Última Alta concluída</h4>
@@ -188,7 +192,7 @@ export function DischargeTimelineModal({
         </section>
         {discharge.pause_reason && (
           <div className="mt-4 rounded-lg border border-amber-400/15 bg-amber-400/[0.05] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wide text-amber-100/45">Observação</div>
+            <div className="text-xs uppercase tracking-wide text-amber-100/45">Observação</div>
             <div className="mt-1 text-sm text-amber-50/80">{discharge.pause_reason}</div>
           </div>
         )}
@@ -201,7 +205,7 @@ export function DischargeTimelineModal({
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2">
-      <div className="text-[9px] uppercase tracking-wide text-white/30">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-white/30">{label}</div>
       <div className="mt-1 font-mono text-base font-semibold tabular-nums text-white/85">
         {value}
       </div>

@@ -1,4 +1,5 @@
 import { ACTIVE_DAILY_BEDS, isDailyConcurrentEligibleBed } from "@/lib/dailyScope";
+import { latestDailyEvent } from "@/lib/dailyAggregation";
 
 /**
  * Leitura ao vivo das rotinas de higiene diária (concorrente) e camareira no Listo360.
@@ -16,8 +17,8 @@ const LISTO_REQUEST_BUDGET_MS = 9 * 1000;
 const STALE_EDGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
-let dailyCache: { shiftStartMs: number; expiresAt: number; events: DailyBedEvent[] } | null = null;
-let dailyInFlight: { shiftStartMs: number; promise: Promise<DailyBedEvent[]> } | null = null;
+let dailyCache: { shiftStartMs: number; expiresAt: number; result: DailyResult } | null = null;
+let dailyInFlight: { shiftStartMs: number; promise: Promise<DailyResult> } | null = null;
 
 type ListoAnswer = {
   id: number;
@@ -50,6 +51,8 @@ export type DailyBedEvent = {
   count: number;
 };
 
+export type DailyResult = { events: DailyBedEvent[]; at: string | null; stale: boolean };
+
 type EdgeCache = {
   match(request: Request): Promise<Response | undefined>;
   put(request: Request, response: Response): Promise<void>;
@@ -69,31 +72,35 @@ function dailyStaleEdgeRequest(shiftStartMs: number): Request {
   return new Request(`https://painelhigiene.internal/cache/daily-stale/${shiftStartMs}`);
 }
 
-async function readEdgeEvents(request: Request): Promise<DailyBedEvent[] | null> {
+async function readEdgeEvents(request: Request): Promise<DailyResult | null> {
   const cache = getEdgeCache();
   if (!cache) return null;
   try {
     const response = await cache.match(request);
-    return response ? ((await response.json()) as DailyBedEvent[]) : null;
+    if (!response) return null;
+    const value = await response.json() as DailyResult | DailyBedEvent[];
+    // Cache anterior não tinha horário de origem: nunca apresentá-lo como fresco.
+    return Array.isArray(value) ? { events: value, at: null, stale: true } : value;
   } catch {
     return null;
   }
 }
 
-async function readDailyEdgeCache(shiftStartMs: number): Promise<DailyBedEvent[] | null> {
+async function readDailyEdgeCache(shiftStartMs: number): Promise<DailyResult | null> {
   return readEdgeEvents(dailyEdgeRequest(shiftStartMs));
 }
 
-async function readDailyStaleEdgeCache(shiftStartMs: number): Promise<DailyBedEvent[] | null> {
-  return readEdgeEvents(dailyStaleEdgeRequest(shiftStartMs));
+async function readDailyStaleEdgeCache(shiftStartMs: number): Promise<DailyResult | null> {
+  const result = await readEdgeEvents(dailyStaleEdgeRequest(shiftStartMs));
+  return result ? { ...result, stale: true } : null;
 }
 
-async function putEdgeEvents(request: Request, events: DailyBedEvent[], maxAgeMs: number): Promise<void> {
+async function putEdgeEvents(request: Request, result: DailyResult, maxAgeMs: number): Promise<void> {
   const cache = getEdgeCache();
   if (!cache) return;
   await cache.put(
     request,
-    new Response(JSON.stringify(events), {
+    new Response(JSON.stringify(result), {
       headers: {
         "content-type": "application/json",
         "cache-control": `public, max-age=${Math.ceil(maxAgeMs / 1000)}`,
@@ -102,11 +109,11 @@ async function putEdgeEvents(request: Request, events: DailyBedEvent[], maxAgeMs
   );
 }
 
-async function writeDailyEdgeCache(shiftStartMs: number, events: DailyBedEvent[]): Promise<void> {
+async function writeDailyEdgeCache(shiftStartMs: number, result: DailyResult): Promise<void> {
   try {
     await Promise.all([
-      putEdgeEvents(dailyEdgeRequest(shiftStartMs), events, RESULT_CACHE_TTL_MS),
-      putEdgeEvents(dailyStaleEdgeRequest(shiftStartMs), events, STALE_EDGE_CACHE_TTL_MS),
+      putEdgeEvents(dailyEdgeRequest(shiftStartMs), result, RESULT_CACHE_TTL_MS),
+      putEdgeEvents(dailyStaleEdgeRequest(shiftStartMs), result, STALE_EDGE_CACHE_TTL_MS),
     ]);
   } catch {
     // Cache de borda é otimização; nunca derruba a leitura ao vivo.
@@ -381,10 +388,7 @@ async function loadDailyBedEventsFresh(
       continue;
     }
     const completedCount = prev.completedCount + completedIncrement;
-    // Em execução sempre vence pra exibição; entre iguais, o mais recente vence.
-    const prevScore = prev.event.status === "in_progress" ? 1 : 0;
-    const score = status === "in_progress" ? 1 : 0;
-    const event = score > prevScore || (score === prevScore && at > prev.event.at) ? ev : prev.event;
+    const event = latestDailyEvent(prev.event, ev);
     byBed.set(key, { event, completedCount });
   }
 
@@ -394,27 +398,27 @@ async function loadDailyBedEventsFresh(
   }));
 }
 
-/** Eventos de higiene diária por leito, deduplicados (em execução tem prioridade). */
-export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
+/** Eventos de higiene diária por leito, deduplicados pelo horário do último evento. */
+export async function loadDailyBedEvents(): Promise<DailyResult> {
   const { start: shiftStart, end: shiftEnd } = currentShiftWindow();
   const shiftStartMs = shiftStart.getTime();
   const now = Date.now();
 
   if (dailyCache && dailyCache.shiftStartMs === shiftStartMs && dailyCache.expiresAt > now) {
-    return dailyCache.events;
+    return dailyCache.result;
   }
   if (dailyInFlight && dailyInFlight.shiftStartMs === shiftStartMs) {
     return dailyInFlight.promise;
   }
 
-  const edgeEvents = await readDailyEdgeCache(shiftStartMs);
-  if (edgeEvents) {
+  const edgeResult = await readDailyEdgeCache(shiftStartMs);
+  if (edgeResult) {
     dailyCache = {
       shiftStartMs,
       expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
-      events: edgeEvents,
+      result: edgeResult,
     };
-    return edgeEvents;
+    return edgeResult;
   }
 
   // Outra requisição pode ter começado enquanto consultávamos o cache de borda.
@@ -424,13 +428,14 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
 
   const promise = loadDailyBedEventsFresh(shiftStart, shiftEnd)
     .then(async (events) => {
+      const result: DailyResult = { events, at: new Date().toISOString(), stale: false };
       dailyCache = {
         shiftStartMs,
         expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
-        events,
+        result,
       };
-      await writeDailyEdgeCache(shiftStartMs, events);
-      return events;
+      await writeDailyEdgeCache(shiftStartMs, result);
+      return result;
     })
     .catch(async (error) => {
       console.warn("[diaria:listo]", {
@@ -440,20 +445,20 @@ export async function loadDailyBedEvents(): Promise<DailyBedEvent[]> {
 
       // Em oscilação ou lentidão do Listo, nunca segura a tela por quase 1 minuto:
       // prefere o último estado válido do mesmo turno, primeiro local e depois edge.
-      if (dailyCache?.shiftStartMs === shiftStartMs) return dailyCache.events;
+      if (dailyCache?.shiftStartMs === shiftStartMs) return { ...dailyCache.result, stale: true };
 
-      const staleEdgeEvents = await readDailyStaleEdgeCache(shiftStartMs);
-      if (staleEdgeEvents) {
+      const staleEdgeResult = await readDailyStaleEdgeCache(shiftStartMs);
+      if (staleEdgeResult) {
         dailyCache = {
           shiftStartMs,
           expiresAt: Date.now() + RESULT_CACHE_TTL_MS,
-          events: staleEdgeEvents,
+          result: staleEdgeResult,
         };
         console.warn("[diaria:listo]", {
           step: "stale-fallback",
-          rows: staleEdgeEvents.length,
+          rows: staleEdgeResult.events.length,
         });
-        return staleEdgeEvents;
+        return staleEdgeResult;
       }
 
       throw error;

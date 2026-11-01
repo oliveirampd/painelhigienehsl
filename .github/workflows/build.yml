@@ -28,6 +28,12 @@ jobs:
         run: node tests/predictions-xls.test.mjs
       - name: Test Listo sync safeguards
         run: node tests/listo-sync-safety.test.mjs
+      - name: Test daily aggregation
+        run: node tests/daily-aggregation.test.mjs
+      - name: Test paginated load
+        run: node tests/fetch-pages.test.mjs
+      - name: Typecheck
+        run: bunx tsc --noEmit
       - name: Build
         run: bun run build
       - name: Validate Terminal sync Durable Object bundle
