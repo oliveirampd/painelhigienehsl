@@ -258,13 +258,13 @@ async function fetchAnswers(deadlineMs: number): Promise<{
 export const Route = createFileRoute("/api/public/hooks/sync-listo360")({
   server: {
     handlers: {
-      GET: ({ request }) => handle(request),
-      POST: ({ request }) => handle(request),
+      GET: ({ request }) => handleListo360Sync(request),
+      POST: ({ request }) => handleListo360Sync(request),
     },
   },
 });
 
-async function handle(request: Request) {
+export async function handleListo360Sync(request: Request) {
   // Pode ser habilitado sem mudar a URL do cron. Configure a mesma chave no
   // agendador e no Cloudflare (X-Cron-Secret). Sem a chave, mantém compatibilidade.
   const cronSecret = process.env.SYNC_CRON_SECRET;
