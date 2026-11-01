@@ -8,6 +8,15 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const api = await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
 
+assert.equal(
+  api.formatListoDateBRT(new Date("2026-11-01T02:00:00.000Z")),
+  "2026-10-31T23:00:00",
+);
+assert.equal(
+  api.formatListoDateBRT(new Date("2026-10-31T02:00:00.000Z")),
+  "2026-10-30T23:00:00",
+);
+
 assert.equal(api.isSuspiciousPartialResponse(0, 100), true);
 assert.equal(api.isSuspiciousPartialResponse(64, 100), true);
 assert.equal(api.isSuspiciousPartialResponse(65, 100), false);
@@ -71,5 +80,12 @@ assert.equal(api.computeSyncBackoffMs(1), 55_000);
 assert.equal(api.computeSyncBackoffMs(2), 115_000);
 assert.equal(api.computeSyncBackoffMs(3), 235_000);
 assert.equal(api.computeSyncBackoffMs(1, 429), 115_000);
+
+const syncSource = fs.readFileSync("src/routes/api/public/hooks/sync-listo360.ts", "utf8");
+assert.match(syncSource, /formatListoDateBRT/);
+assert.doesNotMatch(syncSource, /\.delete\(\)\.in\("external_id"/);
+assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
+assert.match(syncSource, /completed_with_issues/);
+assert.match(syncSource, /preservedAbsentCount/);
 
 console.log("listo sync safety tests passed");
