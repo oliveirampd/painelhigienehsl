@@ -18,7 +18,7 @@ export function PanelNav({ compact = false }: { compact?: boolean }) {
           to={to}
           activeProps={{ className: "panel-nav-item-active" }}
           inactiveProps={{ className: "panel-nav-item-inactive" }}
-          className="panel-nav-item inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold uppercase tracking-wide transition-colors"
+          className="panel-nav-item inline-flex min-h-9 shrink-0 items-center gap-1 rounded-md border px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors sm:min-h-10 sm:gap-1.5 sm:px-2.5 sm:text-xs"
         >
           <Icon className="h-3.5 w-3.5" />
           {!compact && <span>{label}</span>}

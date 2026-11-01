@@ -521,14 +521,14 @@ function DiariaPage() {
       className={`${themeClass} daily-panel-page scrollbar-hidden min-h-screen w-full max-w-full flex flex-col overflow-x-hidden overflow-y-auto font-sans ${isDark ? "bg-[#050505]" : "bg-background"} text-foreground lg:h-screen lg:overflow-y-auto`}
     >
 
-      <header className="panel-shell-header flex-none border-b border-white/10 px-4 py-3 lg:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <h1 className="text-base font-bold tracking-tight lg:text-2xl">Higiene Diária · Leitos</h1>
+      <header className="panel-shell-header flex-none border-b border-white/10 px-3 py-2.5 sm:px-4 sm:py-3 lg:px-6">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:gap-x-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-[15px] font-bold tracking-tight sm:text-base lg:text-2xl">Higiene Diária · Leitos</h1>
             <PanelNav />
           </div>
-          <div className="flex items-center gap-3 text-xs sm:gap-4">
-            <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wide text-white/50">
+          <div className="flex min-w-0 items-center gap-1.5 text-[10px] sm:gap-4 sm:text-xs">
+            <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-white/50 sm:gap-1.5">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
@@ -536,10 +536,10 @@ function DiariaPage() {
               Ao vivo
             </span>
             <ThemeToggle isDark={isDark} onToggle={toggleTheme} compact />
-            <span className="font-mono text-lg font-semibold tabular-nums lg:text-xl">{clock}</span>
+            <span className="font-mono text-base font-semibold tabular-nums sm:text-lg lg:text-xl">{clock}</span>
           </div>
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-white/45">
+        <div className="mt-1.5 flex min-w-0 flex-wrap items-center justify-between gap-1.5 text-[11px] text-white/45 sm:gap-2 sm:text-xs">
           <span>{ACTIVE_BEDS.length} leitos cadastrados · rotinas do turno atual</span>
           {stale || lastAt === null ? (
             <span role="status" className="text-amber-200">
@@ -552,14 +552,14 @@ function DiariaPage() {
         </div>
       </header>
 
-      <section aria-label="Indicadores do turno" className="flex-none px-4 pb-3 pt-3 lg:px-6">
+      <section aria-label="Indicadores do turno" className="flex-none px-3 pb-2.5 pt-2.5 sm:px-4 sm:pb-3 sm:pt-3 lg:px-6">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/50 sm:text-xs sm:tracking-[0.14em]">
             Ritmo das rotinas
           </h2>
-          <span className="text-xs text-white/40">Turno atual</span>
+          <span className="text-[10px] text-white/40 sm:text-xs">Turno atual</span>
         </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-1.5 sm:gap-2 md:grid-cols-4">
           <Kpi
             icon={<BrushCleaning className="h-4 w-4 animate-sweep" />}
             label="Em higiene agora"
@@ -587,10 +587,10 @@ function DiariaPage() {
         </div>
       </section>
 
-      <section aria-label="Cobertura e panorama dos andares" className="flex-none px-4 pb-3 lg:px-6">
+      <section aria-label="Cobertura e panorama dos andares" className="flex-none px-3 pb-2.5 sm:px-4 sm:pb-3 lg:px-6">
         <div
           className={
-            "daily-overview-surface rounded-xl border p-3 sm:p-4 " +
+            "daily-overview-surface rounded-xl border p-2.5 sm:p-4 " +
             (ritmoStatus === "attention"
               ? "border-amber-400/25 bg-amber-400/[0.035]"
               : ritmoStatus === "ahead"
@@ -604,10 +604,10 @@ function DiariaPage() {
                 Cobertura do turno
               </div>
               <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <span className="text-4xl font-bold leading-none tabular-nums">{coberturaHigiene}%</span>
-                <span className="text-xs text-white/50">concorrente</span>
+                <span className="text-3xl font-bold leading-none tabular-nums sm:text-4xl">{coberturaHigiene}%</span>
+                <span className="text-[11px] text-white/50 sm:text-xs">concorrente</span>
                 {periodo === "tarde" && (
-                  <span className="rounded-md bg-white/[0.055] px-2 py-1 text-xs text-white/70">
+                  <span className="rounded-md bg-white/[0.055] px-1.5 py-1 text-[11px] text-white/70 sm:px-2 sm:text-xs">
                     Camareira <strong className="tabular-nums">{coberturaCamareira}%</strong>
                   </span>
                 )}
@@ -621,7 +621,7 @@ function DiariaPage() {
                   }}
                 />
               </div>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-white/50">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-white/50 sm:gap-2 sm:text-xs">
                 <span>Turno percorrido: <strong className="text-white/75">{ritmoEsperado}%</strong></span>
                 <span>
                   {ritmoStatus === "attention"
@@ -643,7 +643,7 @@ function DiariaPage() {
                     type="button"
                     key={x.block + "-" + x.floor}
                     onClick={() => setSelectedFloor({ block: x.block, floor: x.floor })}
-                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-black/10 px-2 py-1.5 text-xs transition-colors hover:bg-white/10"
+                    className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-white/10 bg-black/10 px-1.5 py-1.5 text-[11px] transition-colors hover:bg-white/10 sm:gap-1.5 sm:px-2 sm:text-xs"
                   >
                     <strong>{x.floor}{x.block}</strong>
                     <span className={x.pct < ritmoEsperado - 20 ? "font-semibold text-amber-200" : "text-white/60"}>
@@ -653,16 +653,16 @@ function DiariaPage() {
                   </button>
                 ))}
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-white/50">{concentrationText}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-white/50 sm:text-xs">{concentrationText}</p>
             </div>
           </div>
 
           <div className="mt-3 border-t border-white/10 pt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/50 sm:text-xs sm:tracking-[0.12em]">
                 Visão rápida dos andares
               </span>
-              <span className="text-xs text-white/35">deslize para ver todos</span>
+              <span className="text-[10px] text-white/35 sm:text-xs">deslize para ver todos</span>
             </div>
             <div className="scrollbar-hidden flex gap-2 overflow-x-auto pb-1">
               {floorCoverage.map((x) => {
@@ -676,17 +676,17 @@ function DiariaPage() {
                 return (
                   <div
                     key={"heat-" + x.block + "-" + x.floor}
-                    className="min-w-[86px] shrink-0 rounded-lg border px-2.5 py-2"
+                    className="min-w-[76px] shrink-0 rounded-lg border px-2 py-1.5 sm:min-w-[86px] sm:px-2.5 sm:py-2"
                     style={{
                       borderColor: colorWash(blockTone, 0.5),
                       background: colorWash(blockTone, 0.13),
                     }}
                     title={"Bloco " + x.block + " · " + x.floor + "º andar · " + x.pct + "% de cobertura"}
                   >
-                    <div className="text-xs font-semibold tracking-wide" style={{ color: blockTone }}>
+                    <div className="text-[11px] font-semibold tracking-wide sm:text-xs" style={{ color: blockTone }}>
                       {x.floor}{x.block}
                     </div>
-                    <strong className="mt-1 block text-lg font-bold tabular-nums" style={{ color: tone }}>
+                    <strong className="mt-1 block text-base font-bold tabular-nums sm:text-lg" style={{ color: tone }}>
                       {x.pct}%
                     </strong>
                   </div>
@@ -697,7 +697,7 @@ function DiariaPage() {
         </div>
       </section>
 
-      <div className="flex-none px-4 pb-2 lg:px-6">
+      <div className="flex-none px-3 pb-2 sm:px-4 lg:px-6">
         <div className="panel-surface rounded-xl border p-2.5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="scrollbar-hidden flex min-w-0 items-center gap-1.5 overflow-x-auto">
@@ -867,7 +867,7 @@ function DiariaPage() {
             }}
           >
             <h2
-              className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-l-[6px] px-3 py-3 text-xl font-black uppercase tracking-wide text-white shadow-sm lg:text-3xl"
+              className="mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border-l-[5px] px-2.5 py-2.5 text-lg font-black uppercase tracking-wide text-white shadow-sm sm:gap-x-3 sm:gap-y-2 sm:border-l-[6px] sm:px-3 sm:py-3 sm:text-xl lg:text-3xl"
               style={{
                 borderLeftColor: BLOCK_COLOR[g.block],
                 background: `linear-gradient(100deg, color-mix(in srgb, ${BLOCK_COLOR[g.block]} 48%, #091522), color-mix(in srgb, ${BLOCK_COLOR[g.block]} 19%, #091522))`,
@@ -889,7 +889,7 @@ function DiariaPage() {
               >
                 {g.camareiraRealizadas} camareiras
               </span>
-              <span className="ml-auto flex min-w-[140px] flex-1 basis-40 flex-col gap-1 normal-case tracking-normal lg:max-w-xs">
+              <span className="ml-auto flex min-w-[112px] flex-1 basis-32 flex-col gap-1 normal-case tracking-normal sm:min-w-[140px] sm:basis-40 lg:max-w-xs">
                 <ProgressBar
                   value={g.concorrenteRealizadas}
                   total={g.concorrenteTotal}
@@ -1435,20 +1435,20 @@ function Kpi({
 }) {
   return (
     <div
-      className="min-w-0 rounded-xl border px-3 py-3 shadow-sm"
+      className="min-w-0 rounded-xl border px-2.5 py-2.5 shadow-sm sm:px-3 sm:py-3"
       style={{
         borderColor: colorWash(color, 0.34),
         background: colorWash(color, 0.075),
       }}
     >
       <div
-        className="flex min-h-8 items-center gap-2 text-xs font-semibold uppercase leading-tight tracking-wide sm:text-xs"
+        className="flex min-h-7 items-center gap-1.5 text-[10px] font-semibold uppercase leading-tight tracking-wide sm:min-h-8 sm:gap-2 sm:text-xs"
         style={{ color }}
       >
         <span className="shrink-0">{icon}</span>
         <span>{label}</span>
       </div>
-      <div className="mt-1 text-2xl font-bold tabular-nums lg:text-3xl">{value}</div>
+      <div className="mt-1 text-xl font-bold tabular-nums sm:text-2xl lg:text-3xl">{value}</div>
     </div>
   );
 }
