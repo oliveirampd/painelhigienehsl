@@ -11,6 +11,7 @@ import {
   isSuspiciousPartialResponse,
   parseMissingSyncState,
   removeMissingSyncIds,
+  selectRelevantBaseline,
   updateMissingSyncState,
 } from "@/lib/listoSyncSafety";
 
@@ -896,7 +897,14 @@ export async function handleListo360Sync(request: Request) {
         last_success_at: finishedIso,
         last_duration_ms: durationMs,
         last_answers_count: answers.length,
-        last_relevant_count: relevant.length,
+        // Uma resposta parcial não vira o novo baseline de normalidade. Sem isso,
+        // o primeiro ciclo protege contra remoção, mas o segundo poderia aceitar
+        // a mesma queda como "normal" e começar a quarentena de centenas de leitos.
+        last_relevant_count: selectRelevantBaseline(
+          relevant.length,
+          runtimeState.last_relevant_count,
+          suspiciousPartial,
+        ),
         last_pages: source.pages,
         consecutive_failures: 0,
         last_error: null,

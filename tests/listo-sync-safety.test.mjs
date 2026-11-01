@@ -13,6 +13,10 @@ assert.equal(api.isSuspiciousPartialResponse(64, 100), true);
 assert.equal(api.isSuspiciousPartialResponse(65, 100), false);
 assert.equal(api.isSuspiciousPartialResponse(5, null), false);
 
+assert.equal(api.selectRelevantBaseline(284, 449, true), 449);
+assert.equal(api.selectRelevantBaseline(284, 449, false), 284);
+assert.equal(api.selectRelevantBaseline(12, null, true), 12);
+
 const t0 = Date.parse("2026-10-31T12:00:00.000Z");
 let state = {};
 let result = api.updateMissingSyncState({
