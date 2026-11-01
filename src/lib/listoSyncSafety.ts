@@ -39,6 +39,17 @@ export function isSuspiciousPartialResponse(
   return currentRelevant < Math.floor(previousRelevant * 0.65);
 }
 
+export function selectRelevantBaseline(
+  currentRelevant: number,
+  previousRelevant: number | null | undefined,
+  suspiciousPartial: boolean,
+): number {
+  if (suspiciousPartial && previousRelevant && previousRelevant > 0) {
+    return previousRelevant;
+  }
+  return currentRelevant;
+}
+
 export function updateMissingSyncState({
   previous,
   freshIds,
