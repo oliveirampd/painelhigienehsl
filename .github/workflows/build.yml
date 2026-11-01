@@ -30,3 +30,8 @@ jobs:
         run: node tests/listo-sync-safety.test.mjs
       - name: Build
         run: bun run build
+      - name: Validate Terminal sync Durable Object bundle
+        run: |
+          grep -q "TerminalSyncDurableObject" .output/server/index.mjs
+          grep -q "TERMINAL_SYNC_DO" .output/server/wrangler.json
+          grep -q "TerminalSyncDurableObject" .output/server/wrangler.json
