@@ -32,6 +32,5 @@ jobs:
         run: bun run build
       - name: Validate Terminal sync Durable Object bundle
         run: |
-          grep -q "TerminalSyncDurableObject" .output/server/index.mjs
-          grep -q "TERMINAL_SYNC_DO" .output/server/wrangler.json
-          grep -q "TerminalSyncDurableObject" .output/server/wrangler.json
+          grep -q "TerminalSyncDurableObject" .output/server/index.mjs || { echo "DO class missing from server bundle"; exit 1; }
+          node -e 'const fs=require("fs"); const c=JSON.parse(fs.readFileSync(".output/server/wrangler.json","utf8")); console.log(JSON.stringify({durable_objects:c.durable_objects,exports:c.exports,migrations:c.migrations})); if(!c.durable_objects?.bindings?.some(b=>b.name==="TERMINAL_SYNC_DO"&&b.class_name==="TerminalSyncDurableObject")) throw new Error("DO binding missing from generated Wrangler config"); if(!c.exports?.TerminalSyncDurableObject) throw new Error("DO export missing from generated Wrangler config");'
