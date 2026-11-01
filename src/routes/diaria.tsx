@@ -81,16 +81,17 @@ type Periodo = "manha" | "tarde" | "noite";
 type BlockFilter = "all" | (typeof BLOCK_ORDER)[number];
 type RoutineFilter = "all" | "concorrente" | "camareira";
 type ViewMode = "all" | "pending" | "running";
-function periodoAtualBRT(): Periodo {
-  const wall = new Date(Date.now() - 3 * 60 * 60 * 1000);
+function periodoAtualBRT(nowMs: number): Periodo {
+  const wall = new Date(nowMs - 3 * 60 * 60 * 1000);
   const minutos = wall.getUTCHours() * 60 + wall.getUTCMinutes();
   if (minutos >= 6 * 60 + 20 && minutos < 13 * 60 + 40) return "manha";
   if (minutos >= 13 * 60 + 40 && minutos < 22 * 60) return "tarde";
   return "noite";
 }
 
-function progressoTurnoBRT(): number {
-  const wall = new Date(Date.now() - 3 * 60 * 60 * 1000);
+function progressoTurnoBRT(nowMs: number): number {
+  if (!nowMs) return 0;
+  const wall = new Date(nowMs - 3 * 60 * 60 * 1000);
   const nowMin = wall.getUTCHours() * 60 + wall.getUTCMinutes();
   const start =
     nowMin >= 6 * 60 + 20 && nowMin < 13 * 60 + 40
@@ -131,8 +132,14 @@ function DiariaPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [lastAt, setLastAt] = useState<number | null>(null);
   const [stale, setStale] = useState(false);
-  const [clock, setClock] = useState("");
-  const [periodo, setPeriodo] = useState<Periodo>(() => periodoAtualBRT());
+  // O primeiro render precisa ser idêntico no Worker e no navegador.
+  const [nowMs, setNowMs] = useState(0);
+  const clock = nowMs ? new Date(nowMs).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }) : "";
+  const periodo: Periodo = nowMs ? periodoAtualBRT(nowMs) : "noite";
   const [selectedBed, setSelectedBed] = useState<{
     bed: string;
     events?: { concorrente?: DailyBedEvent; camareira?: DailyBedEvent };
@@ -150,16 +157,7 @@ function DiariaPage() {
   const completionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const tick = () => {
-      setClock(
-        new Date().toLocaleTimeString("pt-BR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "America/Sao_Paulo",
-        }),
-      );
-      setPeriodo(periodoAtualBRT());
-    };
+    const tick = () => setNowMs(Date.now());
     tick();
     const id = setInterval(tick, 20000);
     return () => clearInterval(id);
@@ -291,7 +289,7 @@ function DiariaPage() {
             100,
         )
       : 0;
-  const progressoTurno = progressoTurnoBRT();
+  const progressoTurno = progressoTurnoBRT(nowMs);
   const ritmoEsperado = Math.round(progressoTurno * 100);
   const desvioRitmo = coberturaHigiene - ritmoEsperado;
   const ritmoStatus = desvioRitmo < -15 ? "attention" : desvioRitmo > 10 ? "ahead" : "ok";
@@ -418,8 +416,8 @@ function DiariaPage() {
   const completedLast15Min = eventsFiltered.filter(
     (event) =>
       event.status === "completed" &&
-      Date.now() - new Date(event.at).getTime() >= 0 &&
-      Date.now() - new Date(event.at).getTime() <= 15 * 60 * 1000,
+      nowMs - new Date(event.at).getTime() >= 0 &&
+      nowMs - new Date(event.at).getTime() <= 15 * 60 * 1000,
   ).length;
   const activeNow = eventsFiltered.filter((event) => event.status === "in_progress").length;
 
