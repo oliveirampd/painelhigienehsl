@@ -1451,7 +1451,7 @@ function TerminalBedsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
-                        className={`inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[9px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] ${
+                        className={`inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
