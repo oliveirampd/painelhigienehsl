@@ -32,6 +32,8 @@ jobs:
         run: node tests/daily-aggregation.test.mjs
       - name: Test paginated load
         run: node tests/fetch-pages.test.mjs
+      - name: Test Terminal motion safeguards
+        run: node tests/terminal-motion.test.mjs
       - name: Typecheck
         run: bunx tsc --noEmit
       - name: Build
