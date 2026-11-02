@@ -13,7 +13,6 @@ import {
   BadgeCheck,
    AlertTriangle,
   Activity,
-  Eye,
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -187,7 +186,6 @@ function TvPage() {
   const clock = useClock();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
   const [selectedCardRect, setSelectedCardRect] = useState<DOMRect | null>(null);
-  const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [syncPulseVersion, setSyncPulseVersion] = useState(0);
   const didSyncOnceRef = useRef(false);
   const [completionFx, setCompletionFx] = useState<{ bed: string; key: number } | null>(null);
@@ -723,20 +721,6 @@ function TvPage() {
               alignToClock
             />
           </span>
-          <button
-            type="button"
-            aria-pressed={exceptionsOnly}
-            onClick={() => setExceptionsOnly((v) => !v)}
-            title="Mostrar somente exceções na grade principal"
-            className={`flex min-h-9 items-center gap-1 rounded-md border px-2 py-1 text-[10px] uppercase tracking-wide transition-colors active:scale-95 sm:text-xs ${
-              exceptionsOnly
-                ? "border-amber-400/40 bg-amber-400/10 text-amber-200"
-                : "border-white/15 text-white/55 hover:bg-white/10"
-            }`}
-          >
-            <Eye className="h-3 w-3" /> Só exceções
-          </button>
-
           <span className="font-mono text-lg tabular-nums sm:text-xl lg:text-3xl">{clock}</span>
         </div>
       </header>
@@ -881,8 +865,8 @@ function TvPage() {
 
       <div className="flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-[minmax(0,2fr)_minmax(0,1fr)] gap-3 px-4 lg:px-6 pb-4">
         <TerminalBedsPanel
-          inFlight={exceptionsOnly ? [] : inFlight}
-          enRoute={exceptionsOnly ? [] : enRoute}
+          inFlight={inFlight}
+          enRoute={enRoute}
           paused={paused}
           dismantles={dismantlesForDisplay}
           nowMs={now}
