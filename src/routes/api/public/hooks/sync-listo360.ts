@@ -11,7 +11,10 @@ import {
   formatListoDateBRT,
   hasProvenNewCycle,
   isSuspiciousPartialResponse,
+  parseMissingSyncState,
+  removeMissingSyncIds,
   selectRelevantBaseline,
+  updateMissingSyncState,
 } from "@/lib/listoSyncSafety";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
@@ -815,25 +818,58 @@ export async function handleListo360Sync(request: Request) {
       console.error("[sync-listo360:last-completed]", historyError);
     }
 
-    // Ausência numa janela histórica NÃO é confirmação de resolução.
-    // Mantemos registros que não vieram nesta rodada, inclusive tombstones
-    // completed/completed_with_issues, porque eles guardam decisões reais do
-    // Listo ou do operador. O external_id é estável por leito/tipo, então isso
-    // não cria crescimento histórico ilimitado.
+    // O Listo é a fonte de verdade para estados ATIVOS. Não manter indefinidamente
+    // uma alta parada / em execução / pausada se ela deixar de vir da origem.
+    // Tombstones concluídos (incluindo resolução manual) permanecem para não
+    // inventar nova alta nem apagar histórico. Uma resposta parcial também não
+    // pode provocar exclusões em massa.
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
     const absentRows = existingDischarges.filter((d) => !freshIds.has(d.external_id));
     const suspiciousPartial = isSuspiciousPartialResponse(
       relevant.length,
       runtimeState.last_relevant_count,
     );
-    const preservedAbsentCount = absentRows.length;
-    const removedCount = 0;
-    const cleanupSkipped = true;
-    const missingState = {};
+    const ACTIVE_STATUSES: DischargeStatus[] = [
+      "waiting_cleaning", "en_route", "in_progress", "paused", "maintenance",
+    ];
+    const staleActiveIds = absentRows
+      .filter((d) => ACTIVE_STATUSES.includes(d.status))
+      .map((d) => d.external_id);
+    // Duas consultas saudáveis distintas: evita limpar leitos durante falhas
+    // momentâneas sem deixá-los presos indefinidamente no painel.
+    const missingResult = updateMissingSyncState({
+      previous: parseMissingSyncState(runtimeState.missing_external_ids),
+      freshIds,
+      staleIds: staleActiveIds,
+      nowMs: Date.now(),
+      allowMissIncrement: !suspiciousPartial,
+      minMisses: 2,
+      minAgeMs: 60_000,
+    });
+    const deleteIds = suspiciousPartial ? [] : missingResult.deleteIds;
+    let removedCount = 0;
+    if (deleteIds.length) {
+      for (let i = 0; i < deleteIds.length; i += 100) {
+        await ensureLockLease();
+        const { data, error } = await supabase
+          .from("discharges")
+          .delete()
+          .in("external_id", deleteIds.slice(i, i + 100))
+          .in("status", ACTIVE_STATUSES)
+          .select("external_id");
+        if (error) throw error;
+        removedCount += data?.length ?? 0;
+      }
+    }
+    const removedIds = new Set(deleteIds);
+    const preservedAbsentCount = absentRows.length - removedCount;
+    const cleanupSkipped = suspiciousPartial;
+    const missingState = removeMissingSyncIds(missingResult.next, deleteIds);
 
     // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
     const reconciledByExternalId = new Map(
-      existingDischarges.map((d) => [d.external_id, d]),
+      existingDischarges.filter((d) => !removedIds.has(d.external_id))
+        .map((d) => [d.external_id, d]),
     );
     for (const row of dischargeRows) reconciledByExternalId.set(row.external_id, row);
 
@@ -960,7 +996,7 @@ export async function handleListo360Sync(request: Request) {
       removidos_orfaos: removedCount,
       ausencias_preservadas: preservedAbsentCount,
       limpeza_pulada_resposta_suspeita: cleanupSkipped,
-      ausencias_em_observacao: 0,
+      ausencias_em_observacao: Object.keys(missingState).length,
       ultimas_altas_atualizadas: lastCompletedUpdated,
       erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,
