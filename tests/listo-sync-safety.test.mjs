@@ -86,7 +86,10 @@ assert.equal(api.hasProvenNewCycle(null, new Date(t0).toISOString()), false);
 
 const syncSource = fs.readFileSync("src/routes/api/public/hooks/sync-listo360.ts", "utf8");
 assert.match(syncSource, /formatListoDateBRT/);
-assert.doesNotMatch(syncSource, /\.delete\(\)\.in\("external_id"/);
+assert.match(syncSource, /minMisses: 2/);
+assert.match(syncSource, /suspiciousPartial \? \[\] : missingResult\.deleteIds/);
+assert.match(syncSource, /\.in\("status", ACTIVE_STATUSES\)/);
+assert.match(syncSource, /removeMissingSyncIds\(missingResult\.next, deleteIds\)/);
 assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
 assert.match(syncSource, /completed_with_issues/);
 assert.match(syncSource, /if \(!cronSecret\)/);
