@@ -120,3 +120,47 @@ export function hasProvenNewCycle(sourceStart: Date | null, resolvedAt: string):
   const resolvedMs = Date.parse(resolvedAt);
   return !!sourceStart && Number.isFinite(resolvedMs) && sourceStart.getTime() > resolvedMs;
 }
+
+/**
+ * Reconhece um novo ciclo de alta mesmo antes do início da higienização.
+ *
+ * O Listo pode enviar uma nova resposta sem startTime (Alta Parada/A Caminho).
+ * Para não ressuscitar uma resposta antiga já concluída, a reabertura nesses
+ * casos exige simultaneamente um answer ID novo E a data/hora de registro
+ * posterior à resolução do ciclo anterior. Datas vagas/futuras não servem.
+ */
+export function hasProvenNewCycleFromAnswer({
+  sourceStart,
+  sourceRecorded,
+  previousResolvedAt,
+  sourceAnswerId,
+  previousAnswerId,
+  nowMs,
+}: {
+  sourceStart: Date | null;
+  sourceRecorded: Date | null;
+  previousResolvedAt: string;
+  sourceAnswerId: number;
+  previousAnswerId: string | null;
+  nowMs: number;
+}): boolean {
+  if (hasProvenNewCycle(sourceStart, previousResolvedAt)) return true;
+
+  const prevMs = Date.parse(previousResolvedAt);
+  const sourceMs = sourceRecorded?.getTime();
+  const previousId = previousAnswerId == null ? NaN : Number(previousAnswerId);
+  if (
+    !Number.isFinite(prevMs) ||
+    sourceMs == null ||
+    !Number.isFinite(sourceMs) ||
+    !Number.isFinite(previousId) ||
+    !Number.isFinite(sourceAnswerId)
+  ) return false;
+
+  return (
+    sourceAnswerId > previousId &&
+    sourceMs > prevMs + 60_000 &&
+    sourceMs >= nowMs - 24 * 60 * 60_000 &&
+    sourceMs <= nowMs + 60_000
+  );
+}
