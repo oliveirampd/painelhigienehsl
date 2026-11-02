@@ -1247,7 +1247,7 @@ function TerminalBedsPanel({
       const current = { x: node.offsetLeft, y: node.offsetTop };
       positions.set(key, current);
       const old = previous.get(key);
-      if (!canAnimate || !old) continue;
+      if (!canAnimate || !old || typeof node.animate !== "function") continue;
       const dx = old.x - current.x;
       const dy = old.y - current.y;
       if ((Math.abs(dx) < 2 && Math.abs(dy) < 2) || Math.abs(dy) > 1000) continue;
