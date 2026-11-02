@@ -189,6 +189,7 @@ function TvPage() {
   const clock = useClock();
   const { theme, setTheme, isDark, themeClass } = useTerminalTheme();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
+  const [selectedCardRect, setSelectedCardRect] = useState<DOMRect | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [syncPulseVersion, setSyncPulseVersion] = useState(0);
   const didSyncOnceRef = useRef(false);
@@ -893,7 +894,10 @@ function TvPage() {
           flashVersions={flashVersions}
           entryVersions={entryVersions}
           worstId={worstCase?.id}
-          onSelect={setSelectedDischarge}
+          onSelect={(discharge, originRect) => {
+            setSelectedCardRect(originRect);
+            setSelectedDischarge(discharge);
+          }}
           className={
             paused.length >= 4
               ? "order-2 lg:order-none lg:col-start-1 lg:col-span-9 lg:row-start-1"
@@ -965,7 +969,11 @@ function TvPage() {
               : null
           }
           nowMs={now}
-          onClose={() => setSelectedDischarge(null)}
+          originRect={selectedCardRect}
+          onClose={() => {
+            setSelectedDischarge(null);
+            setSelectedCardRect(null);
+          }}
         />
       )}
     </div>
@@ -1215,7 +1223,7 @@ function TerminalBedsPanel({
   flashVersions?: Map<string, number>;
   entryVersions?: Map<string, number>;
   worstId?: string;
-  onSelect?: (discharge: Discharge) => void;
+  onSelect?: (discharge: Discharge, originRect: DOMRect) => void;
   className?: string;
 }) {
   const KIND_ORDER = { parada: 0, desmontagem: 1, caminho: 2, execucao: 3 } as const;
@@ -1375,11 +1383,14 @@ function TerminalBedsPanel({
                 return (
                   <div
                     key={`${d.id}-v${version}`}
-                    onClick={() => onSelect?.(d)}
+                    onClick={(event) => onSelect?.(d, event.currentTarget.getBoundingClientRect())}
                     role={onSelect ? "button" : undefined}
                     tabIndex={onSelect ? 0 : undefined}
                     onKeyDown={(e) => {
-                      if (onSelect && (e.key === "Enter" || e.key === " ")) onSelect(d);
+                      if (onSelect && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onSelect(d, e.currentTarget.getBoundingClientRect());
+                      }
                     }}
                     className={`relative flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${
                       onSelect ? "cursor-pointer hover:-translate-y-0.5 hover:bg-white/[0.05]" : ""
@@ -1440,7 +1451,7 @@ function TerminalBedsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
-                        className={`rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
+                        className={`inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
