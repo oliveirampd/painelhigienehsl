@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   BedDouble, CheckCircle2, Clock3, Database, History, MapPin,
   ShieldCheck, Timer, UserRound, X,
@@ -90,7 +90,8 @@ export function DischargeTimelineModal({
   }, [requestClose]);
 
   useLayoutEffect(() => {
-    if (!originRect || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (!originRect || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia?.("(max-width: 639px)").matches) return;
     const dialog = dialogRef.current;
     if (!dialog) return;
     const rect = dialog.getBoundingClientRect();
@@ -315,7 +316,7 @@ export function DischargeTimelineModal({
 function MetricCard({
   icon, label, value, accent = false,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   accent?: boolean;
