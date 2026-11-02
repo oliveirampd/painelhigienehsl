@@ -84,6 +84,22 @@ assert.equal(api.hasProvenNewCycle(new Date(t0 + 1), new Date(t0).toISOString())
 assert.equal(api.hasProvenNewCycle(new Date(t0), new Date(t0).toISOString()), false);
 assert.equal(api.hasProvenNewCycle(null, new Date(t0).toISOString()), false);
 
+assert.equal(api.isNewListoCycleAnswer(18206123, "18205000"), true);
+assert.equal(api.isNewListoCycleAnswer(18205000, "18205000"), false);
+assert.equal(api.isNewListoCycleAnswer(18204999, "18205000"), false);
+assert.equal(api.isNewListoCycleAnswer(18206123, null), false);
+
+// Data do novo registro pode vir sem hora (meia-noite) no Listo.
+// A ordem é pelo ID da resposta, NÃO pela data de fim da alta anterior.
+assert.equal(
+  api.isNewerListoAnswer(
+    { id: 18206123, date: "2026-11-02T00:00:00", startTime: null },
+    { id: 18205000, endTime: "2026-11-02T09:15:00" },
+  ),
+  true,
+);
+assert.equal(api.isNewerListoAnswer({ id: 18205000 }, { id: 18206123 }), false);
+
 const syncSource = fs.readFileSync("src/routes/api/public/hooks/sync-listo360.ts", "utf8");
 assert.match(syncSource, /formatListoDateBRT/);
 assert.doesNotMatch(syncSource, /\.delete\(\)\.in\("external_id"/);
@@ -92,5 +108,9 @@ assert.match(syncSource, /completed_with_issues/);
 assert.match(syncSource, /if \(!cronSecret\)/);
 assert.match(syncSource, /\.eq\("lock_until", ownedLockUntil/);
 assert.match(syncSource, /preservedAbsentCount/);
+assert.match(syncSource, /isNewerListoAnswer\(a, prev\)/);
+assert.match(syncSource, /isNewListoCycleAnswer\(a\.id, prevRow\.last_answer_id\)/);
+assert.match(syncSource, /origem_estados_ativos: rawTerminalStatusCounts/);
+
 
 console.log("listo sync safety tests passed");

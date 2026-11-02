@@ -9,7 +9,8 @@ import {
 import {
   computeSyncBackoffMs,
   formatListoDateBRT,
-  hasProvenNewCycle,
+  isNewerListoAnswer,
+  isNewListoCycleAnswer,
   isSuspiciousPartialResponse,
   selectRelevantBaseline,
 } from "@/lib/listoSyncSafety";
@@ -442,17 +443,15 @@ export async function handleListo360Sync(request: Request) {
     //    Dedup por leito: o Listo pode gerar várias respostas pro mesmo leito no mesmo
     //    dia — sem isso, um leito pode aparecer em "A Caminho" E "Em Limpeza" ao mesmo
     //    tempo, um contradizendo o outro. Só a resposta mais recente por leito importa.
-    const refTime = (a: ListoAnswer): number => {
-      const d = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
-      return d ? d.getTime() : a.id;
-    };
-
     function dedupByBed(list: ListoAnswer[]): ListoAnswer[] {
       const byBed = new Map<string, ListoAnswer>();
       for (const a of list) {
         const bedKey = operationalBedKey(unitOf(a), a.locationName || `leito-${a.id}`);
         const prev = byBed.get(bedKey);
-        if (!prev || refTime(a) > refTime(prev)) {
+        // Para pendências, date pode ser meia-noite ou não conter uma hora
+        // real. Comparar timestamps escolhia conclusões antigas e ocultava
+        // uma Alta Parada nova. A resposta mais recente tem o maior ID.
+        if (!prev || isNewerListoAnswer(a, prev)) {
           byBed.set(bedKey, a);
         }
       }
@@ -462,6 +461,21 @@ export async function handleListo360Sync(request: Request) {
     const bedAnswersDedup = dedupByBed(bedAnswers);
     const boxAnswersDedup = dedupByBed(boxAnswers);
     const dismantleAnswersDedup = dedupByBed(dismantleAnswers);
+    // Telemetria agregada: quantas respostas ATIVAS o Listo realmente entregou,
+    // ANTES das salvaguardas de ciclo e da gravação no Supabase.
+    const rawTerminalStatusCounts = {
+      waiting_cleaning: 0,
+      en_route: 0,
+      in_progress: 0,
+      paused: 0,
+      maintenance: 0,
+    };
+    for (const answer of [...bedAnswersDedup, ...boxAnswersDedup]) {
+      const status = mapStatus(answer);
+      if (status in rawTerminalStatusCounts) {
+        rawTerminalStatusCounts[status as keyof typeof rawTerminalStatusCounts]++;
+      }
+    }
 
     // Estado atual no banco, pra manter o horário estável quando o status não muda
     // entre sincronizações (importante pro "A Caminho"/"Altas Paradas", que não têm
@@ -503,6 +517,8 @@ export async function handleListo360Sync(request: Request) {
     const existingByExternalId = new Map(existingDischarges.map((d) => [d.external_id, d]));
 
     const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
+    let reopenedCycleCount = 0;
+    let blockedActiveCycleCount = 0;
 
     // O painel é operacional: tempo excessivo nunca vira conclusão inventada.
     // Se a origem continuar marcando o leito como ativo, preservamos esse estado
@@ -519,28 +535,32 @@ export async function handleListo360Sync(request: Request) {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Uma resolução manual só é reaberta por início explícito de novo ciclo.
-      // Uma data de edição, conclusão tardia ou answer id novo não prova isso.
-      if (
-        prevRow &&
+      // O Listo é a fonte de verdade. Um novo answer ID permite novo ciclo
+      // ainda que o status esteja como Alta Parada e não tenha startTime.
+      // A mesma resposta não pode reabrir uma conclusão manual/automática.
+      const wasResolved = !!prevRow &&
         (prevRow.status === "completed_with_issues" ||
-          (prevRow.status === "completed" && rawStatus !== "completed")) &&
-        !hasProvenNewCycle(parseBRT(a.startTime), prevRow.status_updated_at)
-      ) {
-          return {
-            external_id: externalId,
-            bed_number: prevRow.bed_number,
-            unit: prevRow.unit,
-            status: prevRow.status as DischargeStatus,
-            priority: prevRow.priority,
-            pause_reason: prevRow.pause_reason,
-            assigned_staff_id: prevRow.assigned_staff_id,
-            status_updated_at: prevRow.status_updated_at,
-            completed_at: prevRow.completed_at,
-            last_answer_id: prevRow.last_answer_id,
-            _debug: "mantida resolução manual sem prova de novo ciclo",
-          };
+          (prevRow.status === "completed" && rawStatus !== "completed"));
+      const newSourceAnswer = wasResolved && prevRow
+        ? isNewListoCycleAnswer(a.id, prevRow.last_answer_id)
+        : false;
+      if (wasResolved && !newSourceAnswer && prevRow) {
+        if (rawStatus !== "completed" && kind !== "desmont") blockedActiveCycleCount++;
+        return {
+          external_id: externalId,
+          bed_number: prevRow.bed_number,
+          unit: prevRow.unit,
+          status: prevRow.status as DischargeStatus,
+          priority: prevRow.priority,
+          pause_reason: prevRow.pause_reason,
+          assigned_staff_id: prevRow.assigned_staff_id,
+          status_updated_at: prevRow.status_updated_at,
+          completed_at: prevRow.completed_at,
+          last_answer_id: prevRow.last_answer_id,
+          _debug: "mantida conclusão anterior (mesma resposta do Listo)",
+        };
       }
+      if (newSourceAnswer && kind !== "desmont") reopenedCycleCount++;
 
       // Uma desmontagem antiga pode continuar aparecendo como "em andamento" no
       // Listo mesmo depois de encerrada pelo início da limpeza terminal. Se já
@@ -940,6 +960,9 @@ export async function handleListo360Sync(request: Request) {
       preservedAbsentCount,
       activeSourceCount: activeSourceSnapshot.length,
       suspiciousPartial,
+      rawTerminalStatusCounts,
+      reopenedCycleCount,
+      blockedActiveCycleCount,
     });
 
     return Response.json({
@@ -961,6 +984,9 @@ export async function handleListo360Sync(request: Request) {
       ausencias_preservadas: preservedAbsentCount,
       limpeza_pulada_resposta_suspeita: cleanupSkipped,
       ausencias_em_observacao: 0,
+      origem_estados_ativos: rawTerminalStatusCounts,
+      novos_ciclos_reconhecidos: reopenedCycleCount,
+      ativos_bloqueados_por_ciclo: blockedActiveCycleCount,
       ultimas_altas_atualizadas: lastCompletedUpdated,
       erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,

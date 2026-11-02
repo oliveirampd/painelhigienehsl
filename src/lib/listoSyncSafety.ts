@@ -120,3 +120,30 @@ export function hasProvenNewCycle(sourceStart: Date | null, resolvedAt: string):
   const resolvedMs = Date.parse(resolvedAt);
   return !!sourceStart && Number.isFinite(resolvedMs) && sourceStart.getTime() > resolvedMs;
 }
+
+/**
+ * A mesma cama pode receber diversas respostas no Listo no mesmo dia.
+ * O ID da resposta identifica a ordem do registro, inclusive para altas
+ * ainda sem startTime/endTime, cujo campo date pode conter só meia-noite.
+ */
+export function isNewerListoAnswer(
+  candidate: { id: number },
+  previous: { id: number },
+): boolean {
+  return candidate.id > previous.id;
+}
+
+/**
+ * Uma resolução anterior não impede uma NOVA alta: um answer ID mais recente
+ * da fonte é prova de um novo registro, mesmo se a limpeza ainda não iniciou.
+ * Nunca reabrir pela mesma resposta.
+ */
+export function isNewListoCycleAnswer(
+  sourceAnswerId: number,
+  previousAnswerId: string | null,
+): boolean {
+  const prev = previousAnswerId == null ? NaN : Number(previousAnswerId);
+  return Number.isFinite(sourceAnswerId) &&
+    Number.isFinite(prev) &&
+    sourceAnswerId > prev;
+}
