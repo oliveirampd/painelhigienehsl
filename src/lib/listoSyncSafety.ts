@@ -122,45 +122,28 @@ export function hasProvenNewCycle(sourceStart: Date | null, resolvedAt: string):
 }
 
 /**
- * Reconhece um novo ciclo de alta mesmo antes do início da higienização.
- *
- * O Listo pode enviar uma nova resposta sem startTime (Alta Parada/A Caminho).
- * Para não ressuscitar uma resposta antiga já concluída, a reabertura nesses
- * casos exige simultaneamente um answer ID novo E a data/hora de registro
- * posterior à resolução do ciclo anterior. Datas vagas/futuras não servem.
+ * A mesma cama pode receber diversas respostas no Listo no mesmo dia.
+ * O ID da resposta identifica a ordem do registro, inclusive para altas
+ * ainda sem startTime/endTime, cujo campo date pode conter só meia-noite.
  */
-export function hasProvenNewCycleFromAnswer({
-  sourceStart,
-  sourceRecorded,
-  previousResolvedAt,
-  sourceAnswerId,
-  previousAnswerId,
-  nowMs,
-}: {
-  sourceStart: Date | null;
-  sourceRecorded: Date | null;
-  previousResolvedAt: string;
-  sourceAnswerId: number;
-  previousAnswerId: string | null;
-  nowMs: number;
-}): boolean {
-  if (hasProvenNewCycle(sourceStart, previousResolvedAt)) return true;
+export function isNewerListoAnswer(
+  candidate: { id: number },
+  previous: { id: number },
+): boolean {
+  return candidate.id > previous.id;
+}
 
-  const prevMs = Date.parse(previousResolvedAt);
-  const sourceMs = sourceRecorded?.getTime();
-  const previousId = previousAnswerId == null ? NaN : Number(previousAnswerId);
-  if (
-    !Number.isFinite(prevMs) ||
-    sourceMs == null ||
-    !Number.isFinite(sourceMs) ||
-    !Number.isFinite(previousId) ||
-    !Number.isFinite(sourceAnswerId)
-  ) return false;
-
-  return (
-    sourceAnswerId > previousId &&
-    sourceMs > prevMs + 60_000 &&
-    sourceMs >= nowMs - 24 * 60 * 60_000 &&
-    sourceMs <= nowMs + 60_000
-  );
+/**
+ * Uma resolução anterior não impede uma NOVA alta: um answer ID mais recente
+ * da fonte é prova de um novo registro, mesmo se a limpeza ainda não iniciou.
+ * Nunca reabrir pela mesma resposta.
+ */
+export function isNewListoCycleAnswer(
+  sourceAnswerId: number,
+  previousAnswerId: string | null,
+): boolean {
+  const prev = previousAnswerId == null ? NaN : Number(previousAnswerId);
+  return Number.isFinite(sourceAnswerId) &&
+    Number.isFinite(prev) &&
+    sourceAnswerId > prev;
 }
