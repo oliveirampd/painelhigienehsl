@@ -10,6 +10,7 @@ import {
   computeSyncBackoffMs,
   formatListoDateBRT,
   hasProvenNewCycle,
+  hasProvenNewCycleFromAnswer,
   isSuspiciousPartialResponse,
   selectRelevantBaseline,
 } from "@/lib/listoSyncSafety";
@@ -462,6 +463,21 @@ export async function handleListo360Sync(request: Request) {
     const bedAnswersDedup = dedupByBed(bedAnswers);
     const boxAnswersDedup = dedupByBed(boxAnswers);
     const dismantleAnswersDedup = dedupByBed(dismantleAnswers);
+    // Telemetria agregada: quantas respostas ATIVAS o Listo realmente entregou,
+    // ANTES das salvaguardas de ciclo e da gravação no Supabase.
+    const rawTerminalStatusCounts = {
+      waiting_cleaning: 0,
+      en_route: 0,
+      in_progress: 0,
+      paused: 0,
+      maintenance: 0,
+    };
+    for (const answer of [...bedAnswersDedup, ...boxAnswersDedup]) {
+      const status = mapStatus(answer);
+      if (status in rawTerminalStatusCounts) {
+        rawTerminalStatusCounts[status as keyof typeof rawTerminalStatusCounts]++;
+      }
+    }
 
     // Estado atual no banco, pra manter o horário estável quando o status não muda
     // entre sincronizações (importante pro "A Caminho"/"Altas Paradas", que não têm
@@ -503,6 +519,8 @@ export async function handleListo360Sync(request: Request) {
     const existingByExternalId = new Map(existingDischarges.map((d) => [d.external_id, d]));
 
     const NO_RELIABLE_TIMESTAMP: DischargeStatus[] = ["en_route", "waiting_cleaning"];
+    let reopenedCycleCount = 0;
+    let blockedActiveCycleCount = 0;
 
     // O painel é operacional: tempo excessivo nunca vira conclusão inventada.
     // Se a origem continuar marcando o leito como ativo, preservamos esse estado
@@ -519,15 +537,26 @@ export async function handleListo360Sync(request: Request) {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Uma resolução manual só é reaberta por início explícito de novo ciclo.
-      // Uma data de edição, conclusão tardia ou answer id novo não prova isso.
-      if (
-        prevRow &&
+      // Um leito pode receber uma nova alta ANTES do início da limpeza.
+      // O teste antigo exigia startTime para reabrir; isso ocultava novas Altas
+      // Paradas e A Caminho de leitos que já haviam sido concluídos no passado.
+      // Data/hora NOVA + answer ID NOVO provam outro ciclo sem reabrir históricos.
+      const hasPreviousResolution = !!prevRow &&
         (prevRow.status === "completed_with_issues" ||
-          (prevRow.status === "completed" && rawStatus !== "completed")) &&
-        !hasProvenNewCycle(parseBRT(a.startTime), prevRow.status_updated_at)
-      ) {
-          return {
+          (prevRow.status === "completed" && rawStatus !== "completed"));
+      const isProvenNewCycle = hasPreviousResolution && prevRow
+        ? hasProvenNewCycleFromAnswer({
+            sourceStart: parseBRT(a.startTime),
+            sourceRecorded: pendingRecordedAt(a, Date.now()),
+            previousResolvedAt: prevRow.completed_at ?? prevRow.status_updated_at,
+            sourceAnswerId: a.id,
+            previousAnswerId: prevRow.last_answer_id,
+            nowMs: Date.now(),
+          })
+        : false;
+      if (hasPreviousResolution && !isProvenNewCycle && prevRow) {
+        if (rawStatus !== "completed" && kind !== "desmont") blockedActiveCycleCount++;
+        return {
             external_id: externalId,
             bed_number: prevRow.bed_number,
             unit: prevRow.unit,
@@ -538,9 +567,10 @@ export async function handleListo360Sync(request: Request) {
             status_updated_at: prevRow.status_updated_at,
             completed_at: prevRow.completed_at,
             last_answer_id: prevRow.last_answer_id,
-            _debug: "mantida resolução manual sem prova de novo ciclo",
+            _debug: "mantido ciclo concluído: sem resposta nova e data posterior",
           };
       }
+      if (isProvenNewCycle && kind !== "desmont") reopenedCycleCount++;
 
       // Uma desmontagem antiga pode continuar aparecendo como "em andamento" no
       // Listo mesmo depois de encerrada pelo início da limpeza terminal. Se já
@@ -940,6 +970,9 @@ export async function handleListo360Sync(request: Request) {
       preservedAbsentCount,
       activeSourceCount: activeSourceSnapshot.length,
       suspiciousPartial,
+      rawTerminalStatusCounts,
+      reopenedCycleCount,
+      blockedActiveCycleCount,
     });
 
     return Response.json({
@@ -961,6 +994,9 @@ export async function handleListo360Sync(request: Request) {
       ausencias_preservadas: preservedAbsentCount,
       limpeza_pulada_resposta_suspeita: cleanupSkipped,
       ausencias_em_observacao: 0,
+      origem_estados_ativos: rawTerminalStatusCounts,
+      novos_ciclos_reconhecidos: reopenedCycleCount,
+      ativos_bloqueados_por_ciclo: blockedActiveCycleCount,
       ultimas_altas_atualizadas: lastCompletedUpdated,
       erro_ultima_alta: lastCompletedError,
       debug_estabilidade_horario: debugSample,
