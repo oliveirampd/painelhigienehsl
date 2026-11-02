@@ -23,6 +23,8 @@ import { SyncCounter } from "@/components/SyncCounter";
 import { ThemePicker } from "@/components/ThemePicker";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 import { AutoScroll } from "@/components/AutoScroll";
+import { TerminalMotionGrid, MotionIdentity } from "@/components/TerminalMotionGrid";
+import { useSeamlessScroll } from "@/hooks/useSeamlessScroll";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
@@ -189,11 +191,10 @@ function TvPage() {
   const clock = useClock();
   const { theme, setTheme, isDark, themeClass } = useTerminalTheme();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
+  const detailOrigin = useRef<HTMLElement | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const [syncPulseVersion, setSyncPulseVersion] = useState(0);
   const didSyncOnceRef = useRef(false);
-  const [completionFx, setCompletionFx] = useState<{ bed: string; key: number } | null>(null);
-  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shiftFxVersion, setShiftFxVersion] = useState(0);
   const prevTurnoStartRef = useRef<number | null>(null);
 
@@ -204,21 +205,9 @@ function TvPage() {
     else didSyncOnceRef.current = true;
   }, [discharges, staff]);
 
-  useEffect(
-    () => () => {
-      if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
-    },
-    [],
-  );
-
-  // Detecta leitos cujo status mudou desde a última leitura, pra dar um flash
-  // rápido de destaque. Usa uma "versão" por leito (não um timer) — cada mudança
-  // incrementa a versão, o que remonta a linha e dispara uma animação CSS de um
-  // disparo só. Isso não depende de nenhum timeout que possa ser cancelado por
-  // outra atualização chegando no meio do caminho (era isso que prendia o flash).
+  // Versions animate changed content; card identities remain stable.
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
-  const entryVersionRef = useRef<Map<string, number>>(new Map());
   const [, forceFlashRerender] = useState(0);
   useEffect(() => {
     const prev = prevStatusRef.current;
@@ -227,26 +216,11 @@ function TvPage() {
     for (const d of discharges) {
       const externalId = d.external_id ?? "";
       const before = prev.get(externalId);
-      if (!isFirstRun && before === undefined && externalId) {
-        entryVersionRef.current.set(
-          externalId,
-          (entryVersionRef.current.get(externalId) ?? 0) + 1,
-        );
-        mudou = true;
-      }
       if (before !== undefined && before !== d.status) {
         flashVersionRef.current.set(
           externalId,
           (flashVersionRef.current.get(externalId) ?? 0) + 1,
         );
-        if (
-          d.status === "completed" &&
-          ["waiting_cleaning", "en_route", "in_progress"].includes(before)
-        ) {
-          setCompletionFx({ bed: d.bed_number, key: Date.now() });
-          if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
-          completionTimerRef.current = setTimeout(() => setCompletionFx(null), 1800);
-        }
         mudou = true;
       }
     }
@@ -256,7 +230,6 @@ function TvPage() {
 
 
   const flashVersions = flashVersionRef.current;
-  const entryVersions = entryVersionRef.current;
 
   const filtered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isTerminalDisplayLocation(d)),
@@ -685,18 +658,6 @@ function TvPage() {
           aria-hidden="true"
         />
       )}
-      {completionFx && (
-        <div
-          key={completionFx.key}
-          className="tv-completion-fx pointer-events-none fixed left-1/2 top-[14%] z-[75] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-3 py-2 text-emerald-100 shadow-2xl sm:px-4 lg:top-[18%]"
-          aria-hidden="true"
-        >
-          <CircleCheck className="h-5 w-5" />
-          <span className="text-xs font-semibold uppercase tracking-wider">
-            {completionFx.bed} finalizado
-          </span>
-        </div>
-      )}
       <header className="panel-shell-header flex-none flex flex-col gap-1.5 border-b border-white/15 px-3 py-2 sm:px-4 sm:py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
           <h1 className="min-w-0 text-[15px] font-bold leading-tight tracking-tight sm:text-lg lg:text-2xl">
@@ -890,10 +851,10 @@ function TvPage() {
           dismantles={dismantlesForDisplay}
           nowMs={now}
           staffMap={staffMap}
-          flashVersions={flashVersions}
-          entryVersions={entryVersions}
           worstId={worstCase?.id}
-          onSelect={setSelectedDischarge}
+          onSelect={(discharge, element) => { detailOrigin.current = element; setSelectedDischarge(discharge); }}
+          completedIds={new Set(discharges.filter((d) => d.status === "completed").map((d) => d.id))}
+          motionSuspended={!!selectedDischarge}
           className={
             paused.length >= 4
               ? "order-2 lg:order-none lg:col-start-1 lg:col-span-9 lg:row-start-1"
@@ -959,6 +920,7 @@ function TvPage() {
       {selectedDischarge && (
         <DischargeTimelineModal
           discharge={selectedDischarge}
+          origin={detailOrigin.current}
           staffName={
             selectedDischarge.assigned_staff_id
               ? staffMap.get(selectedDischarge.assigned_staff_id)?.name
@@ -981,72 +943,7 @@ function HorizontalAutoScroll({
 }) {
   const [ref, setRef] = useState<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (!ref) return;
-    ref.scrollLeft = 0;
-
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion) return;
-
-    const USER_PAUSE_MS = 15_000;
-    let raf = 0;
-    let direction = 1;
-    let edgePause = 110;
-    let pausedUntil = 0;
-    let pos = 0;
-
-    const pauseForUser = () => {
-      pos = ref.scrollLeft;
-      pausedUntil = Date.now() + USER_PAUSE_MS;
-    };
-
-    ref.addEventListener("wheel", pauseForUser, { passive: true });
-    ref.addEventListener("touchstart", pauseForUser, { passive: true });
-    ref.addEventListener("touchmove", pauseForUser, { passive: true });
-    ref.addEventListener("pointerdown", pauseForUser, { passive: true });
-    ref.addEventListener("focusin", pauseForUser);
-    ref.addEventListener("keydown", pauseForUser);
-
-    const step = () => {
-      const max = Math.max(0, ref.scrollWidth - ref.clientWidth);
-      if (max > 4) {
-        if (Date.now() < pausedUntil) {
-          pos = ref.scrollLeft;
-        } else if (edgePause > 0) {
-          edgePause -= 1;
-        } else {
-          const distanceToEdge = Math.min(pos, max - pos);
-          const easing = Math.max(0.35, Math.min(1, distanceToEdge / 90));
-          pos += direction * 0.46 * easing;
-          if (pos >= max) {
-            pos = max;
-            direction = -1;
-            edgePause = 110;
-          } else if (pos <= 0) {
-            pos = 0;
-            direction = 1;
-            edgePause = 110;
-          }
-          ref.scrollLeft = Math.floor(pos);
-        }
-      } else {
-        pos = 0;
-        ref.scrollLeft = 0;
-      }
-      raf = requestAnimationFrame(step);
-    };
-
-    raf = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(raf);
-      ref.removeEventListener("wheel", pauseForUser);
-      ref.removeEventListener("touchstart", pauseForUser);
-      ref.removeEventListener("touchmove", pauseForUser);
-      ref.removeEventListener("pointerdown", pauseForUser);
-      ref.removeEventListener("focusin", pauseForUser);
-      ref.removeEventListener("keydown", pauseForUser);
-    };
-  }, [ref, resetKey]);
+  useSeamlessScroll(ref, "x", resetKey);
 
   return (
     <div
@@ -1200,10 +1097,10 @@ function TerminalBedsPanel({
   dismantles,
   nowMs,
   staffMap,
-  flashVersions,
-  entryVersions,
   worstId,
   onSelect,
+  completedIds,
+  motionSuspended,
   className,
 }: {
   inFlight: Discharge[];
@@ -1212,10 +1109,10 @@ function TerminalBedsPanel({
   dismantles: Discharge[];
   nowMs: number;
   staffMap: Map<string, Staff>;
-  flashVersions?: Map<string, number>;
-  entryVersions?: Map<string, number>;
   worstId?: string;
-  onSelect?: (discharge: Discharge) => void;
+  onSelect?: (discharge: Discharge, element: HTMLElement) => void;
+  completedIds: Set<string>;
+  motionSuspended?: boolean;
   className?: string;
 }) {
   const KIND_ORDER = { parada: 0, desmontagem: 1, caminho: 2, execucao: 3 } as const;
@@ -1342,15 +1239,9 @@ function TerminalBedsPanel({
         </div>
       </div>
       <div className="terminal-panel-content flex-1 min-h-0 overflow-hidden">
-        {cards.length === 0 ? (
-          <div className="p-4 text-center text-white/40 text-sm">Nenhum leito em higienização.</div>
-        ) : (
-          <AutoScroll>
-            <div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 sm:gap-2 sm:p-3 lg:grid-cols-4 xl:grid-cols-5">
-              {cards.map(({ d, kind }) => {
+          <AutoScroll suspended={motionSuspended}>
+            <TerminalMotionGrid completedIds={completedIds} items={cards.map(({ d, kind }) => {
                 const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
-                const version = flashVersions?.get(d.external_id ?? "") ?? 0;
-                const entryVersion = entryVersions?.get(d.external_id ?? "") ?? 0;
                 const isWorst = worstId && d.id === worstId;
                 const minutes = elapsedMinutes(d.status_updated_at, nowMs);
                 const target =
@@ -1372,21 +1263,18 @@ function TerminalBedsPanel({
                 const base = isDismantling
                   ? KIND_COLOR.desmontagem
                   : overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
-                return (
+                return { id: d.id, content: (
                   <div
-                    key={`${d.id}-v${version}`}
-                    onClick={() => onSelect?.(d)}
+                    data-bed-id={d.id}
+                    onClick={(event) => onSelect?.(d, event.currentTarget)}
                     role={onSelect ? "button" : undefined}
                     tabIndex={onSelect ? 0 : undefined}
                     onKeyDown={(e) => {
-                      if (onSelect && (e.key === "Enter" || e.key === " ")) onSelect(d);
+                      if (onSelect && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(d, e.currentTarget); }
                     }}
-                    className={`relative flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${
-                      onSelect ? "cursor-pointer hover:-translate-y-0.5 hover:bg-white/[0.05]" : ""
-                    } ${entryVersion > 0 ? "tv-card-enter" : ""} ${
-                      version > 0 ? "tv-card-status-change flash-row" : ""
-                    } ${overtime || isWorst ? "tv-critical-breathe" : ""}`}
+                    className={`tv-bed-card relative flex h-full min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${onSelect ? "cursor-pointer" : ""} ${overtime ? "tv-threshold-reached" : ""}`}
                     style={{
+                      ["--bed-accent" as string]: base,
                       borderColor: base.replace(")", " / 0.45)"),
                       background: base.replace(")", " / 0.14)"),
                     }}
@@ -1404,7 +1292,7 @@ function TerminalBedsPanel({
                       </span>
                     )}
                     <div className="flex items-baseline justify-between gap-1">
-                      <span className="truncate text-sm font-bold tabular-nums sm:text-base lg:text-xl">
+                      <span data-bed-identity className="min-w-0 truncate text-sm font-bold tabular-nums sm:text-base lg:text-xl">
                         {d.bed_number}
                       </span>
                       {(kind !== "parada" || isDismantling) && (
@@ -1434,18 +1322,16 @@ function TerminalBedsPanel({
                           className="line-clamp-2 text-[12px] font-bold leading-tight sm:text-[13px] lg:text-[15px]"
                           style={{ color: displayName ? base : "rgba(255,255,255,0.4)" }}
                         >
-                          {displayName ?? "sem colaborador"}
+                          <MotionIdentity value={displayName ?? "sem colaborador"} />
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between gap-1">
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-1">
                       <span
-                        className={`rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide sm:text-xs ${
-                          version > 0 ? "tv-status-pill-morph" : ""
-                        }`}
+                        className="tv-status-pill min-w-0 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide sm:text-xs"
                         style={{ color: base, background: base.replace(")", " / 0.18)") }}
                       >
-                        {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
+                        <MotionIdentity value={isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]} />
                       </span>
                       {isDismantling ? (
                         <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/65 sm:text-xs">
@@ -1485,11 +1371,9 @@ function TerminalBedsPanel({
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                ) };
+              })} />
           </AutoScroll>
-        )}
       </div>
     </section>
   );
@@ -1982,3 +1866,4 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
     </span>
   );
 }
+

@@ -1,0 +1,48 @@
+name: Terminal motion validation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/routes/tv.tsx"
+      - "src/styles.css"
+      - "src/components/**"
+      - "src/hooks/**"
+      - "tests/motion/**"
+      - ".github/workflows/motion-validation.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Install isolated browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/motion-tools" --no-package-lock playwright@1.58.2
+          node "$RUNNER_TEMP/motion-tools/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Lint report (repository baseline included)
+        run: |
+          mkdir -p motion-results
+          set +e
+          bun run lint > motion-results/lint.txt 2>&1
+          printf '%s\n' "$?" > motion-results/lint-exit-code.txt
+      - name: Start isolated Terminal fixture
+        run: |
+          bunx vite --config tests/motion/vite.config.mjs > motion-results/fixture-server.txt 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:4173/tests/motion/index.html > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Verify mobile, desktop, TV and motion
+        run: PLAYWRIGHT_PACKAGE="$RUNNER_TEMP/motion-tools/package.json" node tests/motion/verify.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: terminal-motion-evidence
+          path: motion-results
+          retention-days: 14
