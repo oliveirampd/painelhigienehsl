@@ -17,10 +17,13 @@ export function AutoScroll({ children }: { children: ReactNode }) {
     const USER_PAUSE_MS = 15_000;
     let raf = 0;
     let dir = 1;
-    let edgePause = 0;
+    let edgePauseUntil = 0;
     let pausedUntil = 0;
+    let lastFrameAt = 0;
     let pos = ref.scrollTop;
     let needs = ref.scrollHeight > ref.clientHeight + 4;
+    // Antigo ritmo: ~0,35px/frame a 60Hz. Agora o passo independe do Hz da TV.
+    const PIXELS_PER_SECOND = 21;
 
     const pauseForUser = () => {
       pos = ref.scrollTop;
@@ -49,25 +52,31 @@ export function AutoScroll({ children }: { children: ReactNode }) {
     const mo = new MutationObserver(recheck);
     mo.observe(ref, { childList: true, subtree: true, characterData: true });
 
-    const step = () => {
+    const step = (frameAt: number) => {
+      const deltaSeconds = lastFrameAt === 0 ? 0 : Math.min((frameAt - lastFrameAt) / 1000, 0.05);
+      lastFrameAt = frameAt;
+      // TVs e celulares em segundo plano não precisam acumular rolagem.
+      if (document.hidden) {
+        raf = requestAnimationFrame(step);
+        return;
+      }
       if (needs) {
         if (Date.now() < pausedUntil) {
-          // Enquanto a pessoa navega, acompanha a posição real em vez de tentar
-          // impor a posição antiga do carrossel.
+          // A interação humana tem prioridade absoluta por 15s.
           pos = ref.scrollTop;
-        } else if (edgePause > 0) {
-          edgePause -= 1;
-        } else {
-          pos += dir * 0.35;
-          const max = ref.scrollHeight - ref.clientHeight;
+        } else if (frameAt >= edgePauseUntil) {
+          const max = Math.max(0, ref.scrollHeight - ref.clientHeight);
+          const distanceToEdge = Math.max(0, Math.min(pos, max - pos));
+          const easing = Math.max(0.45, Math.min(1, distanceToEdge / 80));
+          pos += dir * PIXELS_PER_SECOND * deltaSeconds * easing;
           if (pos >= max) {
             pos = max;
             dir = -1;
-            edgePause = 120;
+            edgePauseUntil = frameAt + 2000;
           } else if (pos <= 0) {
             pos = 0;
             dir = 1;
-            edgePause = 120;
+            edgePauseUntil = frameAt + 2000;
           }
           ref.scrollTop = Math.floor(pos);
         }
