@@ -20,13 +20,11 @@ import { toast } from "sonner";
 import { resolvePausedDischarge, updateDischargeServiceOrder } from "@/lib/hospital.functions";
 import { PanelNav } from "@/components/PanelNav";
 import { SyncCounter } from "@/components/SyncCounter";
-import { ThemePicker } from "@/components/ThemePicker";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 import { AutoScroll } from "@/components/AutoScroll";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useNow } from "@/hooks/useNow";
-import { useTerminalTheme } from "@/hooks/useTerminalTheme";
 import {
   elapsedMinutes,
   formatElapsed,
@@ -187,7 +185,6 @@ function TvPage() {
   const { discharges, staff, loading, error } = useHospitalData();
   const now = useNow(15000);
   const clock = useClock();
-  const { theme, setTheme, isDark, themeClass } = useTerminalTheme();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
   const [selectedCardRect, setSelectedCardRect] = useState<DOMRect | null>(null);
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
@@ -668,11 +665,11 @@ function TvPage() {
   const isNoturno = horaBRT >= 22 || horaBRT < 6;
 
 
-  const filtros = theme === "original" && isNoturno ? "brightness(0.88)" : undefined;
+  const filtros = isNoturno ? "brightness(0.88)" : undefined;
 
   return (
     <div
-      className={`${themeClass} tv-terminal-page scrollbar-hidden min-h-screen w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
+      className={`dark panel-dark tv-terminal-page scrollbar-hidden min-h-screen w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
@@ -740,7 +737,6 @@ function TvPage() {
             <Eye className="h-3 w-3" /> Só exceções
           </button>
 
-          <ThemePicker theme={theme} onChange={setTheme} />
           <span className="font-mono text-lg tabular-nums sm:text-xl lg:text-3xl">{clock}</span>
         </div>
       </header>
