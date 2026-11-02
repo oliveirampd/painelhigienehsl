@@ -9,8 +9,8 @@ import {
 import {
   computeSyncBackoffMs,
   formatListoDateBRT,
-  hasProvenNewCycle,
-  hasProvenNewCycleFromAnswer,
+  isNewerListoAnswer,
+  isNewListoCycleAnswer,
   isSuspiciousPartialResponse,
   selectRelevantBaseline,
 } from "@/lib/listoSyncSafety";
@@ -443,17 +443,15 @@ export async function handleListo360Sync(request: Request) {
     //    Dedup por leito: o Listo pode gerar várias respostas pro mesmo leito no mesmo
     //    dia — sem isso, um leito pode aparecer em "A Caminho" E "Em Limpeza" ao mesmo
     //    tempo, um contradizendo o outro. Só a resposta mais recente por leito importa.
-    const refTime = (a: ListoAnswer): number => {
-      const d = parseBRT(a.endTime) ?? parseBRT(a.startTime) ?? parseBRT(a.date);
-      return d ? d.getTime() : a.id;
-    };
-
     function dedupByBed(list: ListoAnswer[]): ListoAnswer[] {
       const byBed = new Map<string, ListoAnswer>();
       for (const a of list) {
         const bedKey = operationalBedKey(unitOf(a), a.locationName || `leito-${a.id}`);
         const prev = byBed.get(bedKey);
-        if (!prev || refTime(a) > refTime(prev)) {
+        // Para pendências, date pode ser meia-noite ou não conter uma hora
+        // real. Comparar timestamps escolhia conclusões antigas e ocultava
+        // uma Alta Parada nova. A resposta mais recente tem o maior ID.
+        if (!prev || isNewerListoAnswer(a, prev)) {
           byBed.set(bedKey, a);
         }
       }
@@ -537,40 +535,32 @@ export async function handleListo360Sync(request: Request) {
 
       const prevRow = existingByExternalId.get(externalId);
 
-      // Um leito pode receber uma nova alta ANTES do início da limpeza.
-      // O teste antigo exigia startTime para reabrir; isso ocultava novas Altas
-      // Paradas e A Caminho de leitos que já haviam sido concluídos no passado.
-      // Data/hora NOVA + answer ID NOVO provam outro ciclo sem reabrir históricos.
-      const hasPreviousResolution = !!prevRow &&
+      // O Listo é a fonte de verdade. Um novo answer ID permite novo ciclo
+      // ainda que o status esteja como Alta Parada e não tenha startTime.
+      // A mesma resposta não pode reabrir uma conclusão manual/automática.
+      const wasResolved = !!prevRow &&
         (prevRow.status === "completed_with_issues" ||
           (prevRow.status === "completed" && rawStatus !== "completed"));
-      const isProvenNewCycle = hasPreviousResolution && prevRow
-        ? hasProvenNewCycleFromAnswer({
-            sourceStart: parseBRT(a.startTime),
-            sourceRecorded: pendingRecordedAt(a, Date.now()),
-            previousResolvedAt: prevRow.completed_at ?? prevRow.status_updated_at,
-            sourceAnswerId: a.id,
-            previousAnswerId: prevRow.last_answer_id,
-            nowMs: Date.now(),
-          })
+      const newSourceAnswer = wasResolved && prevRow
+        ? isNewListoCycleAnswer(a.id, prevRow.last_answer_id)
         : false;
-      if (hasPreviousResolution && !isProvenNewCycle && prevRow) {
+      if (wasResolved && !newSourceAnswer && prevRow) {
         if (rawStatus !== "completed" && kind !== "desmont") blockedActiveCycleCount++;
         return {
-            external_id: externalId,
-            bed_number: prevRow.bed_number,
-            unit: prevRow.unit,
-            status: prevRow.status as DischargeStatus,
-            priority: prevRow.priority,
-            pause_reason: prevRow.pause_reason,
-            assigned_staff_id: prevRow.assigned_staff_id,
-            status_updated_at: prevRow.status_updated_at,
-            completed_at: prevRow.completed_at,
-            last_answer_id: prevRow.last_answer_id,
-            _debug: "mantido ciclo concluído: sem resposta nova e data posterior",
-          };
+          external_id: externalId,
+          bed_number: prevRow.bed_number,
+          unit: prevRow.unit,
+          status: prevRow.status as DischargeStatus,
+          priority: prevRow.priority,
+          pause_reason: prevRow.pause_reason,
+          assigned_staff_id: prevRow.assigned_staff_id,
+          status_updated_at: prevRow.status_updated_at,
+          completed_at: prevRow.completed_at,
+          last_answer_id: prevRow.last_answer_id,
+          _debug: "mantida conclusão anterior (mesma resposta do Listo)",
+        };
       }
-      if (isProvenNewCycle && kind !== "desmont") reopenedCycleCount++;
+      if (newSourceAnswer && kind !== "desmont") reopenedCycleCount++;
 
       // Uma desmontagem antiga pode continuar aparecendo como "em andamento" no
       // Listo mesmo depois de encerrada pelo início da limpeza terminal. Se já
