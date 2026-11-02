@@ -4,7 +4,7 @@ import {
   operationalBedKey,
 } from "@/lib/operationalScope";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
    BrushCleaning,
   CirclePause,
@@ -188,8 +188,6 @@ function TvPage() {
   const [selectedCardRect, setSelectedCardRect] = useState<DOMRect | null>(null);
   const [syncPulseVersion, setSyncPulseVersion] = useState(0);
   const didSyncOnceRef = useRef(false);
-  const [completionFx, setCompletionFx] = useState<{ bed: string; key: number } | null>(null);
-  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shiftFxVersion, setShiftFxVersion] = useState(0);
   const prevTurnoStartRef = useRef<number | null>(null);
 
@@ -200,18 +198,9 @@ function TvPage() {
     else didSyncOnceRef.current = true;
   }, [discharges, staff]);
 
-  useEffect(
-    () => () => {
-      if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
-    },
-    [],
-  );
-
-  // Detecta leitos cujo status mudou desde a última leitura, pra dar um flash
-  // rápido de destaque. Usa uma "versão" por leito (não um timer) — cada mudança
-  // incrementa a versão, o que remonta a linha e dispara uma animação CSS de um
-  // disparo só. Isso não depende de nenhum timeout que possa ser cancelado por
-  // outra atualização chegando no meio do caminho (era isso que prendia o flash).
+  // Detecta mudanças por identidade da origem sem alterar os estados reais.
+  // O card mantém a mesma chave React; somente o selo de status tem uma breve
+  // transição ao mudar. Assim a grade pode reorganizar cards sem remontá-los.
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const flashVersionRef = useRef<Map<string, number>>(new Map());
   const entryVersionRef = useRef<Map<string, number>>(new Map());
@@ -235,14 +224,6 @@ function TvPage() {
           externalId,
           (flashVersionRef.current.get(externalId) ?? 0) + 1,
         );
-        if (
-          d.status === "completed" &&
-          ["waiting_cleaning", "en_route", "in_progress"].includes(before)
-        ) {
-          setCompletionFx({ bed: d.bed_number, key: Date.now() });
-          if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
-          completionTimerRef.current = setTimeout(() => setCompletionFx(null), 1800);
-        }
         mudou = true;
       }
     }
@@ -680,18 +661,6 @@ function TvPage() {
           className="tv-shift-wash pointer-events-none fixed inset-0 z-[70] block overflow-hidden"
           aria-hidden="true"
         />
-      )}
-      {completionFx && (
-        <div
-          key={completionFx.key}
-          className="tv-completion-fx pointer-events-none fixed left-1/2 top-[14%] z-[75] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-3 py-2 text-emerald-100 shadow-2xl sm:px-4 lg:top-[18%]"
-          aria-hidden="true"
-        >
-          <CircleCheck className="h-5 w-5" />
-          <span className="text-xs font-semibold uppercase tracking-wider">
-            {completionFx.bed} finalizado
-          </span>
-        </div>
       )}
       <header className="panel-shell-header flex-none flex flex-col gap-1.5 border-b border-white/15 px-3 py-2 sm:px-4 sm:py-2.5 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
@@ -1257,6 +1226,39 @@ function TerminalBedsPanel({
     return { de, b, c, outros };
   }, [paused]);
 
+  // Silk Reflow: utiliza a identidade do leito e as posições locais da grade,
+  // sem confundir movimentos do AutoScroll com mudanças reais de layout.
+  // Não mede nem anima a cada tick do relógio, apenas quando a ordem muda.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const previousPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+  const layoutSignature = cards.map(({ d, kind }) => (d.external_id || d.id) + ":" + kind).join("|");
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const nodes = Array.from(grid.querySelectorAll<HTMLElement>("[data-motion-bed]"));
+    const positions = new Map<string, { x: number; y: number }>();
+    const previous = previousPositionsRef.current;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Limite progressivo para aparelhos modestos e cargas com dezenas de altas.
+    const canAnimate = !reduced && !document.hidden && nodes.length <= 40;
+    for (const node of nodes) {
+      const key = node.dataset.motionBed;
+      if (!key) continue;
+      const current = { x: node.offsetLeft, y: node.offsetTop };
+      positions.set(key, current);
+      const old = previous.get(key);
+      if (!canAnimate || !old) continue;
+      const dx = old.x - current.x;
+      const dy = old.y - current.y;
+      if ((Math.abs(dx) < 2 && Math.abs(dy) < 2) || Math.abs(dy) > 1000) continue;
+      node.animate(
+        [{ transform: `translate3d(${dx}px, ${dy}px, 0)` }, { transform: "translate3d(0,0,0)" }],
+        { duration: 330, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    }
+    previousPositionsRef.current = positions;
+  }, [layoutSignature]);
+
   return (
     <section
       className={`h-[520px] lg:h-full panel-surface rounded-xl border overflow-hidden flex flex-col lg:min-h-0 ${className ?? ""}`}
@@ -1334,7 +1336,7 @@ function TerminalBedsPanel({
           <div className="p-4 text-center text-white/40 text-sm">Nenhum leito em higienização.</div>
         ) : (
           <AutoScroll>
-            <div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 sm:gap-2 sm:p-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div ref={gridRef} className="relative grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 sm:gap-2 sm:p-3 lg:grid-cols-4 xl:grid-cols-5">
               {cards.map(({ d, kind }) => {
                 const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
                 const version = flashVersions?.get(d.external_id ?? "") ?? 0;
@@ -1362,7 +1364,8 @@ function TerminalBedsPanel({
                   : overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
                 return (
                   <div
-                    key={`${d.id}-v${version}`}
+                    key={d.id}
+                    data-motion-bed={d.external_id || d.id}
                     onClick={(event) => onSelect?.(d, event.currentTarget.getBoundingClientRect())}
                     role={onSelect ? "button" : undefined}
                     tabIndex={onSelect ? 0 : undefined}
@@ -1372,11 +1375,9 @@ function TerminalBedsPanel({
                         onSelect(d, e.currentTarget.getBoundingClientRect());
                       }
                     }}
-                    className={`relative flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${
-                      onSelect ? "cursor-pointer hover:-translate-y-0.5 hover:bg-white/[0.05]" : ""
-                    } ${entryVersion > 0 ? "tv-card-enter" : ""} ${
-                      version > 0 ? "tv-card-status-change flash-row" : ""
-                    } ${overtime || isWorst ? "tv-critical-breathe" : ""}`}
+                    className={`tv-terminal-bed-card relative flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${
+                      onSelect ? "cursor-pointer hover:-translate-y-0.5" : ""
+                    } ${entryVersion > 0 ? "tv-card-enter" : ""}`}
                     style={{
                       borderColor: base.replace(")", " / 0.45)"),
                       background: base.replace(")", " / 0.14)"),
@@ -1431,6 +1432,7 @@ function TerminalBedsPanel({
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span
+                        key={version}
                         className={`inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
@@ -1933,7 +1935,7 @@ function StaffPanel({
                       <div>
                         <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
                           <div
-                            className="tv-progress-glow h-full rounded-full transition-[width] duration-700 ease-out"
+                            className="h-full rounded-full transition-[width] duration-700 ease-out"
                             style={{
                               width: `${pct}%`,
                               background: overTarget
