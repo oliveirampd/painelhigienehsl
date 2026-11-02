@@ -1423,7 +1423,8 @@ function TerminalBedsPanel({
                         </>
                       ) : (
                         <span
-                          className="line-clamp-2 text-[12px] font-bold leading-tight sm:text-[13px] lg:text-[15px]"
+                          key={displayName ?? "sem-colaborador"}
+                          className="tv-name-handoff line-clamp-2 text-[12px] font-bold leading-tight sm:text-[13px] lg:text-[15px]"
                           style={{ color: displayName ? base : "rgba(255,255,255,0.4)" }}
                         >
                           {displayName ?? "sem colaborador"}
