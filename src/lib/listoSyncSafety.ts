@@ -204,11 +204,66 @@ export function isSuspiciousListoCoverage({
   currentPages: number;
   previousPages: number | null | undefined;
 }): boolean {
-  if (currentRelevant === 0) return true;
-  const relevantDropped = isSuspiciousPartialResponse(currentRelevant, previousRelevant);
-  if (!relevantDropped) return false;
+  if (currentRelevant === 0 || currentAnswers === 0 || currentPages === 0) return true;
+  // Falha de cobertura total NUNCA deve ser mascarada por uma contagem estável
+  // de respostas de higienização. É uma proteção contra limpezas em massa.
   const totalDropped = isSuspiciousPartialResponse(currentAnswers, previousAnswers);
   const pagesDropped = previousPages != null && previousPages >= 2 &&
     currentPages < Math.ceil(previousPages * 0.65);
   return totalDropped || pagesDropped;
+}
+
+
+/**
+ * Monitor independente do cron e da interface: compara o último snapshot
+ * persistido de ativos da origem com TODAS as linhas operacionais ativas.
+ *
+ * Sem inventar conclusão e sem editar dados. Serve para indicar ausência de
+ * prova de que a tela está atualizada, inclusive depois de um HTTP 200.
+ */
+export type TerminalSyncHealthStatus = "healthy" | "reconciling" | "degraded" | "stale";
+
+export type TerminalSyncHealthInput = {
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+  activeSourceIds: string[];
+  activeRows: Array<{ external_id: string; status: string; status_updated_at: string }>;
+  missingState: unknown;
+  nowMs: number;
+};
+
+export function assessTerminalSyncHealth(input: TerminalSyncHealthInput) {
+  const lastSuccessMs = input.lastSuccessAt ? Date.parse(input.lastSuccessAt) : NaN;
+  const ageSeconds = Number.isFinite(lastSuccessMs)
+    ? Math.max(0, Math.floor((input.nowMs - lastSuccessMs) / 1000))
+    : null;
+  const sourceIds = new Set(input.activeSourceIds);
+  const databaseIds = new Set(input.activeRows.map((row) => row.external_id));
+  const absent = input.activeRows.filter((row) => !sourceIds.has(row.external_id));
+  const tracked = parseMissingSyncState(input.missingState);
+  const inObservation = absent.filter((row) => tracked[row.external_id]).length;
+  const outOfLookback = absent.filter((row) =>
+    !activeRecordCoveredByLookback(row.status, row.status_updated_at, input.nowMs)
+  ).length;
+  const unobserved = absent.length - inObservation - outOfLookback;
+  const missingInDatabase = [...sourceIds].filter((id) => !databaseIds.has(id)).length;
+  const stale = ageSeconds === null || ageSeconds > 180 ||
+    input.consecutiveFailures > 0 || !!input.lastError;
+  let status: TerminalSyncHealthStatus;
+  if (stale) status = "stale";
+  else if (outOfLookback > 0 || unobserved > 0 || missingInDatabase > 0) status = "degraded";
+  else if (inObservation > 0) status = "reconciling";
+  else status = "healthy";
+
+  return {
+    status,
+    ageSeconds,
+    sourceActive: sourceIds.size,
+    databaseActive: input.activeRows.length,
+    inObservation,
+    outOfLookback,
+    unobserved: Math.max(0, unobserved),
+    missingInDatabase,
+  };
 }
