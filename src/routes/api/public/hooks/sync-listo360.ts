@@ -7,12 +7,17 @@ import {
   operationalBedKey,
 } from "@/lib/operationalScope";
 import {
+  activeRecordCoveredByLookback,
   computeSyncBackoffMs,
   formatListoDateBRT,
   isNewerListoAnswer,
   isNewListoCycleAnswer,
   isSuspiciousPartialResponse,
+  parseMissingSyncState,
+  RECONCILABLE_ACTIVE_STATUSES,
+  removeMissingSyncIds,
   selectRelevantBaseline,
+  updateMissingSyncState,
 } from "@/lib/listoSyncSafety";
 
 const LISTO_BASE = "https://api.listo360.com.br/api/backoffice";
@@ -835,25 +840,62 @@ export async function handleListo360Sync(request: Request) {
       console.error("[sync-listo360:last-completed]", historyError);
     }
 
-    // Ausência numa janela histórica NÃO é confirmação de resolução.
-    // Mantemos registros que não vieram nesta rodada, inclusive tombstones
-    // completed/completed_with_issues, porque eles guardam decisões reais do
-    // Listo ou do operador. O external_id é estável por leito/tipo, então isso
-    // não cria crescimento histórico ilimitado.
+    // Reconciliação restaurada a partir do fluxo de 31/10:
+    // 1. A API precisa ter respondido todas as páginas sem erro.
+    // 2. Não apagamos em resposta parcial (comparação com volume anterior).
+    // 3. Um leito ativo deve ter desaparecido em 3 consultas consecutivas
+    //    durante pelo menos 90s, e seu marco deve caber na janela coletada.
+    // 4. Histórico concluído e resoluções manuais nunca entram nessa limpeza.
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
     const absentRows = existingDischarges.filter((d) => !freshIds.has(d.external_id));
     const suspiciousPartial = isSuspiciousPartialResponse(
       relevant.length,
       runtimeState.last_relevant_count,
     );
-    const preservedAbsentCount = absentRows.length;
-    const removedCount = 0;
-    const cleanupSkipped = true;
-    const missingState = {};
+    const observationNow = Date.now();
+    const missingActiveRows = absentRows.filter((d) =>
+      activeRecordCoveredByLookback(d.status, d.status_updated_at, observationNow)
+    );
+    const oldActiveWithoutCoverage = absentRows.filter((d) =>
+      (RECONCILABLE_ACTIVE_STATUSES as readonly string[]).includes(d.status) &&
+      !activeRecordCoveredByLookback(d.status, d.status_updated_at, observationNow)
+    ).length;
 
-    // 3) recompute staff status server-side (fallback — /tv também deriva ao vivo)
+    const observation = updateMissingSyncState({
+      previous: parseMissingSyncState(runtimeState.missing_external_ids),
+      freshIds,
+      staleIds: missingActiveRows.map((d) => d.external_id),
+      nowMs: observationNow,
+      allowMissIncrement: !suspiciousPartial,
+      minMisses: 3,
+      minAgeMs: 90_000,
+    });
+    const deleteIds = suspiciousPartial ? [] : observation.deleteIds;
+    let removedCount = 0;
+    const deletedIds = new Set<string>();
+    for (let i = 0; i < deleteIds.length; i += 100) {
+      await ensureLockLease();
+      const { data: deleted, error: deleteError } = await supabase
+        .from("discharges")
+        .delete()
+        .in("external_id", deleteIds.slice(i, i + 100))
+        .in("status", [...RECONCILABLE_ACTIVE_STATUSES])
+        .select("external_id");
+      if (deleteError) throw deleteError;
+      for (const row of deleted ?? []) deletedIds.add(row.external_id);
+      removedCount += deleted?.length ?? 0;
+    }
+    // Se um usuário concluiu manualmente durante a sincronização, não excluímos
+    // sua resolução e removemos a ausência da quarentena mesmo assim.
+    const missingState = removeMissingSyncIds(observation.next, deleteIds);
+    const preservedAbsentCount = absentRows.length - removedCount;
+    const cleanupSkipped = suspiciousPartial;
+
+    // 3) Recalcular colaboradores com o mesmo conjunto de leitos ativo na TV.
     const reconciledByExternalId = new Map(
-      existingDischarges.map((d) => [d.external_id, d]),
+      existingDischarges
+        .filter((d) => !deletedIds.has(d.external_id))
+        .map((d) => [d.external_id, d]),
     );
     for (const row of dischargeRows) reconciledByExternalId.set(row.external_id, row);
 
@@ -958,6 +1000,8 @@ export async function handleListo360Sync(request: Request) {
       changedRows: changedRows.length,
       removedCount,
       preservedAbsentCount,
+      oldActiveWithoutCoverage,
+      missingActiveInObservation: Object.keys(missingState).length,
       activeSourceCount: activeSourceSnapshot.length,
       suspiciousPartial,
       rawTerminalStatusCounts,
@@ -983,7 +1027,8 @@ export async function handleListo360Sync(request: Request) {
       removidos_orfaos: removedCount,
       ausencias_preservadas: preservedAbsentCount,
       limpeza_pulada_resposta_suspeita: cleanupSkipped,
-      ausencias_em_observacao: 0,
+      ausencias_em_observacao: Object.keys(missingState).length,
+      ativos_antigos_fora_da_janela: oldActiveWithoutCoverage,
       origem_estados_ativos: rawTerminalStatusCounts,
       novos_ciclos_reconhecidos: reopenedCycleCount,
       ativos_bloqueados_por_ciclo: blockedActiveCycleCount,
