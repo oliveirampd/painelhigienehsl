@@ -882,7 +882,9 @@ export async function handleListo360Sync(request: Request) {
         .in("status", [...RECONCILABLE_ACTIVE_STATUSES])
         .select("external_id");
       if (deleteError) throw deleteError;
-      for (const row of deleted ?? []) deletedIds.add(row.external_id);
+      for (const row of deleted ?? []) {
+        if (typeof row.external_id === "string") deletedIds.add(row.external_id);
+      }
       removedCount += deleted?.length ?? 0;
     }
     // Se um usuário concluiu manualmente durante a sincronização, não excluímos
