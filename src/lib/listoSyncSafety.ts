@@ -178,3 +178,37 @@ export function activeRecordCoveredByLookback(
     time >= nowMs - lookbackHours * 60 * 60_000 + 120_000 &&
     time <= nowMs + 60_000;
 }
+
+
+/**
+ * Evita travamento permanente da reconciliação quando a janela móvel de 24h
+ * perde respostas antigas de higienização, mas a coleta total segue íntegra.
+ *
+ * O número de respostas RELEVANTES pode cair naturalmente por tipo de rota.
+ * Só tratamos a queda como API incompleta se houver também queda importante
+ * no total de respostas ou na paginação, além do caso sem nenhum registro
+ * relevante (possível falha na filtragem do Listo).
+ */
+export function isSuspiciousListoCoverage({
+  currentRelevant,
+  previousRelevant,
+  currentAnswers,
+  previousAnswers,
+  currentPages,
+  previousPages,
+}: {
+  currentRelevant: number;
+  previousRelevant: number | null | undefined;
+  currentAnswers: number;
+  previousAnswers: number | null | undefined;
+  currentPages: number;
+  previousPages: number | null | undefined;
+}): boolean {
+  if (currentRelevant === 0) return true;
+  const relevantDropped = isSuspiciousPartialResponse(currentRelevant, previousRelevant);
+  if (!relevantDropped) return false;
+  const totalDropped = isSuspiciousPartialResponse(currentAnswers, previousAnswers);
+  const pagesDropped = previousPages != null && previousPages >= 2 &&
+    currentPages < Math.ceil(previousPages * 0.65);
+  return totalDropped || pagesDropped;
+}
