@@ -77,7 +77,18 @@ assíncronas do `pg_net` ficam temporariamente em `net._http_response`.
 - Datas de origem ausentes reutilizam o horário conhecido quando possível.
 - Respostas vazias ou com queda abrupta de volume são tratadas como suspeitas e
   não contam como ausência de leito.
-- Ausência na janela consultada não exclui nem conclui registros operacionais.
+- A ausência de um **leito ativo** na janela de 24h pode excluí-lo do conjunto
+  operacional após **3 consultas completas e 90s**, sem criar conclusão fictícia.
+  Registros concluídos ou manualmente resolvidos são preservados; ativos fora
+  da janela não são apagados sem confirmação abrangente da fonte.
+- A integridade da coleta valida queda de páginas e volume total de respostas,
+  independentemente de a quantidade de higienizações permanecer estável.
+- A saúde da sincronização é consultável em `GET /api/public/sync-health`
+  (somente números agregados, sem leitos, nomes ou segredos), e a tela `/tv`
+  exibe aviso quando o último sucesso ultrapassa 3 minutos, quando há
+  divergência ou quando o monitor está indisponível.
+- `Ao vivo` só deve indicar status confirmado (healthy/reconciling). O
+  contador de 60s mostra a **cadência agendada**, não prova de sincronização.
 - Paginação completa e erros de leitura/escrita falham sem continuar limpando
   registros de forma destrutiva.
 - A resposta do endpoint informa duração total, tempo gasto no Listo, páginas
@@ -115,3 +126,27 @@ pela execução. Uma execução atrasada não deve limpar o lock de outra. O lea
 é de 50 segundos; monitore `last_duration_ms` e erros de lock. Se a duração
 se aproximar desse limite, revise o lease e a renovação antes de elevar a
 carga de trabalho do sync.
+
+## Diagnóstico rápido quando o Terminal divergir do Listo
+
+1. Conferir `GET /api/public/sync-health`: se `stale`, verificar o agendamento,
+   credenciais, `last_success_at` e `last_error` em `sync_runtime_state`.
+2. Se `degraded`, comparar `databaseActive`, `sourceActive`,
+   `inObservation`, `outOfLookback` e `missingInDatabase`.
+3. `reconciling` por até 3 consultas válidas é esperado após uma alta
+   desaparecer da origem; se persistir, investigar o monitor e o job.
+4. Para registros com `outOfLookback > 0`, a API de respostas das últimas
+   24h não permite confirmar a situação. Verificar o registro mais antigo
+   diretamente no Listo ou implementar consulta abrangente de ativos antes
+   de decidir removê-lo. **Nunca concluir automaticamente apenas por idade.**
+5. Consultar `net._http_response` e o registro do job para distinguir HTTP 200
+   de dados realmente coerentes. O endpoint de saúde é uma checagem de
+   consistência, não um substituto de auditoria de ponta a ponta.
+6. Ao alterar filtros, status, paginação ou regras de órfãos, acrescentar um
+   caso de teste reproduzindo a regressão antes de fazer merge/deploy. Não
+   remover proteções silenciosamente para deixar a tela artificialmente limpa.
+
+**Limite atual:** o watchdog evidencia inconsistências, mas ainda não envia
+notificação externa quando nenhuma TV está aberta. Para alertas fora da tela,
+configurar monitoramento externo do endpoint com destino de notificação
+autorizado. A janela de 24h também limita a confirmação de altas mais antigas.

@@ -23,6 +23,7 @@ import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 import { AutoScroll } from "@/components/AutoScroll";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
+import { useTerminalSyncHealth } from "@/hooks/useTerminalSyncHealth";
 import { useNow } from "@/hooks/useNow";
 import {
   elapsedMinutes,
@@ -182,6 +183,9 @@ function hygieneTargetMinutes(bedNumber: string, unit: string): number {
 
 function TvPage() {
   const { discharges, staff, loading, error } = useHospitalData();
+  const syncHealth = useTerminalSyncHealth();
+  const syncConfirmed = syncHealth?.status === "healthy" ||
+    syncHealth?.status === "reconciling";
   const now = useNow(15000);
   const clock = useClock();
   const [selectedDischarge, setSelectedDischarge] = useState<Discharge | null>(null);
@@ -673,12 +677,22 @@ function TvPage() {
           </a>
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5 sm:gap-3 lg:justify-end lg:gap-4">
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-white/50 sm:gap-1.5 sm:text-xs">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          <span
+            className={`flex items-center gap-1 text-[10px] uppercase tracking-widest sm:gap-1.5 sm:text-xs ${
+              syncConfirmed ? "text-white/65" : "text-amber-200"
+            }`}
+            title={syncConfirmed ? "Listo sincronizado e verificado" : "Verificando integridade dos dados do Listo"}
+            aria-live="polite"
+          >
+            <span className="relative flex h-2 w-2 shrink-0">
+              {syncConfirmed && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-60" />
+              )}
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${
+                syncConfirmed ? "bg-red-500" : "bg-amber-400"
+              }`} />
             </span>
-            ao vivo
+            {syncConfirmed ? "ao vivo" : "sync não confirmado"}
           </span>
           <span
             key={syncPulseVersion}
@@ -697,6 +711,28 @@ function TvPage() {
         <p role="status" className="px-4 py-2 text-sm text-amber-200 lg:px-6">
           {error ?? "Carregando dados do painel…"}
         </p>
+      )}
+      {(syncHealth?.status === "stale" ||
+        syncHealth?.status === "degraded" ||
+        syncHealth?.status === "unavailable") && (
+        <div
+          role="alert"
+          className="mx-3 mt-2 flex min-w-0 max-w-full flex-wrap items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/[0.09] px-3 py-2 text-xs leading-relaxed text-amber-100 sm:mx-4 sm:text-sm lg:mx-6"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 break-words">
+            {syncHealth.status === "stale"
+              ? "A sincronização com o Listo está atrasada ou falhou. Os leitos exibidos podem não refletir a operação atual."
+              : syncHealth.status === "unavailable"
+                ? "Não foi possível verificar a integridade da sincronização. Confirme as altas diretamente no Listo."
+                : "Há divergência entre leitos ativos e a última consulta do Listo. Os dados precisam de conferência."}
+            {syncHealth.status === "degraded" && !!syncHealth.outOfLookback && (
+              <span className="ml-1">
+                {syncHealth.outOfLookback} registro(s) fora da janela de 24h da origem.
+              </span>
+            )}
+          </span>
+        </div>
       )}
 
       <div className="min-w-0 max-w-full flex-none overflow-hidden px-4 pt-2.5 lg:px-6">

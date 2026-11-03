@@ -38,7 +38,7 @@ assert.equal(api.isSuspiciousListoCoverage(coverage), false);
 assert.equal(api.isSuspiciousListoCoverage({...coverage, currentRelevant: 0}), true);
 assert.equal(api.isSuspiciousListoCoverage({...coverage, currentAnswers: 800, currentPages: 2}), true);
 assert.equal(api.isSuspiciousListoCoverage({...coverage, currentRelevant: 350}), false);
-assert.equal(api.isSuspiciousListoCoverage({...coverage, currentAnswers: 800, currentPages: 2, currentRelevant: 350}), false);
+assert.equal(api.isSuspiciousListoCoverage({...coverage, currentAnswers: 800, currentPages: 2, currentRelevant: 350}), true);
 
 const t0 = Date.parse("2026-10-31T12:00:00.000Z");
 let state = {};
@@ -148,6 +148,70 @@ for (const [i, minute] of [0, 1, 2].entries()) {
   );
 }
 
+
+const nowHealth = Date.parse("2026-11-03T10:40:00.000Z");
+const latest = "2026-11-03T10:39:00.000Z";
+const standardInput = {
+  lastSuccessAt: latest,
+  lastError: null,
+  consecutiveFailures: 0,
+  activeSourceIds: ["listo:answer:bed:leito-824"],
+  activeRows: [{
+    external_id: "listo:answer:bed:leito-824",
+    status: "waiting_cleaning",
+    status_updated_at: latest,
+  }],
+  missingState: {},
+  nowMs: nowHealth,
+};
+const evaluate = (overrides = {}) => api.assessTerminalSyncHealth({
+  ...standardInput, ...overrides,
+});
+assert.equal(evaluate().status, "healthy");
+assert.equal(evaluate().ageSeconds, 60);
+assert.equal(evaluate({lastSuccessAt: "2026-11-03T10:30:00.000Z"}).status, "stale");
+assert.equal(evaluate({consecutiveFailures: 1}).status, "stale");
+assert.equal(evaluate({lastSuccessAt: null}).status, "stale");
+assert.equal(evaluate({activeSourceIds: []}).status, "degraded");
+assert.equal(evaluate({activeRows: []}).status, "degraded");
+const unseen = {
+  external_id: "listo:box:bed:box-78",
+  status: "waiting_cleaning",
+  status_updated_at: "2026-11-02T17:00:00.000Z",
+};
+const drift = evaluate({activeRows: [...standardInput.activeRows, unseen]});
+assert.equal(drift.status, "degraded");
+assert.equal(drift.unobserved, 1);
+const reconciling = evaluate({
+  activeRows: [...standardInput.activeRows, unseen],
+  missingState: {
+    [unseen.external_id]: {
+      count: 2, firstMissingAt: latest, lastMissingAt: latest,
+    },
+  },
+});
+assert.equal(reconciling.status, "reconciling");
+assert.equal(reconciling.inObservation, 1);
+const outside = evaluate({
+  activeRows: [{...unseen, status_updated_at: "2026-11-01T06:00:00.000Z"}],
+  activeSourceIds: [],
+});
+assert.equal(outside.status, "degraded");
+assert.equal(outside.outOfLookback, 1);
+assert.equal(outside.unobserved, 0);
+// Nenhum leito ativo é uma condição válida, desde que a sincronização seja recente.
+assert.equal(evaluate({activeRows: [], activeSourceIds: []}).status, "healthy");
+// Muitos leitos em execução não significam inconsistência.
+const fifty = Array.from({length: 50}, (_, id) => ({
+  external_id: `listo:answer:bed:leito-${id}`,
+  status: "in_progress",
+  status_updated_at: latest,
+}));
+assert.equal(evaluate({
+  activeRows: fifty,
+  activeSourceIds: fifty.map((row) => row.external_id),
+}).status, "healthy");
+
 const syncSource = fs.readFileSync("src/routes/api/public/hooks/sync-listo360.ts", "utf8");
 assert.match(syncSource, /formatListoDateBRT/);
 assert.match(syncSource, /activeRecordCoveredByLookback\(d\.status, d\.status_updated_at/);
@@ -159,6 +223,14 @@ assert.match(syncSource, /oldActiveWithoutCoverage/);
 assert.match(syncSource, /isSuspiciousListoCoverage\(\{/);
 assert.match(syncSource, /previousAnswers: runtimeState\.last_answers_count/);
 assert.match(syncSource, /previousPages: runtimeState\.last_pages/);
+const healthSource = fs.readFileSync("src/routes/api/public/sync-health.ts", "utf8");
+const tvSource = fs.readFileSync("src/routes/tv.tsx", "utf8");
+assert.match(healthSource, /assessTerminalSyncHealth\(/);
+assert.match(healthSource, /Cache-Control/);
+assert.doesNotMatch(healthSource, /return Response\.json\(\{.*external_id/);
+assert.match(tvSource, /useTerminalSyncHealth/);
+assert.match(tvSource, /sync não confirmado/);
+
 assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
 assert.match(syncSource, /completed_with_issues/);
 assert.match(syncSource, /if \(!cronSecret\)/);
