@@ -100,9 +100,48 @@ assert.equal(
 );
 assert.equal(api.isNewerListoAnswer({ id: 18205000 }, { id: 18206123 }), false);
 
+// Regressão 01/11: quatro leitos sumiram do snapshot do Listo, mas permaneceram
+// indefinidamente como waiting_cleaning. Testa a reconciliação sem autoconcluir.
+const moment = Date.parse("2026-11-03T10:09:00.000Z");
+const insideWindow = "2026-11-02T22:27:06.000Z";
+const outsideWindow = "2026-11-02T09:00:00.000Z";
+assert.equal(api.activeRecordCoveredByLookback("waiting_cleaning", insideWindow, moment), true);
+assert.equal(api.activeRecordCoveredByLookback("en_route", insideWindow, moment), true);
+assert.equal(api.activeRecordCoveredByLookback("in_progress", insideWindow, moment), true);
+assert.equal(api.activeRecordCoveredByLookback("paused", insideWindow, moment), true);
+assert.equal(api.activeRecordCoveredByLookback("completed", insideWindow, moment), false);
+assert.equal(api.activeRecordCoveredByLookback("completed_with_issues", insideWindow, moment), false);
+assert.equal(api.activeRecordCoveredByLookback("waiting_cleaning", outsideWindow, moment), false);
+assert.equal(api.activeRecordCoveredByLookback("waiting_cleaning", "not-a-date", moment), false);
+
+let observed = {};
+for (const [i, minute] of [0, 1, 2].entries()) {
+  const change = api.updateMissingSyncState({
+    previous: observed,
+    freshIds: new Set(["listo:answer:bed:presente"]),
+    staleIds: ["listo:answer:bed:leito-1415", "listo:box:bed:box-78"],
+    nowMs: moment + minute * 60_000,
+    allowMissIncrement: true,
+    minMisses: 3,
+    minAgeMs: 90_000,
+  });
+  observed = change.next;
+  assert.deepEqual(
+    change.deleteIds.sort(),
+    i === 2
+      ? ["listo:answer:bed:leito-1415", "listo:box:bed:box-78"].sort()
+      : [],
+  );
+}
+
 const syncSource = fs.readFileSync("src/routes/api/public/hooks/sync-listo360.ts", "utf8");
 assert.match(syncSource, /formatListoDateBRT/);
-assert.doesNotMatch(syncSource, /\.delete\(\)\.in\("external_id"/);
+assert.match(syncSource, /activeRecordCoveredByLookback\(d\.status, d\.status_updated_at/);
+assert.match(syncSource, /minMisses: 3/);
+assert.match(syncSource, /minAgeMs: 90_000/);
+assert.match(syncSource, /\.in\("status", \[\.\.\.RECONCILABLE_ACTIVE_STATUSES\]\)/);
+assert.match(syncSource, /suspiciousPartial \? \[\] : observation\.deleteIds/);
+assert.match(syncSource, /oldActiveWithoutCoverage/);
 assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
 assert.match(syncSource, /completed_with_issues/);
 assert.match(syncSource, /if \(!cronSecret\)/);
