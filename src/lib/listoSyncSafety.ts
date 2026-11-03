@@ -147,3 +147,34 @@ export function isNewListoCycleAnswer(
     Number.isFinite(prev) &&
     sourceAnswerId > prev;
 }
+
+
+/** Estados operacionais que precisam espelhar a origem, não tombstones de conclusão. */
+export const RECONCILABLE_ACTIVE_STATUSES = [
+  "waiting_cleaning",
+  "en_route",
+  "in_progress",
+  "paused",
+  "maintenance",
+] as const;
+
+/**
+ * A busca all-answers é limitada a 24h. Só a ausência de registros cujo
+ * status atual nasceu DENTRO dessa janela pode ser tomada como evidência
+ * de que saíram do Listo. Não excluir altas antigas sem consulta abrangente.
+ */
+export function activeRecordCoveredByLookback(
+  status: string,
+  statusUpdatedAt: string,
+  nowMs: number,
+  lookbackHours = 24,
+): boolean {
+  if (!(RECONCILABLE_ACTIVE_STATUSES as readonly string[]).includes(status)) {
+    return false;
+  }
+  const time = Date.parse(statusUpdatedAt);
+  // Margem de 2min na borda de 24h por diferenças de relógio/API.
+  return Number.isFinite(time) &&
+    time >= nowMs - lookbackHours * 60 * 60_000 + 120_000 &&
+    time <= nowMs + 60_000;
+}
