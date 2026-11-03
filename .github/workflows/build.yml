@@ -34,10 +34,11 @@ jobs:
         run: node tests/fetch-pages.test.mjs
       - name: Test Terminal motion safeguards
         run: node tests/terminal-motion.test.mjs
-      - name: Typecheck
-        run: bunx tsc --noEmit
-      - name: Build
+      # TanStack Router gera os tipos de novas rotas durante o build.
+      - name: Build (generate route types)
         run: bun run build
+      - name: Typecheck generated routes
+        run: bunx tsc --noEmit
       - name: Validate Terminal sync Durable Object bundle
         run: |
           grep -q "TerminalSyncDurableObject" .output/server/index.mjs || { echo "DO class missing from server bundle"; exit 1; }
