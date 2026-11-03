@@ -26,6 +26,20 @@ assert.equal(api.selectRelevantBaseline(284, 449, true), 449);
 assert.equal(api.selectRelevantBaseline(284, 449, false), 284);
 assert.equal(api.selectRelevantBaseline(12, null, true), 12);
 
+// Incidente 03/11: 356 relevantes como baseline histórico, agora ~182,
+// mas mais de 3.500 respostas e 8 páginas completas por sincronização.
+// Antes, esse cenário marcava a origem como parcial para sempre.
+const coverage = {
+  currentRelevant: 182, previousRelevant: 356,
+  currentAnswers: 3602, previousAnswers: 3596,
+  currentPages: 8, previousPages: 8,
+};
+assert.equal(api.isSuspiciousListoCoverage(coverage), false);
+assert.equal(api.isSuspiciousListoCoverage({...coverage, currentRelevant: 0}), true);
+assert.equal(api.isSuspiciousListoCoverage({...coverage, currentAnswers: 800, currentPages: 2}), true);
+assert.equal(api.isSuspiciousListoCoverage({...coverage, currentRelevant: 350}), false);
+assert.equal(api.isSuspiciousListoCoverage({...coverage, currentAnswers: 800, currentPages: 2, currentRelevant: 350}), false);
+
 const t0 = Date.parse("2026-10-31T12:00:00.000Z");
 let state = {};
 let result = api.updateMissingSyncState({
@@ -142,6 +156,9 @@ assert.match(syncSource, /minAgeMs: 90_000/);
 assert.match(syncSource, /\.in\("status", \[\.\.\.RECONCILABLE_ACTIVE_STATUSES\]\)/);
 assert.match(syncSource, /suspiciousPartial \? \[\] : observation\.deleteIds/);
 assert.match(syncSource, /oldActiveWithoutCoverage/);
+assert.match(syncSource, /isSuspiciousListoCoverage\(\{/);
+assert.match(syncSource, /previousAnswers: runtimeState\.last_answers_count/);
+assert.match(syncSource, /previousPages: runtimeState\.last_pages/);
 assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
 assert.match(syncSource, /completed_with_issues/);
 assert.match(syncSource, /if \(!cronSecret\)/);

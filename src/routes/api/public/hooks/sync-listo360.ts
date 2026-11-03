@@ -12,7 +12,7 @@ import {
   formatListoDateBRT,
   isNewerListoAnswer,
   isNewListoCycleAnswer,
-  isSuspiciousPartialResponse,
+  isSuspiciousListoCoverage,
   parseMissingSyncState,
   RECONCILABLE_ACTIVE_STATUSES,
   removeMissingSyncIds,
@@ -848,10 +848,14 @@ export async function handleListo360Sync(request: Request) {
     // 4. Histórico concluído e resoluções manuais nunca entram nessa limpeza.
     const freshIds = new Set(dischargeRows.map((d) => d.external_id));
     const absentRows = existingDischarges.filter((d) => !freshIds.has(d.external_id));
-    const suspiciousPartial = isSuspiciousPartialResponse(
-      relevant.length,
-      runtimeState.last_relevant_count,
-    );
+    const suspiciousPartial = isSuspiciousListoCoverage({
+      currentRelevant: relevant.length,
+      previousRelevant: runtimeState.last_relevant_count,
+      currentAnswers: answers.length,
+      previousAnswers: runtimeState.last_answers_count,
+      currentPages: source.pages,
+      previousPages: runtimeState.last_pages,
+    });
     const observationNow = Date.now();
     const missingActiveRows = absentRows.filter((d) =>
       activeRecordCoveredByLookback(d.status, d.status_updated_at, observationNow)
