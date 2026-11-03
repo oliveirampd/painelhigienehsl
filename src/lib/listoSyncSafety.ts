@@ -242,11 +242,12 @@ export function assessTerminalSyncHealth(input: TerminalSyncHealthInput) {
   const databaseIds = new Set(input.activeRows.map((row) => row.external_id));
   const absent = input.activeRows.filter((row) => !sourceIds.has(row.external_id));
   const tracked = parseMissingSyncState(input.missingState);
-  const inObservation = absent.filter((row) => tracked[row.external_id]).length;
-  const outOfLookback = absent.filter((row) =>
-    !activeRecordCoveredByLookback(row.status, row.status_updated_at, input.nowMs)
-  ).length;
-  const unobserved = absent.length - inObservation - outOfLookback;
+  const covered = absent.filter((row) =>
+    activeRecordCoveredByLookback(row.status, row.status_updated_at, input.nowMs)
+  );
+  const outOfLookback = absent.length - covered.length;
+  const inObservation = covered.filter((row) => tracked[row.external_id]).length;
+  const unobserved = covered.length - inObservation;
   const missingInDatabase = [...sourceIds].filter((id) => !databaseIds.has(id)).length;
   const stale = ageSeconds === null || ageSeconds > 180 ||
     input.consecutiveFailures > 0 || !!input.lastError;
