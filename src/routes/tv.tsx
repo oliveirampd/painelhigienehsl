@@ -21,6 +21,7 @@ import { PanelNav } from "@/components/PanelNav";
 import { SyncCounter } from "@/components/SyncCounter";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 import { AutoScroll } from "@/components/AutoScroll";
+import { preserveTerminalStageProgress, type TerminalStageMemory } from "@/lib/terminalDisplayStage";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useTerminalSyncHealth } from "@/hooks/useTerminalSyncHealth";
@@ -60,32 +61,24 @@ function dismantleWasSuperseded(dismantle: Discharge, rows: Discharge[]): boolea
   const bedKey = operationalBedKey(dismantle.unit || "", dismantle.bed_number || "");
   const dismantleStart = new Date(dismantle.status_updated_at).getTime();
   if (!Number.isFinite(dismantleStart)) return false;
-  const toleranceMs = 10 * 60 * 1000;
+  // Uma desmontagem registrada tardiamente pode ter horário POSTERIOR ao início
+  // da higiene. Não pode rebaixar uma limpeza que já esteja em execução.
+  const lateDismantleWindowMs = 4 * 60 * 60 * 1000;
 
   return rows.some((row) => {
     if (operationalBedKey(row.unit || "", row.bed_number || "") !== bedKey) return false;
 
-    if (isLastCompletedSnapshot(row)) {
-      if (!row.completed_at) return false;
-      const cleaningStarted = new Date(row.status_updated_at).getTime();
-      const cleaningCompleted = new Date(row.completed_at).getTime();
-      return (
-        Number.isFinite(cleaningStarted) &&
-        Number.isFinite(cleaningCompleted) &&
-        cleaningStarted >= dismantleStart - toleranceMs &&
-        cleaningCompleted >= dismantleStart
-      );
+    // Conclusão real: desmontagem só pertence ao mesmo ciclo se começou antes
+    // do fim da higiene. Uma nova desmontagem após a conclusão pode reaparecer.
+    if (isLastCompletedSnapshot(row) || (isTerminal(row) && row.status === "completed")) {
+      const completedAt = new Date(row.completed_at ?? "").getTime();
+      return Number.isFinite(completedAt) && completedAt >= dismantleStart;
     }
 
-    if (!isTerminal(row) || (row.status !== "in_progress" && row.status !== "completed")) {
-      return false;
-    }
-    const terminalMoment = new Date(row.status_updated_at).getTime();
-    if (!Number.isFinite(terminalMoment) || terminalMoment < dismantleStart - toleranceMs) {
-      return false;
-    }
-    return row.status !== "completed" || !row.completed_at ||
-      new Date(row.completed_at).getTime() >= dismantleStart;
+    if (!isTerminal(row) || row.status !== "in_progress") return false;
+    const hygieneStarted = new Date(row.status_updated_at).getTime();
+    return Number.isFinite(hygieneStarted) &&
+      hygieneStarted >= dismantleStart - lateDismantleWindowMs;
   });
 }
 const isTerminalDisplayLocation = (d: Discharge) => isBed(d) || isTerminalBox(d);
@@ -239,10 +232,18 @@ function TvPage() {
   const flashVersions = flashVersionRef.current;
   const entryVersions = entryVersionRef.current;
 
-  const filtered = useMemo(
+  const sourceFiltered = useMemo(
     () => discharges.filter((d) => !isExcluded(d) && isTerminalDisplayLocation(d)),
     [discharges],
   );
+  // Apenas a exibição da TV retém o maior estágio visto no mesmo answer do Listo.
+  // O banco, o realtime e o sync continuam recebendo os dados originais.
+  const terminalStageMemoryRef = useRef<TerminalStageMemory>(new Map());
+  const filtered = useMemo(() => {
+    const resolved = preserveTerminalStageProgress(sourceFiltered, terminalStageMemoryRef.current);
+    terminalStageMemoryRef.current = resolved.memory;
+    return resolved.rows;
+  }, [sourceFiltered]);
 
   // Em Limpeza: terminal + in_progress
   const inFlight = useMemo(
@@ -343,9 +344,10 @@ function TvPage() {
     }
     for (const d of inFlight) {
       if (!d.assigned_staff_id) continue;
-      // desmontando tem prioridade se ambos existirem (raro), mas mais recente vence
+      // Higiene iniciada sempre tem prioridade para o mesmo colaborador,
+      // mesmo que a desmontagem tenha chegado ao painel depois.
       const prev = activity.get(d.assigned_staff_id);
-      if (!prev || new Date(d.status_updated_at) > new Date(prev.start)) {
+      if (!prev || prev.kind !== "em_alta" || new Date(d.status_updated_at) > new Date(prev.start)) {
         activity.set(d.assigned_staff_id, {
           kind: "em_alta",
           start: d.status_updated_at,
@@ -1394,7 +1396,9 @@ function TerminalBedsPanel({
                 const dismantleName = isDismantling && dismantle.row.assigned_staff_id
                   ? staffMap.get(dismantle.row.assigned_staff_id)?.name
                   : null;
-                const displayName = dismantleName ?? name;
+                // A pessoa designada para a limpeza terminal continua sendo a
+                // referência principal; o registro de desmontagem não a substitui.
+                const displayName = name ?? dismantleName;
                 const base = isDismantling
                   ? KIND_COLOR.desmontagem
                   : overtime ? OVERDUE_COLOR : KIND_COLOR[kind];
