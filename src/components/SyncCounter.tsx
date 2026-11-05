@@ -26,7 +26,7 @@ export function SyncCounter({
   const cycleProgress = Math.min(100, (elapsedSeconds / cadenceSeconds) * 100);
 
   return (
-    <span className="relative inline-flex max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-full border border-white/10 bg-white/[0.035] px-1.5 py-1 font-mono text-[10px] text-white/45 sm:gap-1.5 sm:px-2 sm:text-xs">
+    <span className="qh-sync-counter relative inline-flex max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-full border border-white/10 bg-white/[0.035] px-1.5 py-1 font-mono text-[10px] text-white/45 sm:gap-1.5 sm:px-2 sm:text-xs">
       <span
         aria-hidden="true"
         className="absolute inset-y-0 left-0 bg-sky-400/[0.06] transition-[width] duration-300"

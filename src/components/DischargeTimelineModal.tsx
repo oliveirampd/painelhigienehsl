@@ -152,7 +152,7 @@ export function DischargeTimelineModal({
         ref={dialogRef}
         tabIndex={-1}
         style={theme}
-        className={"bed-detail-dialog flex max-h-[min(92dvh,790px)] w-full max-w-[610px] min-w-0 flex-col overflow-hidden rounded-t-[22px] border border-[#263445] bg-[#090d13] text-[#f3f7fb] shadow-[0_18px_65px_rgba(0,0,0,0.55)] outline-none sm:max-h-[min(88dvh,790px)] sm:rounded-[22px] " +
+        className={"bed-detail-dialog flex max-h-[min(92dvh,790px)] w-full max-w-[610px] min-w-0 flex-col overflow-hidden rounded-t-xl border border-[#263445] bg-[#090d13] text-[#f3f7fb] shadow-[0_18px_65px_rgba(0,0,0,0.55)] outline-none sm:max-h-[min(88dvh,790px)] sm:rounded-xl " +
           (closing ? "bed-detail-dialog-closing" : "")}
         onClick={(event) => event.stopPropagation()}
       >
@@ -160,11 +160,11 @@ export function DischargeTimelineModal({
           <div className="absolute inset-x-0 top-0 h-[2px] bg-[var(--bed-accent)] opacity-80" aria-hidden="true" />
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--bed-accent-border)] bg-[var(--bed-accent-bg)] text-[var(--bed-accent)]">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--bed-accent-border)] bg-[var(--bed-accent-bg)] text-[var(--bed-accent)]">
                 <BedDouble className="h-5 w-5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#91a2b5] sm:text-[11px]">
+                <p className="text-[11px] font-semibold normal-case tracking-normal text-[#91a2b5] sm:text-[11px]">
                   Visão operacional do leito
                 </p>
                 <h2 id="bed-detail-title" className="mt-0.5 break-words text-[23px] font-bold leading-tight tracking-tight sm:text-[27px]">
@@ -180,7 +180,7 @@ export function DischargeTimelineModal({
               type="button"
               onClick={requestClose}
               aria-label="Fechar detalhes do leito"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-[#a8b7c8] transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.035] text-[#a8b7c8] transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -188,7 +188,7 @@ export function DischargeTimelineModal({
         </div>
 
         <div className="bed-detail-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pb-4 pt-3 sm:space-y-4 sm:px-5 sm:pb-5 sm:pt-4">
-          <section className="bed-detail-reveal rounded-xl border border-[var(--bed-accent-border)] bg-[var(--bed-accent-bg)] px-3 py-3 sm:px-4">
+          <section className="bed-detail-reveal rounded-lg border border-[var(--bed-accent-border)] bg-[var(--bed-accent-bg)] px-3 py-3 sm:px-4">
             <div className="flex min-w-0 items-center gap-2">
               <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--bed-accent)]" aria-hidden="true" />
               <h3 className="min-w-0 break-words text-[13px] font-semibold text-[var(--bed-accent)] sm:text-sm">
@@ -198,8 +198,8 @@ export function DischargeTimelineModal({
             <p className="mt-1.5 text-[11px] text-white/55 sm:text-xs">Etapa operacional atual</p>
           </section>
 
-          <section className="bed-detail-reveal bed-detail-reveal-second rounded-xl border border-[#293747] bg-[#111a25] px-3 py-3 sm:px-4">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[#90a2b5]">
+          <section className="bed-detail-reveal bed-detail-reveal-second rounded-lg border border-[#293747] bg-[#111a25] px-3 py-3 sm:px-4">
+            <div className="flex items-center gap-2 text-[11px] font-semibold normal-case tracking-normal text-[#90a2b5]">
               <UserRound className="h-4 w-4 shrink-0" aria-hidden="true" />
               Colaborador alocado
             </div>
@@ -226,7 +226,7 @@ export function DischargeTimelineModal({
             />
           </div>
 
-          <section className="bed-detail-reveal bed-detail-reveal-third min-w-0 rounded-xl border border-[#293747] bg-[#0e151e] p-3 sm:p-4">
+          <section className="bed-detail-reveal bed-detail-reveal-third min-w-0 rounded-lg border border-[#293747] bg-[#0e151e] p-3 sm:p-4">
             <div className="flex min-w-0 items-center gap-2">
               <History className="h-4 w-4 shrink-0 text-[#a9bcd1]" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-[#f3f7fb]">Histórico do leito</h3>
@@ -288,8 +288,8 @@ export function DischargeTimelineModal({
           </section>
 
           {discharge.pause_reason && (
-            <section className="min-w-0 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-3 py-3 sm:px-4">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-amber-200">Observação</h3>
+            <section className="min-w-0 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-3 py-3 sm:px-4">
+              <h3 className="text-[11px] font-semibold normal-case tracking-normal text-amber-200">Observação</h3>
               <p className="mt-1 break-words text-[13px] leading-relaxed text-amber-50/90">{discharge.pause_reason}</p>
             </section>
           )}
@@ -303,7 +303,7 @@ export function DischargeTimelineModal({
           <button
             type="button"
             onClick={requestClose}
-            className="flex min-h-10 w-full items-center justify-center rounded-lg border border-[#35465a] bg-[#182330] px-4 text-[13px] font-semibold text-[#d9e6f3] transition-colors hover:bg-[#243346] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:ml-auto sm:w-auto sm:min-w-24"
+            className="flex min-h-11 w-full items-center justify-center rounded-lg border border-[#35465a] bg-[#182330] px-4 text-[13px] font-semibold text-[#d9e6f3] transition-colors hover:bg-[#243346] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 sm:ml-auto sm:w-auto sm:min-w-24"
           >
             Fechar
           </button>
@@ -322,8 +322,8 @@ function MetricCard({
   accent?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-[#2a394b] bg-[#121c27] px-3 py-3">
-      <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase leading-tight tracking-wide text-[#93a6b9] sm:text-[11px]">
+    <div className="min-w-0 rounded-lg border border-[#2a394b] bg-[#121c27] px-3 py-3">
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold normal-case leading-tight tracking-normal text-[#93a6b9] sm:text-[11px]">
         <span className="shrink-0">{icon}</span>
         <span className="min-w-0">{label}</span>
       </div>
@@ -338,7 +338,7 @@ function MetricCard({
 function HistoryMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 rounded-lg border border-[#2b3a4b] bg-[#1b2836] px-2 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#91a4b8]">{label}</p>
+      <p className="text-[11px] font-semibold normal-case tracking-normal text-[#91a4b8]">{label}</p>
       <p className="mt-1 break-words font-mono text-[12px] font-semibold leading-snug tabular-nums text-[#f2f6fb] sm:text-sm">{value}</p>
     </div>
   );
