@@ -229,7 +229,10 @@ assert.match(healthSource, /assessTerminalSyncHealth\(/);
 assert.match(healthSource, /Cache-Control/);
 assert.doesNotMatch(healthSource, /return Response\.json\(\{.*external_id/);
 assert.match(tvSource, /useTerminalSyncHealth/);
-assert.match(tvSource, /sync não confirmado/);
+assert.match(tvSource, /describeTerminalSyncNotice\(syncHealth, now\)/);
+const syncNoticeSource = fs.readFileSync("src/lib/terminalSyncNotice.ts", "utf8");
+assert.match(syncNoticeSource, /Monitor indisponível/);
+assert.match(syncNoticeSource, /Sync sem confirmação/);
 
 assert.doesNotMatch(syncSource, /STALE_LIMIT_MIN/);
 assert.match(syncSource, /completed_with_issues/);

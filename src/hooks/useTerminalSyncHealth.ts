@@ -11,6 +11,8 @@ export type TerminalSyncHealth = {
   outOfLookback?: number;
   unobserved?: number;
   missingInDatabase?: number;
+  /** Falhas seguidas apenas do endpoint de monitoramento (não do Listo). */
+  monitorFailures?: number;
 };
 
 /** O contador de 60s é apenas uma agenda. Este monitor lê o sucesso REAL. */
@@ -30,9 +32,15 @@ export function useTerminalSyncHealth() {
         if (!["healthy", "reconciling", "degraded", "stale"].includes(value.status)) {
           throw new Error("Resposta de integridade inválida");
         }
-        if (mounted) setHealth(value);
+        if (mounted) setHealth({ ...value, monitorFailures: 0 });
       } catch {
-        if (mounted) setHealth({ status: "unavailable" });
+        // Uma consulta isolada do monitor pode falhar sem o Listo ter parado.
+        // Preservamos o último horário conhecido e contamos apenas erros do monitor.
+        if (mounted) setHealth((previous) => ({
+          ...previous,
+          status: "unavailable",
+          monitorFailures: (previous?.monitorFailures ?? 0) + 1,
+        }));
       } finally {
         pending = false;
       }
