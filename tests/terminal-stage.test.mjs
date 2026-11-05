@@ -77,8 +77,8 @@ test("registros de desmontagem continuam independentes da higiene", () => {
 
 test("Terminal dá prioridade ao nome do responsável pela higiene e não ao da desmontagem", () => {
   const tv = fs.readFileSync("src/routes/tv.tsx", "utf8");
-  assert.match(tv, /const displayName = name \\?\\? dismantleName/);
-  assert.match(tv, /prev.kind !== "em_alta"/);
-  assert.match(tv, /lateDismantleWindowMs = 4 \\* 60 \\* 60 \\* 1000/);
-  assert.doesNotMatch(tv, /const displayName = dismantleName \\?\\? name/);
+  assert.ok(tv.includes("const displayName = name ?? dismantleName;"));
+  assert.ok(tv.includes('prev.kind !== "em_alta"'));
+  assert.ok(tv.includes("lateDismantleWindowMs = 4 * 60 * 60 * 1000"));
+  assert.ok(!tv.includes("const displayName = dismantleName ?? name"));
 });
