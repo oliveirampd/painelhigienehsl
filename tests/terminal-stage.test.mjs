@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { stripTypeScriptTypes } from "node:module";
+
+import { preserveTerminalStageProgress } from "../src/lib/terminalDisplayStage.ts";
 import test from "node:test";
 
-// Executa a função REAL de apresentação, sem mockar suas regras.
-const source = fs.readFileSync("src/lib/terminalDisplayStage.ts", "utf8");
-const stripped = stripTypeScriptTypes(source, { mode: "strip" });
-const url = `data:text/javascript;base64,${Buffer.from(stripped).toString("base64")}`;
-const { preserveTerminalStageProgress } = await import(url);
+// Bun importa TypeScript nativamente; os testes executam a função real do Terminal.
 
 const mk = (status, answerId = "818-20261104", overrides = {}) => ({
   external_id: "listo:answer:bed:bloco-c-08-andar|leito-818",
