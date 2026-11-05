@@ -833,13 +833,13 @@ function TvPage() {
         <KpiCard
           label="Em Limpeza"
           value={inFlight.length}
-          accent="var(--qh-border)"
+          accent="oklch(0.75 0.22 155)"
           trend={trendFor("inFlight", inFlight.length)}
         />
         <KpiCard
           label="A Caminho"
           value={enRoute.length}
-          accent="var(--qh-border)"
+          accent="oklch(0.74 0.18 230)"
           trend={trendFor("enRoute", enRoute.length)}
         />
         <KpiCard
