@@ -21,6 +21,7 @@ import { PanelNav } from "@/components/PanelNav";
 import { SyncCounter } from "@/components/SyncCounter";
 import { DischargeTimelineModal } from "@/components/DischargeTimelineModal";
 import { AutoScroll } from "@/components/AutoScroll";
+import { isTerminalActivityTimedOut } from "@/lib/terminalActivityTimeout";
 
 import { useHospitalData } from "@/hooks/useHospitalData";
 import { useTerminalSyncHealth } from "@/hooks/useTerminalSyncHealth";
@@ -239,9 +240,17 @@ function TvPage() {
   const flashVersions = flashVersionRef.current;
   const entryVersions = entryVersionRef.current;
 
+  // Esquecimentos não podem manter leito/colaborador ativo indefinidamente.
+  // Desmontagem: 35 min; higiene terminal (leito e box): 4 h.
+  // Apenas a apresentação é filtrada: não inventa conclusão nem altera o sync.
+  // O relógio atualiza a cada 15 s, mesmo entre duas sincronizações.
   const filtered = useMemo(
-    () => discharges.filter((d) => !isExcluded(d) && isTerminalDisplayLocation(d)),
-    [discharges],
+    () => discharges.filter((d) =>
+      !isExcluded(d) &&
+      isTerminalDisplayLocation(d) &&
+      !isTerminalActivityTimedOut(d, now),
+    ),
+    [discharges, now],
   );
 
   // Em Limpeza: terminal + in_progress
