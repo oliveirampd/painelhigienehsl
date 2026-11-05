@@ -691,7 +691,7 @@ function TvPage() {
           <span
             className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-[11px] normal-case leading-tight tracking-normal sm:text-xs ${
               syncNotice.tone === "healthy"
-                ? "text-white/65"
+                ? "tv-live-indicator text-white/65"
                 : syncNotice.tone === "checking"
                   ? "text-white/45"
                   : "text-amber-200"
@@ -701,7 +701,7 @@ function TvPage() {
           >
             <span className={`h-2 w-2 shrink-0 rounded-full ${
               syncNotice.tone === "healthy"
-                ? "bg-red-500"
+                ? "tv-live-dot bg-red-500"
                 : syncNotice.tone === "checking"
                   ? "bg-white/40"
                   : "bg-amber-400"
@@ -860,13 +860,13 @@ function TvPage() {
           label="A Caminho · média agora"
           value={avgEnRouteAge ?? 0}
           display={avgEnRouteAge == null ? "—" : `${avgEnRouteAge}m`}
-          accent="oklch(0.8 0.16 85)"
+          accent="var(--qh-border)"
         />
         <KpiCard
           label="Em execução · média agora"
           value={avgExecution ?? 0}
           display={avgExecution == null ? "—" : `${avgExecution}m`}
-          accent="oklch(0.75 0.14 195)"
+          accent="var(--qh-border)"
         />
       </div>
 
