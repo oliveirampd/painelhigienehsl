@@ -757,7 +757,9 @@
 .tv-terminal-page .qh-bed-status { font-weight: 600; }
 .tv-terminal-page .panel-critical-badge { top: -7px; right: 6px; font-size: 11px; line-height: 14px; }
 .tv-terminal-page .tv-staff-row-in {
-  background: var(--qh-surface); border-color: var(--qh-border-subtle);
+  background: var(--qh-surface);
+  background: color-mix(in srgb, var(--qh-accent) 14%, var(--qh-surface));
+  border-color: var(--qh-border-subtle);
   border-left: 3px solid var(--qh-accent); border-radius: 6px; box-shadow: none;
 }
 .tv-terminal-page .panel-paused-table-head { background: var(--qh-surface-raised); box-shadow: none; color: var(--qh-text-secondary); }
