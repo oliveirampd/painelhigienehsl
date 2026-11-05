@@ -1447,7 +1447,7 @@ function TerminalBedsPanel({
                       {kind === "parada" && !isDismantling ? (
                         <>
                           <span className="text-[11px] font-semibold normal-case tracking-normal text-white/55 sm:text-xs">
-                            Aguardando há
+                            Alta parada há
                           </span>
                           <span
                             className="mt-1 font-mono text-lg font-bold leading-none tabular-nums sm:text-xl lg:text-2xl"
