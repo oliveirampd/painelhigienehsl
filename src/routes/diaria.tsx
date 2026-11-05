@@ -518,7 +518,7 @@ function DiariaPage() {
   return (
     <div
       ref={mainRef}
-      className={`${themeClass} daily-panel-page scrollbar-hidden min-h-screen w-full max-w-full flex flex-col overflow-x-hidden overflow-y-auto font-sans ${isDark ? "bg-[#050505]" : "bg-background"} text-foreground lg:h-screen lg:overflow-y-auto`}
+      className={`${themeClass} daily-panel-page scrollbar-hidden min-h-screen w-full max-w-full min-w-0 flex flex-col overflow-y-auto font-sans ${isDark ? "bg-[#050505]" : "bg-background"} text-foreground lg:h-screen lg:overflow-y-auto`}
     >
 
       <header className="panel-shell-header flex-none border-b border-white/10 px-3 py-2.5 sm:px-4 sm:py-3 lg:px-6">
@@ -527,8 +527,8 @@ function DiariaPage() {
             <h1 className="text-[15px] font-bold tracking-tight sm:text-base lg:text-2xl">Higiene Diária · Leitos</h1>
             <PanelNav />
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 text-[10px] sm:gap-4 sm:text-xs">
-            <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-white/50 sm:gap-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] sm:gap-4 sm:text-xs">
+            <span className="inline-flex items-center gap-1 font-semibold normal-case tracking-normal text-white/50 sm:gap-1.5">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
@@ -554,10 +554,10 @@ function DiariaPage() {
 
       <section aria-label="Indicadores do turno" className="flex-none px-3 pb-2.5 pt-2.5 sm:px-4 sm:pb-3 sm:pt-3 lg:px-6">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/50 sm:text-xs sm:tracking-[0.14em]">
+          <h2 className="text-[11px] font-semibold normal-case tracking-normal text-white/50 sm:text-xs sm:tracking-normal">
             Ritmo das rotinas
           </h2>
-          <span className="text-[10px] text-white/40 sm:text-xs">Turno atual</span>
+          <span className="text-[11px] text-white/40 sm:text-xs">Turno atual</span>
         </div>
         <div className="grid grid-cols-2 gap-1.5 sm:gap-2 md:grid-cols-4">
           <Kpi
@@ -600,7 +600,7 @@ function DiariaPage() {
         >
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
+              <div className="text-xs font-semibold normal-case tracking-normal text-white/50">
                 Cobertura do turno
               </div>
               <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -634,7 +634,7 @@ function DiariaPage() {
             </div>
 
             <div className="border-t border-white/10 pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/50">
+              <div className="text-xs font-semibold normal-case tracking-normal text-white/50">
                 Andares abaixo da referência
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -659,10 +659,10 @@ function DiariaPage() {
 
           <div className="mt-3 border-t border-white/10 pt-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-white/50 sm:text-xs sm:tracking-[0.12em]">
+              <span className="text-[11px] font-semibold normal-case tracking-normal text-white/50 sm:text-xs sm:tracking-normal">
                 Visão rápida dos andares
               </span>
-              <span className="text-[10px] text-white/35 sm:text-xs">deslize para ver todos</span>
+              <span className="text-[11px] text-white/35 sm:text-xs">deslize para ver todos</span>
             </div>
             <div className="scrollbar-hidden flex gap-2 overflow-x-auto pb-1">
               {floorCoverage.map((x) => {
@@ -676,14 +676,15 @@ function DiariaPage() {
                 return (
                   <div
                     key={"heat-" + x.block + "-" + x.floor}
-                    className="min-w-[76px] shrink-0 rounded-lg border px-2 py-1.5 sm:min-w-[86px] sm:px-2.5 sm:py-2"
+                    className="qh-floor-summary min-w-[76px] shrink-0 rounded-lg border px-2 py-1.5 sm:min-w-[86px] sm:px-2.5 sm:py-2"
                     style={{
-                      borderColor: colorWash(blockTone, 0.5),
-                      background: colorWash(blockTone, 0.13),
+                      borderColor: "var(--qh-border, " + colorWash(blockTone, 0.5) + ")",
+                      borderLeftColor: blockTone,
+                      background: "var(--qh-surface, " + colorWash(blockTone, 0.13) + ")",
                     }}
                     title={"Bloco " + x.block + " · " + x.floor + "º andar · " + x.pct + "% de cobertura"}
                   >
-                    <div className="text-[11px] font-semibold tracking-wide sm:text-xs" style={{ color: blockTone }}>
+                    <div className="text-[11px] font-semibold tracking-normal sm:text-xs" style={{ color: "var(--qh-text-secondary, " + blockTone + ")" }}>
                       {x.floor}{x.block}
                     </div>
                     <strong className="mt-1 block text-base font-bold tabular-nums sm:text-lg" style={{ color: tone }}>
@@ -701,7 +702,7 @@ function DiariaPage() {
         <div className="panel-surface rounded-xl border p-2.5">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="scrollbar-hidden flex min-w-0 items-center gap-1.5 overflow-x-auto">
-              <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-white/35">
+              <span className="shrink-0 text-xs font-semibold normal-case tracking-normal text-white/35">
                 Bloco
               </span>
               {(["all", ...BLOCK_ORDER] as BlockFilter[]).map((block) => {
@@ -716,11 +717,11 @@ function DiariaPage() {
                       setFloorFilter(null);
                     }}
                     aria-pressed={blockFilter === block}
-                    className="min-h-10 min-w-9 shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                    className="qh-block-filter min-h-10 min-w-9 shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
                     style={{
                       borderColor: colorWash(color, active ? 0.8 : 0.36),
-                      background: colorWash(color, active ? 0.22 : 0.06),
-                      color: active ? color : undefined,
+                      background: "var(--qh-surface-raised, " + colorWash(color, active ? 0.22 : 0.06) + ")",
+                      color: "var(--qh-text-secondary, " + (active ? color : "inherit") + ")",
                     }}
                   >
                     {block === "all" ? "Todos" : block}
@@ -839,7 +840,7 @@ function DiariaPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium uppercase text-white/60">
+      <div className="flex flex-wrap items-center gap-4 px-4 lg:px-6 pb-2 text-xs lg:text-sm font-medium normal-case text-white/60">
         <Legenda color="oklch(0.72 0.16 235)" text="Limpeza concorrente" />
         <Legenda color="oklch(0.75 0.17 55)" text="Rotina camareira" />
         <LegendaSplit text="Concorrente + Camareira concluídas" />
@@ -851,26 +852,26 @@ function DiariaPage() {
         {loading && <span className="normal-case">carregando…</span>}
       </div>
 
-      <div className="flex-none px-4 pb-1 text-xs font-semibold uppercase tracking-widest text-white/30 lg:px-6">
+      <div className="flex-none px-4 pb-1 text-xs font-semibold normal-case tracking-normal text-white/30 lg:px-6">
         Mapa de leitos · clique no andar para resumo · rolagem automática na TV
       </div>
       <main
-        className="scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:flex-none lg:overflow-visible lg:px-6 space-y-6"
+        className="qh-map-scroll scrollbar-hidden min-h-[48vh] flex-1 overflow-y-auto scroll-smooth px-4 pb-8 lg:min-h-0 lg:flex-none lg:overflow-visible lg:px-6 space-y-3"
       >
         {visibleGroups.map((g) => (
           <section
             key={g.block}
             className="daily-map-surface rounded-2xl border p-2.5 sm:p-3 lg:p-4"
             style={{
-              borderColor: colorWash(BLOCK_COLOR[g.block], 0.3),
-              background: `linear-gradient(115deg, ${colorWash(BLOCK_COLOR[g.block], 0.09)}, ${colorWash(BLOCK_COLOR[g.block], 0.035)})`,
+              borderColor: "var(--qh-border, " + colorWash(BLOCK_COLOR[g.block], 0.3) + ")",
+              background: `var(--qh-surface, linear-gradient(115deg, ${colorWash(BLOCK_COLOR[g.block], 0.09)}, ${colorWash(BLOCK_COLOR[g.block], 0.035)}))`,
             }}
           >
             <h2
-              className="mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border-l-[5px] px-2.5 py-2.5 text-lg font-black uppercase tracking-wide text-white shadow-sm sm:gap-x-3 sm:gap-y-2 sm:border-l-[6px] sm:px-3 sm:py-3 sm:text-xl lg:text-3xl"
+              className="qh-block-header mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 rounded-xl border-l-[5px] px-2.5 py-2.5 text-lg font-black normal-case tracking-normal text-white shadow-sm sm:gap-x-3 sm:gap-y-2 sm:border-l-[6px] sm:px-3 sm:py-3 sm:text-xl lg:text-3xl"
               style={{
                 borderLeftColor: BLOCK_COLOR[g.block],
-                background: `linear-gradient(100deg, color-mix(in srgb, ${BLOCK_COLOR[g.block]} 48%, #091522), color-mix(in srgb, ${BLOCK_COLOR[g.block]} 19%, #091522))`,
+                background: `var(--qh-surface-raised, linear-gradient(100deg, color-mix(in srgb, ${BLOCK_COLOR[g.block]} 48%, #091522), color-mix(in srgb, ${BLOCK_COLOR[g.block]} 19%, #091522)))`,
               }}
             >
               <span>Bloco {g.block}</span>
@@ -920,7 +921,7 @@ function DiariaPage() {
                 return (
                   <div
                     key={floor}
-                    className={`flex items-start gap-3 rounded-lg ${
+                    className={`qh-floor-row flex min-w-0 items-start gap-3 rounded-lg ${
                       floorNeedsAttention ? "bg-amber-400/[0.035] py-1" : ""
                     }`}
                   >
@@ -928,10 +929,11 @@ function DiariaPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedFloor({ block: g.block, floor })}
-                        className="min-h-9 w-full rounded-md border px-1 py-1 text-center font-mono text-xs font-bold text-white transition-[filter] hover:brightness-125"
+                        className="qh-floor-button min-h-11 w-full rounded-md border px-1 py-1 text-center font-mono text-xs font-bold text-white transition-[filter] hover:brightness-125"
                         style={{
-                          borderColor: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.9 : 0.65),
-                          background: colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.42 : 0.27),
+                          borderColor: "var(--qh-border, " + colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.9 : 0.65) + ")",
+                          borderLeftColor: BLOCK_COLOR[g.block],
+                          background: "var(--qh-surface-raised, " + colorWash(BLOCK_COLOR[g.block], floorNeedsAttention ? 0.42 : 0.27) + ")",
                         }}
                         title={`Abrir resumo do ${floor}º andar do Bloco ${g.block}`}
                       >
@@ -954,7 +956,7 @@ function DiariaPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2.5">
+                    <div className="qh-bed-tiles flex min-w-0 flex-wrap gap-2">
                       {g.beds
                         .filter((b) => bedFloor(b.n) === floor)
                         .map((b) => (
@@ -1075,7 +1077,7 @@ function BedDetailSheet({
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-widest text-white/35">
+            <div className="text-xs font-semibold normal-case tracking-normal text-white/35">
               Situação da Diária
             </div>
             <h3 className="mt-0.5 text-xl font-bold">Leito {bed}</h3>
@@ -1091,23 +1093,23 @@ function BedDetailSheet({
         </div>
 
         <section className="rounded-xl border border-white/10 bg-black/10 p-3">
-          <div className="text-xs font-semibold uppercase tracking-widest text-white/35">
+          <div className="text-xs font-semibold normal-case tracking-normal text-white/35">
             O que falta / situação atual
           </div>
           <div className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
             <div>
-              <div className="text-xs uppercase text-white/35">Concorrente</div>
+              <div className="text-xs normal-case text-white/35">Concorrente</div>
               <strong className="text-sm">{currentLabel(c, concurrentEligible)}</strong>
             </div>
             <div>
-              <div className="text-xs uppercase text-white/35">Camareira</div>
+              <div className="text-xs normal-case text-white/35">Camareira</div>
               <strong className="text-sm">{currentLabel(k)}</strong>
               {!k && periodo !== "tarde" && (
                 <div className="mt-0.5 text-xs text-white/35">fora do destaque do período atual</div>
               )}
             </div>
             <div>
-              <div className="text-xs uppercase text-white/35">Alta terminal</div>
+              <div className="text-xs normal-case text-white/35">Alta terminal</div>
               <strong className="text-sm">
                 {altaStatus === "waiting_cleaning"
                   ? "Alta parada"
@@ -1209,7 +1211,7 @@ function FloorDetailSheet({
         <div className="flex items-start justify-between gap-3">
           <div>
             <div
-              className="text-xs font-semibold uppercase tracking-widest"
+              className="text-xs font-semibold normal-case tracking-normal"
               style={{ color: BLOCK_COLOR[block] }}
             >
               Bloco {block}
@@ -1282,11 +1284,12 @@ function FloorMetric({
     <div
       className="rounded-lg border px-3 py-2"
       style={{
-        borderColor: colorWash(color, 0.3),
-        background: colorWash(color, 0.08),
+        borderColor: "var(--qh-border, " + colorWash(color, 0.3) + ")",
+        borderLeftColor: color,
+        background: "var(--qh-surface, " + colorWash(color, 0.08) + ")",
       }}
     >
-      <div className="text-xs font-semibold uppercase tracking-wide" style={{ color }}>
+      <div className="text-xs font-semibold normal-case tracking-normal" style={{ color }}>
         {label}
       </div>
       <div className="mt-1 text-xl font-bold tabular-nums">{value}</div>
@@ -1312,11 +1315,12 @@ function DetailRow({
     <div
       className="rounded-lg border px-3 py-2"
       style={{
-        borderColor: color.replace(")", " / 0.35)"),
-        background: color.replace(")", " / 0.08)"),
+        borderColor: "var(--qh-border, " + color.replace(")", " / 0.35)") + ")",
+        borderLeftColor: color,
+        background: "var(--qh-surface, " + color.replace(")", " / 0.08)") + ")",
       }}
     >
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase" style={{ color }}>
+      <div className="flex items-center gap-1.5 text-xs font-semibold normal-case" style={{ color }}>
         {icon}
         {label}
       </div>
@@ -1355,9 +1359,10 @@ function LegendaSplit({ text }: { text: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <span
-        className="h-2.5 w-4 rounded-full border border-white/15"
+        className="h-2.5 w-4 rounded-sm border-t-2 border-b-2"
         style={{
-          background: `linear-gradient(115deg, ${CONCORRENTE_COLOR}, color-mix(in srgb, ${CONCORRENTE_COLOR} 50%, ${CAMAREIRA_COLOR}), ${CAMAREIRA_COLOR})`,
+          borderTopColor: CONCORRENTE_COLOR,
+          borderBottomColor: CAMAREIRA_COLOR,
         }}
       />
       {text}
@@ -1435,17 +1440,19 @@ function Kpi({
 }) {
   return (
     <div
-      className="min-w-0 rounded-xl border px-2.5 py-2.5 shadow-sm sm:px-3 sm:py-3"
+      className="qh-daily-kpi min-w-0 rounded-xl border px-2.5 py-2.5 sm:px-3 sm:py-3"
       style={{
-        borderColor: colorWash(color, 0.34),
-        background: colorWash(color, 0.075),
+        borderColor: "var(--qh-border, " + colorWash(color, 0.34) + ")",
+        ["--qh-accent" as string]: color,
+        borderLeftColor: color,
+        background: "var(--qh-surface, " + colorWash(color, 0.075) + ")",
       }}
     >
       <div
-        className="flex min-h-7 items-center gap-1.5 text-[10px] font-semibold uppercase leading-tight tracking-wide sm:min-h-8 sm:gap-2 sm:text-xs"
-        style={{ color }}
+        className="flex min-h-7 items-center gap-1.5 text-[11px] font-semibold normal-case leading-tight tracking-normal sm:min-h-8 sm:gap-2 sm:text-xs"
+        style={{ color: "var(--qh-text-secondary, " + color + ")" }}
       >
-        <span className="shrink-0">{icon}</span>
+        <span className="shrink-0" style={{ color }}>{icon}</span>
         <span>{label}</span>
       </div>
       <div className="mt-1 text-xl font-bold tabular-nums sm:text-2xl lg:text-3xl">{value}</div>
@@ -1606,17 +1613,19 @@ function BedTile({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") onSelect?.();
         }}
-        className={`relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-xs font-mono transition-colors cursor-pointer active:scale-95 ${
+        className={`qh-daily-bed relative flex h-12 w-[62px] flex-col items-center justify-center rounded-md border text-xs font-mono transition-colors cursor-pointer ${
           anyActive ? "animate-bed-blink" : ""
         }`}
         style={{
-          borderColor,
-          background,
-          backgroundImage: dualGradient,
+          borderColor: isDark ? "var(--qh-border)" : borderColor,
+          backgroundColor: isDark ? "var(--qh-surface-raised)" : background,
+          backgroundImage: isDark ? undefined : dualGradient,
+          borderLeftColor: isDark ? altaColor ?? (hasC ? CONCORRENTE_COLOR : hasK ? CAMAREIRA_COLOR : SEM_ROTINA_COLOR) : borderColor,
+          borderLeftWidth: isDark ? 3 : undefined,
           color: textColor,
           boxShadow: [
             dualAccent,
-            anyActive
+            anyActive && !isDark
               ? `0 0 12px -2px ${(activeC ? CONCORRENTE_COLOR : CAMAREIRA_COLOR).replace(")", " / 0.45)")}`
               : null,
             highlighted ? "0 0 0 3px oklch(0.74 0.18 230 / 0.9)" : null,
@@ -1628,7 +1637,7 @@ function BedTile({
       >
         {altaColor && (
           <span
-            className="absolute -left-1.5 -top-1.5 rounded-md border px-1 text-xs font-bold uppercase leading-[13px]"
+            className="absolute -left-1.5 -top-1.5 rounded-md border px-1 text-xs font-bold normal-case leading-[13px]"
             style={{
               color: isDark ? "#ffffff" : "#17202b",
               borderColor: altaColor,
@@ -1665,13 +1674,20 @@ function BedTile({
             <span className="flex items-center gap-1">
               <CircleCheck className="h-3 w-3 opacity-90" />
               <span className="flex items-center gap-0.5" aria-hidden="true">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: CONCORRENTE_COLOR }} />
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: CAMAREIRA_COLOR }} />
+                <BrushCleaning className="h-3 w-3" style={{ color: CONCORRENTE_COLOR }} />
+                <BedDouble className="h-3 w-3" style={{ color: CAMAREIRA_COLOR }} />
               </span>
             </span>
           )}
           {!altaColor && !anyActive && !both && (hasC || hasK) && (
-            <CircleCheck className="h-3 w-3 opacity-90" />
+            <span className="flex items-center gap-1">
+              <CircleCheck className="h-3 w-3 opacity-90" />
+              {hasC ? (
+                <BrushCleaning className="h-3 w-3" style={{ color: CONCORRENTE_COLOR }} />
+              ) : (
+                <BedDouble className="h-3 w-3" style={{ color: CAMAREIRA_COLOR }} />
+              )}
+            </span>
           )}
           {!altaColor && !anyActive && !hasC && !hasK && (
             <PatientIcon className="h-3.5 w-3.5" style={{ color: patientIconColor }} />

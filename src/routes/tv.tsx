@@ -652,11 +652,11 @@ function TvPage() {
 
   return (
     <div
-      className={`dark panel-dark tv-terminal-page scrollbar-hidden min-h-screen w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
+      className={`dark panel-dark tv-terminal-page scrollbar-hidden min-h-screen w-full min-w-0 max-w-full overflow-y-auto lg:h-screen lg:overflow-hidden flex flex-col font-sans relative transition-colors duration-300 bg-background text-foreground`}
       style={filtros ? { filter: filtros } : undefined}
     >
       <div
-        className="absolute top-0 left-0 right-0 h-[2px]"
+        className="qh-header-rule absolute top-0 left-0 right-0 h-px"
         style={{ backgroundColor: "oklch(0.62 0.18 235)" }}
       />
       {shiftFxVersion > 0 && (
@@ -678,7 +678,7 @@ function TvPage() {
         </div>
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-1.5 sm:gap-3 lg:justify-end lg:gap-4">
           <span
-            className={`flex items-center gap-1 text-[10px] uppercase tracking-widest sm:gap-1.5 sm:text-xs ${
+            className={`flex items-center gap-1 text-[11px] normal-case tracking-normal sm:gap-1.5 sm:text-xs ${
               syncConfirmed ? "text-white/65" : "text-amber-200"
             }`}
             title={syncConfirmed ? "Listo sincronizado e verificado" : "Verificando integridade dos dados do Listo"}
@@ -739,7 +739,8 @@ function TvPage() {
         <div className="grid min-w-0 max-w-full gap-2 lg:grid-cols-2">
           <div
             key={operationState}
-            className={`tv-operation-state-change min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 ${
+            data-operation-state={operationState}
+            className={`qh-operation tv-operation-state-change min-w-0 overflow-hidden rounded-xl border px-3 py-2.5 ${
               operationState === "critical"
                 ? "border-red-400/35 bg-red-400/[0.08]"
                 : operationState === "attention"
@@ -757,10 +758,10 @@ function TvPage() {
                   />
                 )}
                 <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-widest text-white/40">
+                  <div className="text-xs normal-case tracking-normal text-white/40">
                     Situação da operação
                   </div>
-                  <div className="text-sm font-bold uppercase">
+                  <div className="text-sm font-bold normal-case">
                     {operationState === "critical"
                       ? "Crítica"
                       : operationState === "attention"
@@ -785,10 +786,10 @@ function TvPage() {
             </div>
           </div>
 
-          <div className="min-w-0 max-w-full overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] px-3 py-2.5">
+          <div className="qh-recent min-w-0 max-w-full overflow-hidden rounded-xl border border-emerald-400/20 bg-emerald-400/[0.035] px-3 py-2.5">
             <div className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 shrink-0 text-emerald-300" />
-              <div className="text-xs font-semibold uppercase tracking-widest text-white/45">
+              <div className="text-xs font-semibold normal-case tracking-normal text-white/45">
                 Finalizados recentes
               </div>
             </div>
@@ -801,7 +802,7 @@ function TvPage() {
                     return (
                     <div
                       key={`${d.id}-recent-v${recentVersion}`}
-                      className={`flex min-w-[112px] shrink-0 items-center justify-between gap-1.5 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5 sm:min-w-[126px] sm:gap-2 ${
+                      className={`qh-recent-item flex min-w-[112px] shrink-0 items-center justify-between gap-1.5 rounded-lg border border-emerald-300/15 bg-black/10 px-2 py-1.5 sm:min-w-[126px] sm:gap-2 ${
                         recentVersion > 0 ? "tv-recent-completed-in" : ""
                       }`}
                     >
@@ -1089,24 +1090,25 @@ function KpiCard({
       className="panel-kpi-card flex flex-col gap-0.5 rounded-xl border px-2.5 py-2 sm:px-3 lg:flex-row lg:items-center lg:justify-between lg:gap-0 lg:px-4"
       style={{
         ["--panel-accent" as string]: accent,
-        backgroundColor: accent.replace(")", " / 0.12)"),
-        borderColor: accent.replace(")", " / 0.42)"),
+        backgroundColor: "var(--qh-surface)",
+        borderColor: "var(--qh-border)",
+        borderLeftColor: accent,
       }}
     >
-      <div className="text-[10px] font-medium uppercase leading-tight tracking-widest text-white/70 sm:text-xs">
+      <div className="text-[11px] font-medium normal-case leading-tight tracking-normal text-white/70 sm:text-xs">
         {label}
       </div>
       <div className="flex items-baseline gap-1.5">
         <div
           key={display ?? value}
           className="tv-kpi-value-change text-xl tabular-nums leading-none sm:text-2xl lg:text-4xl"
-          style={{ color: accent, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.02em" }}
+          style={{ color: "var(--qh-text)" }}
         >
           {display ?? value}
         </div>
         {trend != null && trend !== 0 && (
           <span
-            className="hidden lg:inline text-xs font-mono"
+            className="text-xs font-mono"
             style={{ color: trendColor }}
             title="Comparado a 1h atrás"
           >
@@ -1331,7 +1333,7 @@ function TerminalBedsPanel({
           </div>
           {/* Altas paradas por bloco — sempre visível, mobile incluso. */}
           <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:w-auto sm:flex-nowrap">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40 sm:whitespace-nowrap sm:text-xs">
+            <span className="text-[11px] font-semibold normal-case tracking-normal text-white/40 sm:whitespace-nowrap sm:text-xs">
               Altas paradas por bloco:
             </span>
             {(
@@ -1347,18 +1349,18 @@ function TerminalBedsPanel({
               <span
                 key={label}
                 title={`Altas paradas no Bloco ${label}`}
-                className="inline-flex min-w-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-[10px] leading-tight sm:text-xs"
+                className="inline-flex min-w-0 items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-[11px] leading-tight sm:text-xs"
                 style={{
                   borderColor: KIND_COLOR.parada.replace(")", " / 0.4)"),
                   background: KIND_COLOR.parada.replace(")", " / 0.12)"),
                 }}
               >
-                <span className="font-semibold uppercase tracking-wide text-white/60">
+                <span className="font-semibold normal-case tracking-normal text-white/60">
                   <span className="hidden sm:inline">Bloco </span>{label}
                 </span>
                 <span
                   className="font-bold tabular-nums"
-                  style={{ color: value > 0 ? KIND_COLOR.parada : "rgba(255,255,255,0.4)" }}
+                  style={{ color: value > 0 ? KIND_COLOR.parada : "var(--qh-text-muted)" }}
                 >
                   {value}
                 </span>
@@ -1372,7 +1374,7 @@ function TerminalBedsPanel({
           <div className="p-4 text-center text-white/40 text-sm">Nenhum leito em higienização.</div>
         ) : (
           <AutoScroll>
-            <div ref={gridRef} className="relative grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3 sm:gap-2 sm:p-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div ref={gridRef} className="qh-bed-grid relative grid grid-cols-2 gap-2 p-2 sm:grid-cols-3 sm:p-3 lg:grid-cols-4 xl:grid-cols-5">
               {cards.map(({ d, kind }) => {
                 const name = d.assigned_staff_id ? staffMap.get(d.assigned_staff_id)?.name : null;
                 const version = flashVersions?.get(d.external_id ?? "") ?? 0;
@@ -1412,20 +1414,19 @@ function TerminalBedsPanel({
                       }
                     }}
                     className={`tv-terminal-bed-card relative flex min-w-0 flex-col gap-1 rounded-lg border px-2 py-1.5 sm:gap-1.5 sm:px-2.5 sm:py-2 ${
-                      onSelect ? "cursor-pointer hover:-translate-y-0.5" : ""
+                      onSelect ? "cursor-pointer" : ""
                     } ${entryVersion > 0 ? "tv-card-enter" : ""}`}
                     style={{
-                      borderColor: base.replace(")", " / 0.45)"),
-                      background: base.replace(")", " / 0.14)"),
+                      ["--qh-accent" as string]: base,
                     }}
                   >
                     {isWorst && (
                       <span
-                        className="panel-critical-badge absolute -right-1 -top-1 rounded-[3px] border px-1 py-px text-[9px] font-semibold uppercase tracking-wide sm:-right-1.5 sm:-top-1.5 sm:text-xs"
+                        className="panel-critical-badge absolute -right-1 -top-1 rounded-[3px] border px-1 py-px text-[11px] font-semibold normal-case tracking-normal sm:-right-1.5 sm:-top-1.5 sm:text-xs"
                         style={{
                           borderColor: "oklch(0.7 0.2 25 / 0.5)",
-                          background: "oklch(0.98 0.01 250)",
-                          color: "oklch(0.78 0.19 25)",
+                          background: "oklch(0.30 0.08 25)",
+                          color: "oklch(0.90 0.05 25)",
                         }}
                       >
                         mais antigo
@@ -1444,12 +1445,12 @@ function TerminalBedsPanel({
                     <div className="flex-1 flex flex-col items-center justify-center py-1 text-center min-h-[48px]">
                       {kind === "parada" && !isDismantling ? (
                         <>
-                          <span className="text-[10px] font-semibold uppercase tracking-widest text-white/55 sm:text-xs">
+                          <span className="text-[11px] font-semibold normal-case tracking-normal text-white/55 sm:text-xs">
                             Aguardando há
                           </span>
                           <span
                             className="mt-1 font-mono text-lg font-bold leading-none tabular-nums sm:text-xl lg:text-2xl"
-                            style={{ color: base }}
+                            style={{ color: "var(--qh-text)" }}
                           >
                             {formatElapsed(d.status_updated_at, nowMs)}
                           </span>
@@ -1461,33 +1462,33 @@ function TerminalBedsPanel({
                         <span
                           key={displayName ?? "sem-colaborador"}
                           className="tv-name-handoff line-clamp-2 text-[12px] font-bold leading-tight sm:text-[13px] lg:text-[15px]"
-                          style={{ color: displayName ? base : "rgba(255,255,255,0.4)" }}
+                          style={{ color: displayName ? "var(--qh-text)" : "var(--qh-text-muted)" }}
                         >
                           {displayName ?? "sem colaborador"}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between gap-1">
+                    <div className="qh-bed-state flex flex-wrap items-center justify-between gap-1">
                       <span
                         key={version}
-                        className={`inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] ${
+                        className={`qh-bed-status inline-block min-w-0 break-words rounded py-px text-[11px] font-semibold normal-case leading-tight tracking-normal sm:text-[11px] lg:text-[11px] ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
-                        style={{ color: base, background: base.replace(")", " / 0.18)") }}
+                        style={{ color: base }}
                       >
                         {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>
                       {isDismantling ? (
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/65 sm:text-xs">
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-white/65 sm:text-xs">
                           Início {formatClockTime(dismantle.startedAt)}
                         </span>
                       ) : kind === "execucao" ? (
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/55 sm:text-xs">
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-white/55 sm:text-xs">
                           Início {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : dismantle ? (
                         <span
-                          className="shrink-0 font-mono text-[10px] tabular-nums sm:text-xs"
+                          className="shrink-0 font-mono text-[11px] tabular-nums sm:text-xs"
                           style={{
                             color: dismantle.active
                               ? KIND_COLOR.desmontagem
@@ -1498,7 +1499,7 @@ function TerminalBedsPanel({
                           {formatClockTime(dismantle.startedAt)}
                         </span>
                       ) : kind === "parada" ? (
-                        <span className="shrink-0 font-mono text-[10px] tabular-nums text-white/50 sm:text-xs">
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-white/50 sm:text-xs">
                           Registro {formatClockTime(d.status_updated_at)}
                         </span>
                       ) : null}
@@ -1564,7 +1565,7 @@ function BedsPanel({
       {isWorst && (
         <span
           title="Caso ativo há mais tempo no recorte operacional"
-          className="shrink-0 rounded-[3px] border px-1 py-px text-xs lg:text-xs font-semibold uppercase tracking-wide"
+          className="shrink-0 rounded-[3px] border px-1 py-px text-xs lg:text-xs font-semibold normal-case tracking-normal"
           style={{
             borderColor: "oklch(0.7 0.2 25 / 0.5)",
             color: "oklch(0.78 0.19 25)",
@@ -1609,7 +1610,7 @@ function BedsPanel({
                       key={`${d.id}-mobile-v${version}`}
                       className={`panel-status-row min-w-0 rounded-lg border border-white/8 px-2.5 py-2 ${version > 0 ? "flash-row" : ""}`}
                       style={{
-                        background:
+                        ["--qh-row-accent" as string]:
                           overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                       }}
                     >
@@ -1630,7 +1631,7 @@ function BedsPanel({
 
                       {showReason && (
                         <div className="mt-1.5 min-w-0">
-                          <div className="text-xs font-semibold uppercase tracking-wider text-white/35">
+                          <div className="text-xs font-semibold normal-case tracking-normal text-white/35">
                             Motivo
                           </div>
                           <div className="break-words text-xs leading-snug text-white/90">
@@ -1642,19 +1643,19 @@ function BedsPanel({
                       <div
                         className={`mt-2 grid min-w-0 gap-2 ${
                           showServiceOrder
-                            ? "grid-cols-[minmax(0,1fr)_minmax(112px,0.85fr)]"
+                            ? "grid-cols-1 min-[390px]:grid-cols-[minmax(0,1fr)_minmax(112px,0.85fr)]"
                             : "grid-cols-1"
                         }`}
                       >
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold uppercase tracking-wider text-white/35">
+                          <div className="text-xs font-semibold normal-case tracking-normal text-white/35">
                             Colaborador
                           </div>
                           <div className="truncate text-xs text-white/80">{name || "—"}</div>
                         </div>
                         {showServiceOrder && (
                           <div className="min-w-0">
-                            <div className="text-xs font-semibold uppercase tracking-wider text-white/35">
+                            <div className="text-xs font-semibold normal-case tracking-normal text-white/35">
                               OS
                             </div>
                             <ServiceOrderEditor discharge={d} compact />
@@ -1667,10 +1668,10 @@ function BedsPanel({
               </div>
 
               <table className="hidden w-full table-fixed text-sm md:table">
-                <thead className="panel-paused-table-head sticky top-0 bg-card text-xs uppercase tracking-widest text-white/70">
+                <thead className="panel-paused-table-head sticky top-0 bg-card text-xs normal-case tracking-normal text-white/70">
                   <tr>
                     <th className="w-[18%] px-2 py-1.5 text-left lg:px-3">Leito / Box</th>
-                    <th className="w-[15%] whitespace-nowrap px-2 py-1.5 text-left">
+                    <th className="w-[15%] px-2 py-1.5 text-left">
                       Horário da pausa
                     </th>
                     {showReason ? (
@@ -1682,7 +1683,7 @@ function BedsPanel({
                       <th className="w-[17%] px-2 py-1.5 text-left lg:px-3">OS</th>
                     )}
                     <th className="px-2.5 py-1.5 text-left lg:px-4">Colaborador</th>
-                    {showComplete && <th className="w-9 px-1.5 py-1.5" aria-label="Concluir" />}
+                    {showComplete && <th className="w-14 px-1.5 py-1.5" aria-label="Concluir" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -1696,7 +1697,7 @@ function BedsPanel({
                         key={`${d.id}-desktop-v${version}`}
                         className={`panel-status-row ${version > 0 ? "flash-row" : ""}`}
                         style={{
-                          background:
+                          ["--qh-row-accent" as string]:
                             overtime && tone === "green" ? "oklch(0.4 0.13 55 / 0.3)" : toneBg[tone],
                         }}
                       >
@@ -1802,7 +1803,7 @@ function ServiceOrderEditor({
           event.currentTarget.blur();
         }
       }}
-      className={`w-full min-w-0 rounded-md border border-white/15 bg-black/15 px-2 font-mono tabular-nums text-white/90 outline-none transition-colors placeholder:text-white/30 focus:border-sky-300/60 focus:bg-sky-300/[0.06] disabled:opacity-50 ${
+      className={`qh-service-order w-full min-w-0 rounded-md border border-white/15 bg-black/15 px-2 font-mono tabular-nums text-white/90 outline-none transition-colors placeholder:text-white/30 focus:border-sky-300/60 focus:bg-sky-300/[0.06] disabled:opacity-50 ${
         compact ? "h-8 text-[12px]" : "h-7 text-xs lg:text-xs"
       }`}
     />
@@ -1837,7 +1838,7 @@ function CompleteButton({ dischargeId }: { dischargeId: string }) {
       disabled={saving}
       title="Marcar leito como concluído (pausa resolvida)"
       aria-label="Marcar leito como concluído com pendências"
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors disabled:opacity-40"
+      className="qh-complete inline-flex h-11 w-11 items-center justify-center rounded-md border transition-colors disabled:opacity-40"
       style={{
         borderColor: "oklch(0.55 0.15 155 / 0.5)",
         color: "oklch(0.72 0.16 150)",
@@ -1879,7 +1880,7 @@ function StaffPanel({
           <span className="text-xs text-white/50">{rows.length}</span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1 text-xs lg:text-xs">
-          <span className="mr-0.5 font-semibold uppercase tracking-wide text-white/35">
+          <span className="mr-0.5 font-semibold normal-case tracking-normal text-white/35">
             Em execução:
           </span>
           {(
@@ -1903,7 +1904,7 @@ function StaffPanel({
               <span className="font-semibold text-white/55">{label}</span>
               <span
                 className="font-bold tabular-nums"
-                style={{ color: value > 0 ? "oklch(0.72 0.17 155)" : "rgba(255,255,255,0.38)" }}
+                style={{ color: value > 0 ? "oklch(0.72 0.17 155)" : "var(--qh-text-muted)" }}
               >
                 {value}
               </span>
@@ -1930,18 +1931,12 @@ function StaffPanel({
                     key={staff.id}
                     className="tv-staff-row-in flex flex-col gap-1.5 rounded-md px-3 py-2 border"
                     style={{
-                      background:
+                      ["--qh-accent" as string]:
                         kind === "desmontando"
-                          ? "oklch(0.68 0.20 300 / 0.13)"
+                          ? "oklch(0.8 0.15 300)"
                           : kind === "em_alta"
-                            ? "oklch(0.66 0.19 245 / 0.13)"
-                            : "oklch(0.65 0.03 255 / 0.10)",
-                      borderColor:
-                        kind === "desmontando"
-                          ? "oklch(0.68 0.2 300 / 0.5)"
-                          : kind === "em_alta"
-                            ? "oklch(0.63 0.19 245 / 0.5)"
-                            : "oklch(0.4 0.02 265 / 0.4)",
+                            ? "oklch(0.75 0.15 245)"
+                            : "oklch(0.7 0.02 265)",
                     }}
                   >
                     <div className="flex items-center justify-between">
@@ -1957,7 +1952,7 @@ function StaffPanel({
                           <span
                             className="font-mono tabular-nums text-xs"
                             style={{
-                              color: overTarget ? "oklch(0.62 0.22 25)" : "currentColor",
+                              color: overTarget ? "oklch(0.78 0.14 25)" : "currentColor",
                             }}
                           >
                             {formatElapsed(start, nowMs)}
@@ -1970,9 +1965,9 @@ function StaffPanel({
                     </div>
                     {pct != null && (
                       <div>
-                        <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
+                        <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
                           <div
-                            className="h-full rounded-full transition-[width] duration-700 ease-out"
+                            className="h-full rounded-full transition-[width] duration-400 ease-out"
                             style={{
                               width: `${pct}%`,
                               background: overTarget
@@ -2007,7 +2002,7 @@ function StatusPill({ kind }: { kind: StaffActivity }) {
         ? "oklch(0.75 0.15 245)"
         : "oklch(0.7 0.02 265)";
   return (
-    <span className="uppercase tracking-widest text-xs font-semibold" style={{ color }}>
+    <span className="normal-case tracking-normal text-xs font-semibold" style={{ color }}>
       {label}
     </span>
   );

@@ -1,0 +1,1253 @@
+{
+  "source": "main 4f62aec",
+  "fixture": "Synthetic operational records; fixed 2026-11-05 15:45 BRT",
+  "viewports": [
+    {
+      "route": "tv",
+      "width": 320,
+      "pageWidth": 320,
+      "viewport": 320,
+      "rootWidth": 320,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 169
+    },
+    {
+      "route": "tv",
+      "width": 360,
+      "pageWidth": 360,
+      "viewport": 360,
+      "rootWidth": 360,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 144
+    },
+    {
+      "route": "tv",
+      "width": 390,
+      "pageWidth": 390,
+      "viewport": 390,
+      "rootWidth": 390,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 132
+    },
+    {
+      "route": "tv",
+      "width": 430,
+      "pageWidth": 430,
+      "viewport": 430,
+      "rootWidth": 430,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 132
+    },
+    {
+      "route": "tv",
+      "width": 768,
+      "pageWidth": 768,
+      "viewport": 768,
+      "rootWidth": 768,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 137
+    },
+    {
+      "route": "tv",
+      "width": 1024,
+      "pageWidth": 1024,
+      "viewport": 1024,
+      "rootWidth": 1024,
+      "escaped": [],
+      "visibleBeds": 4,
+      "bedCount": 54,
+      "firstCardHeight": 172
+    },
+    {
+      "route": "tv",
+      "width": 1365,
+      "pageWidth": 1365,
+      "viewport": 1365,
+      "rootWidth": 1365,
+      "escaped": [],
+      "visibleBeds": 5,
+      "bedCount": 54,
+      "firstCardHeight": 159
+    },
+    {
+      "route": "tv",
+      "width": 1920,
+      "pageWidth": 1920,
+      "viewport": 1920,
+      "rootWidth": 1920,
+      "escaped": [],
+      "visibleBeds": 10,
+      "bedCount": 54,
+      "firstCardHeight": 145
+    },
+    {
+      "route": "tv",
+      "width": 3840,
+      "pageWidth": 3840,
+      "viewport": 3840,
+      "rootWidth": 3840,
+      "escaped": [],
+      "visibleBeds": 40,
+      "bedCount": 54,
+      "firstCardHeight": 145
+    },
+    {
+      "route": "diaria",
+      "width": 320,
+      "pageWidth": 320,
+      "viewport": 320,
+      "rootWidth": 320,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 360,
+      "pageWidth": 360,
+      "viewport": 360,
+      "rootWidth": 360,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 390,
+      "pageWidth": 390,
+      "viewport": 390,
+      "rootWidth": 390,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 430,
+      "pageWidth": 430,
+      "viewport": 430,
+      "rootWidth": 430,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 768,
+      "pageWidth": 768,
+      "viewport": 768,
+      "rootWidth": 768,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 1024,
+      "pageWidth": 1024,
+      "viewport": 1024,
+      "rootWidth": 1024,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 1365,
+      "pageWidth": 1365,
+      "viewport": 1365,
+      "rootWidth": 1365,
+      "escaped": [],
+      "visibleBeds": 19,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 1920,
+      "pageWidth": 1920,
+      "viewport": 1920,
+      "rootWidth": 1920,
+      "escaped": [],
+      "visibleBeds": 76,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 3840,
+      "pageWidth": 3840,
+      "viewport": 3840,
+      "rootWidth": 3840,
+      "escaped": [],
+      "visibleBeds": 334,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "tv dark text contrast",
+      "checked": 452,
+      "issues": [
+        {
+          "text": "·",
+          "ratio": 1.82,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.2)",
+          "background": [
+            13.823529411764707,
+            14.788235294117648,
+            16.71764705882353,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "relative hidden shrink-0 text-white/20 sm:inline"
+        },
+        {
+          "text": "Situação da operação",
+          "ratio": 3.8,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            22.764705882352942,
+            11.686274509803923,
+            12.607843137254903,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-xs uppercase tracking-widest text-white/40"
+        },
+        {
+          "text": "Altas paradas por bloco:",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-[10px] font-semibold uppercase tracking-wide text-white/40 sm:whitespace-nowrap sm:text-xs"
+        },
+        {
+          "text": "0",
+          "ratio": 3.77,
+          "color": "rgba(255, 255, 255, 0.4)",
+          "background": [
+            38.02745098039216,
+            25.80392156862745,
+            11.419607843137255,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-bold tabular-nums"
+        },
+        {
+          "text": "mais antigo",
+          "ratio": 2.33,
+          "color": "oklch(0.78 0.19 25)",
+          "background": [
+            244,
+            249,
+            255,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "panel-critical-badge absolute -right-1 -top-1 rounded-[3px] border px-1 py-px text-[9px] font-semibold uppercase tracking-wide sm:-right-1.5 sm:-top-1.5 sm:text-xs"
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em Desmontagem",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.2 300)",
+          "background": [
+            53.51363321799308,
+            37.520138408304504,
+            79.7292733564014,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Estourado",
+          "ratio": 4.36,
+          "color": "oklch(0.68 0.19 25)",
+          "background": [
+            76.42915801614762,
+            31.12161476355248,
+            30.11358708189158,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "inline-block min-w-0 max-w-[70%] break-words rounded px-1 py-px text-[10px] font-semibold uppercase leading-tight tracking-normal sm:text-[10px] lg:text-[11px] "
+        },
+        {
+          "text": "Em execução:",
+          "ratio": 3.12,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "mr-0.5 font-semibold uppercase tracking-wide text-white/35"
+        },
+        {
+          "text": "início15:19",
+          "ratio": 3.81,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            25.482352941176472,
+            19.364705882352943,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "início15:19",
+          "ratio": 3.81,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            25.482352941176472,
+            19.364705882352943,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "início15:11",
+          "ratio": 3.81,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            25.482352941176472,
+            19.364705882352943,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "início15:22",
+          "ratio": 3.78,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "meta75min",
+          "ratio": 3.18,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "DIV",
+          "class": "mt-0.5 text-right text-xs font-mono text-white/35"
+        },
+        {
+          "text": "início15:22",
+          "ratio": 3.78,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "meta75min",
+          "ratio": 3.18,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "DIV",
+          "class": "mt-0.5 text-right text-xs font-mono text-white/35"
+        },
+        {
+          "text": "início15:14",
+          "ratio": 3.78,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "meta75min",
+          "ratio": 3.18,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "DIV",
+          "class": "mt-0.5 text-right text-xs font-mono text-white/35"
+        },
+        {
+          "text": "2h 00m",
+          "ratio": 4.45,
+          "color": "oklch(0.62 0.22 25)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs"
+        },
+        {
+          "text": "início13:45",
+          "ratio": 3.78,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "meta75min· estourou",
+          "ratio": 3.18,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "DIV",
+          "class": "mt-0.5 text-right text-xs font-mono text-white/35"
+        },
+        {
+          "text": "2h 00m",
+          "ratio": 4.45,
+          "color": "oklch(0.62 0.22 25)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs"
+        },
+        {
+          "text": "início13:45",
+          "ratio": 3.78,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs text-white/40"
+        },
+        {
+          "text": "meta75min· estourou",
+          "ratio": 3.18,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "DIV",
+          "class": "mt-0.5 text-right text-xs font-mono text-white/35"
+        },
+        {
+          "text": "2h 00m",
+          "ratio": 4.45,
+          "color": "oklch(0.62 0.22 25)",
+          "background": [
+            3.4823529411764707,
+            24.411764705882355,
+            38.22352941176471,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "font-mono tabular-nums text-xs"
+        }
+      ],
+      "total": 49
+    },
+    {
+      "name": "tv manual scroll pause and resume",
+      "pausedAt": 40,
+      "pausedAfter": 40,
+      "resumedAt": 57,
+      "passed": true
+    },
+    {
+      "name": "tv small modal",
+      "width": 320,
+      "height": 588.796875,
+      "viewportWidth": 320,
+      "viewportHeight": 640,
+      "scrollWidth": 318,
+      "clientWidth": 318
+    },
+    {
+      "name": "tv focus stays in dialog",
+      "passed": true
+    },
+    {
+      "name": "tv Escape closes",
+      "passed": true
+    },
+    {
+      "name": "diaria dark text contrast",
+      "checked": 698,
+      "issues": [
+        {
+          "text": "468leitos cadastrados · rotinas do turno atual",
+          "ratio": 4.48,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.45)",
+          "background": [
+            5,
+            6,
+            8,
+            1
+          ],
+          "tag": "SPAN",
+          "class": ""
+        },
+        {
+          "text": "·",
+          "ratio": 1.82,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.2)",
+          "background": [
+            13.823529411764707,
+            14.788235294117648,
+            16.71764705882353,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "relative hidden shrink-0 text-white/20 sm:inline"
+        },
+        {
+          "text": "Turno atual",
+          "ratio": 3.7,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            3,
+            4,
+            5,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-[10px] text-white/40 sm:text-xs"
+        },
+        {
+          "text": "·9faltam",
+          "ratio": 3.76,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            7.184313725490196,
+            8.980392156862745,
+            11.67450980392157,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-white/40"
+        },
+        {
+          "text": "·9faltam",
+          "ratio": 3.76,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            7.184313725490196,
+            8.980392156862745,
+            11.67450980392157,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-white/40"
+        },
+        {
+          "text": "·5faltam",
+          "ratio": 3.76,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            7.184313725490196,
+            8.980392156862745,
+            11.67450980392157,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-white/40"
+        },
+        {
+          "text": "·15faltam",
+          "ratio": 3.76,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            7.184313725490196,
+            8.980392156862745,
+            11.67450980392157,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-white/40"
+        },
+        {
+          "text": "·16faltam",
+          "ratio": 3.76,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            7.184313725490196,
+            8.980392156862745,
+            11.67450980392157,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-white/40"
+        },
+        {
+          "text": "deslize para ver todos",
+          "ratio": 3.12,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-[10px] text-white/35 sm:text-xs"
+        },
+        {
+          "text": "18D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "16D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "8B",
+          "ratio": 3.21,
+          "color": "rgb(204, 0, 0)",
+          "background": [
+            34.01176470588236,
+            8.705882352941178,
+            11.31764705882353,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "9D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "7D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "10D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "15D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "7B",
+          "ratio": 3.21,
+          "color": "rgb(204, 0, 0)",
+          "background": [
+            34.01176470588236,
+            8.705882352941178,
+            11.31764705882353,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "6B",
+          "ratio": 3.21,
+          "color": "rgb(204, 0, 0)",
+          "background": [
+            34.01176470588236,
+            8.705882352941178,
+            11.31764705882353,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "12D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "8D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "11D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "17D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "7E",
+          "ratio": 2.82,
+          "color": "rgb(103, 78, 167)",
+          "background": [
+            19.905882352941177,
+            18.67058823529412,
+            33.31764705882353,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "8E",
+          "ratio": 2.82,
+          "color": "rgb(103, 78, 167)",
+          "background": [
+            19.905882352941177,
+            18.67058823529412,
+            33.31764705882353,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "14D",
+          "ratio": 3.27,
+          "color": "rgb(56, 118, 29)",
+          "background": [
+            13.952941176470588,
+            23.71764705882353,
+            14.294117647058824,
+            1
+          ],
+          "tag": "DIV",
+          "class": "text-[11px] font-semibold tracking-wide sm:text-xs"
+        },
+        {
+          "text": "Bloco",
+          "ratio": 3.12,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.35)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "shrink-0 text-xs font-semibold uppercase tracking-widest text-white/35"
+        },
+        {
+          "text": "468de468leitos exibidos",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": ""
+        },
+        {
+          "text": "Últimos 15 min:·",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": ""
+        },
+        {
+          "text": "Mapa de leitos · clique no andar para resumo · rolagem autom",
+          "ratio": 2.53,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.3)",
+          "background": [
+            3,
+            4,
+            5,
+            1
+          ],
+          "tag": "DIV",
+          "class": "flex-none px-4 pb-1 text-xs font-semibold uppercase tracking-widest text-white/30 lg:px-6"
+        },
+        {
+          "text": "281leitos",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-sm lg:text-base font-normal normal-case tracking-normal text-white/40"
+        },
+        {
+          "text": "28leitos",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-sm lg:text-base font-normal normal-case tracking-normal text-white/40"
+        },
+        {
+          "text": "125leitos",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-sm lg:text-base font-normal normal-case tracking-normal text-white/40"
+        },
+        {
+          "text": "34leitos",
+          "ratio": 3.77,
+          "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.4)",
+          "background": [
+            8,
+            10,
+            13,
+            1
+          ],
+          "tag": "SPAN",
+          "class": "text-sm lg:text-base font-normal normal-case tracking-normal text-white/40"
+        }
+      ],
+      "total": 33
+    },
+    {
+      "name": "diaria manual scroll pause and resume",
+      "pausedAt": 40,
+      "pausedAfter": 40,
+      "resumedAt": 40,
+      "passed": false
+    },
+    {
+      "name": "diaria small modal",
+      "width": 320,
+      "height": 424,
+      "viewportWidth": 320,
+      "viewportHeight": 640,
+      "scrollWidth": 318,
+      "clientWidth": 318
+    },
+    {
+      "name": "diaria focus stays in dialog",
+      "passed": true
+    },
+    {
+      "name": "diaria Escape closes",
+      "passed": true
+    },
+    {
+      "name": "combined daily filters",
+      "blocks": 1,
+      "text": "BLOCO D\n31 leitos\n15 concorrentes\n16 camareiras\n48%\n52%\n7D\n770\n769\n768\n767\n766\n765\n×3\n764\n763\n762\n761\n760\n759\n758\n757\n756\n755\n754\n×3\n753\n752\n751\n750\n749\n748\n747\n746\n745\n744\n743\n742"
+    },
+    {
+      "name": "daily light theme",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "name": "daily light theme",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "name": "daily light theme",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "daily light theme",
+      "width": 1920,
+      "overflow": false
+    },
+    {
+      "name": "few terminal beds",
+      "count": 3
+    }
+  ],
+  "writes": [],
+  "errorSummary": [
+    {
+      "message": "%s a style property during rerender (%s) when a conflicting property is set (%s) can lead to styling bugs. To avoid this, don't mix shorthand and non-shorthand properties for the same value; instead, replace the shorthand with separate values. Updating background backgroundImage",
+      "count": 776
+    }
+  ]
+}

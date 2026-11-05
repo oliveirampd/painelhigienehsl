@@ -309,14 +309,9 @@
 
 
 @keyframes daily-bed-completed {
-  0% { transform: scale(1); filter: brightness(1); }
-  35% { transform: scale(1.08); filter: brightness(1.22); }
-  100% { transform: scale(1); filter: brightness(1); }
+  from { opacity: 0.7; } to { opacity: 1; }
 }
-.daily-bed-completed {
-  animation: daily-bed-completed 1.2s ease-out 2;
-}
-
+.daily-bed-completed { animation: daily-bed-completed 260ms ease-out; }
 
 /* Superfícies e navegação compartilhadas entre TV, Diária, Geral e Gestão. */
 .panel-shell-header {
@@ -478,7 +473,7 @@
  * Desktop/TV apenas. O mobile permanece com o visual e interação atuais.
  * ============================================================ */
 @keyframes tv-card-enter {
-  from { opacity: 0; transform: translateY(7px); }
+  from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes tv-status-pill-morph {
@@ -494,33 +489,29 @@
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes tv-operation-state-change {
-  0% { opacity: 0.82; transform: translateY(-3px); filter: brightness(1.28); }
-  100% { opacity: 1; transform: translateY(0); filter: brightness(1); }
+  from { opacity: 0.8; } to { opacity: 1; }
 }
 @keyframes tv-sync-pulse {
-  0% { opacity: 0.35; text-shadow: 0 0 0 rgba(125, 211, 252, 0); }
-  45% { opacity: 0.95; color: rgba(186, 230, 253, 0.95); text-shadow: 0 0 10px rgba(56, 189, 248, 0.42); }
-  100% { opacity: 0.35; text-shadow: 0 0 0 rgba(125, 211, 252, 0); }
+  from { opacity: 0.8; } to { opacity: 1; }
 }
 @keyframes tv-recent-completed-in {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes tv-staff-row-in {
-  0% { opacity: 0; transform: translateX(10px); }
+  0% { opacity: 0; transform: translateY(2px); }
   100% { opacity: 1; transform: translateX(0); }
 }
 @keyframes tv-shift-wash {
-  0% { opacity: 0; background: linear-gradient(90deg, transparent, rgba(125, 211, 252, 0.04), transparent); transform: translateX(-35%); }
-  35% { opacity: 1; }
-  100% { opacity: 0; background: linear-gradient(90deg, transparent, rgba(125, 211, 252, 0.08), transparent); transform: translateX(35%); }
+  from { opacity: 0.06; background: oklch(1 0 0); }
+  to { opacity: 0; background: oklch(1 0 0); }
 }
 
 /* Transição sem pulso: status, borda e superfície mudam de cor uma única vez.
    A identidade do card permanece estável para o Silk Reflow. */
 .tv-terminal-bed-card {
-  transition: border-color 280ms cubic-bezier(0.2, 0.75, 0.25, 1),
-              background-color 280ms cubic-bezier(0.2, 0.75, 0.25, 1),
+  transition: border-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
+              background-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
               box-shadow 160ms ease;
 }
 .tv-terminal-bed-card:focus-visible {
@@ -529,80 +520,44 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .tv-terminal-bed-card[role="button"]:hover {
-    box-shadow: 0 5px 16px rgba(0, 0, 0, 0.25);
+    background-color: var(--qh-surface-hover);
+    border-color: var(--qh-border);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .tv-terminal-bed-card { transition: none !important; }
 }
 
-/* Fundo e superfícies profundas em TV e mobile.
-   Cards de KPI, cards de leito e linhas operacionais mantêm suas cores próprias. */
-.tv-terminal-page {
-  background-color: #030405 !important;
-}
-.tv-terminal-page .panel-shell-header {
-  background-color: #050608 !important;
-  border-color: rgba(255,255,255,0.08);
-}
-.tv-terminal-page .panel-surface {
-  background-color: #080a0d !important;
-  border-color: rgba(255,255,255,0.085) !important;
-}
-.tv-terminal-page .terminal-panel-content {
-  background-color: #040506 !important;
-}
-.tv-terminal-page .panel-paused-table-head {
-  background-color: #0b0d10 !important;
-  box-shadow: inset 0 -1px rgba(255,255,255,0.08);
-}
-
-/* Mesmo acabamento profundo do Terminal na Diária, inclusive mobile.
-   KPI cards e cards de leito continuam com suas cores próprias. */
-.dark.daily-panel-page {
-  background-color: #030405 !important;
-}
-.dark.daily-panel-page .panel-shell-header {
-  background-color: #050608 !important;
-  border-color: rgba(255,255,255,0.08);
-}
-.dark.daily-panel-page .panel-surface,
-.dark.daily-panel-page .daily-overview-surface,
-.dark.daily-panel-page .daily-map-surface {
-  background: #080a0d !important;
-  border-color: rgba(255,255,255,0.085) !important;
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .tv-card-enter {
-    animation: tv-card-enter 320ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    animation: tv-card-enter 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .tv-status-pill-morph {
-    animation: tv-status-pill-morph 240ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    animation: tv-status-pill-morph 240ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .tv-name-handoff {
-    animation: tv-name-handoff 200ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    animation: tv-name-handoff 200ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .tv-kpi-value-change {
-    animation: tv-kpi-value-change 240ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    animation: tv-kpi-value-change 240ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .tv-operation-state-change {
-    animation: tv-operation-state-change 720ms ease-out;
+    animation: tv-operation-state-change 240ms ease-out;
   }
   .tv-sync-pulse {
-    animation: tv-sync-pulse 620ms ease-out;
+    animation: tv-sync-pulse 220ms ease-out;
   }
   .tv-recent-completed-in {
-    animation: tv-recent-completed-in 320ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    animation: tv-recent-completed-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .tv-staff-row-in {
-    animation: tv-staff-row-in 460ms ease-out;
+    animation: tv-staff-row-in 240ms ease-out;
   }
   .tv-shift-wash {
-    animation: tv-shift-wash 1.35s ease-in-out forwards;
+    animation: tv-shift-wash 260ms ease-out forwards;
   }
   .tv-card-progress-fill {
-    transition: width 850ms cubic-bezier(0.22, 1, 0.36, 1), filter 250ms ease;
+    transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1), filter 250ms ease;
   }
 }
 
@@ -618,16 +573,16 @@
     animation-duration: 200ms;
   }
   .tv-operation-state-change {
-    animation-duration: 520ms;
+    animation-duration: 240ms;
   }
   .tv-recent-completed-in {
     animation-duration: 250ms;
   }
   .tv-staff-row-in {
-    animation-duration: 360ms;
+    animation-duration: 240ms;
   }
   .tv-card-progress-fill {
-    transition-duration: 650ms, 200ms;
+    transition-duration: 400ms, 200ms;
   }
 }
 
@@ -655,7 +610,7 @@
 @keyframes bed-detail-dialog-in {
   from {
     opacity: 0;
-    transform: translate3d(var(--bed-origin-x), var(--bed-origin-y), 0) scale(0.975);
+    transform: translate3d(calc(var(--bed-origin-x) * 0.15), calc(var(--bed-origin-y) * 0.15), 0);
   }
   to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
@@ -663,7 +618,7 @@
   from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
   to {
     opacity: 0;
-    transform: translate3d(var(--bed-origin-x), var(--bed-origin-y), 0) scale(0.985);
+    transform: translate3d(var(--bed-origin-x), var(--bed-origin-y), 0) scale(1);
   }
 }
 @keyframes bed-detail-reveal-in {
@@ -675,7 +630,7 @@
     animation: bed-detail-overlay-in 220ms ease-out both;
   }
   .bed-detail-dialog {
-    animation: bed-detail-dialog-in 350ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
+    animation: bed-detail-dialog-in 220ms cubic-bezier(0.2, 0.85, 0.25, 1) both;
   }
   .bed-detail-reveal {
     animation: bed-detail-reveal-in 260ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
@@ -703,4 +658,191 @@
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Quiet Operations 1.0 — tokens exist only in these two dark operational modules. */
+.tv-terminal-page, .dark.daily-panel-page {
+  --qh-bg: oklch(0.16183 0.00802 248.32); /* #0B0E11 */
+  --qh-surface: oklch(0.19826 0.01184 254.11); /* #12161B */
+  --qh-surface-raised: oklch(0.22833 0.01387 253.11); /* #181D23 */
+  --qh-surface-hover: oklch(0.26117 0.01813 251.94); /* #1E252D */
+  --qh-border: oklch(0.30939 0.01965 251.51); /* #29313A */
+  --qh-border-subtle: oklch(0.28080 0.01860 248.49); /* #222A32 */
+  --qh-text: oklch(0.96273 0.00515 247.88); /* #F0F3F6 */
+  --qh-text-secondary: oklch(0.78526 0.01856 253.37); /* #B1BAC5 */
+  --qh-text-muted: oklch(0.66481 0.02499 252.26); /* #8995A3 */
+  --qh-card-radius: 8px;
+  --qh-panel-radius: 10px;
+  --qh-control-radius: 6px;
+  --qh-modal-radius: 12px;
+  background: var(--qh-bg);
+  color: var(--qh-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  color-scheme: dark;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-shell-header {
+  background: var(--qh-surface);
+  border-color: var(--qh-border-subtle);
+  backdrop-filter: none;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) h1 {
+  font-size: 18px; font-weight: 600; letter-spacing: -0.015em;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) h2 { font-weight: 500; }
+:is(.tv-terminal-page, .dark.daily-panel-page) [class*="text-white/"] { color: var(--qh-text-secondary); }
+:is(.tv-terminal-page, .dark.daily-panel-page) :is([class*="text-white/2"], [class*="text-white/3"], [class*="text-white/4"]) { color: var(--qh-text-muted); }
+:is(.tv-terminal-page, .dark.daily-panel-page) [class*="border-white/"] { border-color: var(--qh-border-subtle); }
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-surface,
+.dark.daily-panel-page :is(.daily-overview-surface, .daily-map-surface) {
+  background: var(--qh-surface); border-color: var(--qh-border);
+  border-radius: var(--qh-panel-radius); box-shadow: none; min-width: 0;
+}
+.tv-terminal-page .terminal-panel-content { background: var(--qh-bg); }
+:is(.tv-terminal-page, .dark.daily-panel-page) :is(button, input, select, a) {
+  transition-duration: 140ms;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) :is(button, input, select, a, [role="button"]):focus-visible {
+  outline: 2px solid oklch(0.83 0.09 235); outline-offset: 2px;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-nav {
+  background: var(--qh-bg); border-color: var(--qh-border-subtle); border-radius: 8px; padding: 3px;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-nav-item {
+  border-color: transparent; border-radius: 5px; min-height: 36px;
+  font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: normal; box-shadow: none;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-nav-item-inactive { color: var(--qh-text-secondary); }
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-nav-item-active {
+  background: var(--qh-surface-hover); color: var(--qh-text); border-bottom-color: var(--qh-text-secondary);
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-nav-item:hover { background: var(--qh-surface-hover); }
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-shell-header :is(a[href="/control"], .panel-theme-toggle) {
+  border-color: var(--qh-border); background: transparent; color: var(--qh-text-secondary); border-radius: 6px;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .panel-shell-header .animate-ping { animation: none; }
+:is(.tv-terminal-page, .dark.daily-panel-page) .qh-sync-counter {
+  background: transparent; border-color: var(--qh-border-subtle); border-radius: 6px;
+  font-family: inherit; font-size: 11px; flex-wrap: wrap;
+}
+:is(.tv-terminal-page, .dark.daily-panel-page) .qh-sync-counter > span:last-child { display: inline; white-space: normal; }
+.tv-terminal-page .qh-header-rule { opacity: 0.3; }
+.tv-terminal-page .panel-shell-header > div:last-child > span:last-child { font-size: 20px; }
+.tv-terminal-page .panel-kpi-card, .dark.daily-panel-page .qh-daily-kpi {
+  position: relative; border-radius: var(--qh-card-radius); padding: 10px 12px;
+  border-left: 3px solid var(--panel-accent, var(--qh-accent)); gap: 6px; box-shadow: none;
+}
+.tv-terminal-page .panel-kpi-card > div:first-child { font-size: 12px; color: var(--qh-text-secondary); }
+.tv-terminal-page .tv-kpi-value-change { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+.tv-terminal-page .qh-operation, .tv-terminal-page .qh-recent {
+  background: var(--qh-surface); border-color: var(--qh-border); border-radius: 10px;
+}
+.tv-terminal-page .qh-operation { border-left: 3px solid oklch(0.75 0.16 155); }
+.tv-terminal-page .qh-operation[data-operation-state="attention"] { border-left-color: oklch(0.80 0.16 75); }
+.tv-terminal-page .qh-operation[data-operation-state="critical"] { border-left-color: oklch(0.78 0.14 25); }
+.tv-terminal-page .qh-operation[data-operation-state="critical"] .font-bold { color: oklch(0.87 0.08 25); }
+.tv-terminal-page .qh-operation .truncate { white-space: normal; overflow-wrap: anywhere; }
+.tv-terminal-page .qh-recent-item { background: var(--qh-bg); border-color: var(--qh-border-subtle); border-radius: 6px; }
+.tv-terminal-page .tv-terminal-bed-card {
+  background: var(--qh-surface); border: 1px solid var(--qh-border);
+  border-left: 3px solid var(--qh-accent); border-radius: 8px;
+  padding: 10px; gap: 4px; box-shadow: none;
+  transition: background-color 140ms ease-out, border-color 220ms ease-out;
+}
+.tv-terminal-page .tv-terminal-bed-card > div:first-of-type { flex-wrap: wrap; }
+.tv-terminal-page .tv-terminal-bed-card > div:first-of-type > span:first-child { font-size: 17px; font-weight: 600; }
+.tv-terminal-page .tv-name-handoff { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.tv-terminal-page .qh-bed-state { align-items: baseline; }
+.tv-terminal-page .qh-bed-state > span { font-family: inherit; font-size: 11px; max-width: 100%; }
+.tv-terminal-page .qh-bed-status { font-weight: 600; }
+.tv-terminal-page .panel-critical-badge { top: -7px; right: 6px; font-size: 11px; line-height: 14px; }
+.tv-terminal-page .tv-staff-row-in {
+  background: var(--qh-surface); border-color: var(--qh-border-subtle);
+  border-left: 3px solid var(--qh-accent); border-radius: 6px; box-shadow: none;
+}
+.tv-terminal-page .panel-paused-table-head { background: var(--qh-surface-raised); box-shadow: none; color: var(--qh-text-secondary); }
+.tv-terminal-page .panel-paused-table-head th { font-weight: 500; white-space: normal; overflow-wrap: anywhere; }
+.tv-terminal-page .panel-status-row { background: var(--qh-surface); border-color: var(--qh-border-subtle); }
+.tv-terminal-page .panel-status-row > td:first-child { border-left: 3px solid color-mix(in srgb, var(--qh-row-accent) 10%, oklch(0.78 0.14 25)); }
+.tv-terminal-page div.panel-status-row { border-left: 3px solid color-mix(in srgb, var(--qh-row-accent) 10%, oklch(0.78 0.14 25)); }
+.tv-terminal-page .qh-service-order {
+  background: var(--qh-bg); border-color: var(--qh-border); border-radius: 6px;
+  color: var(--qh-text); min-height: 36px;
+}
+.tv-terminal-page .qh-service-order::placeholder { color: var(--qh-text-muted); }
+.tv-terminal-page .qh-complete { background: var(--qh-surface-raised); border-color: var(--qh-border); }
+.dark.daily-panel-page .qh-daily-kpi > div:first-child { color: var(--qh-text-secondary); font-size: 12px; }
+.dark.daily-panel-page .qh-daily-kpi > div:last-child { font-size: 28px; font-weight: 600; }
+.dark.daily-panel-page .daily-overview-surface > .grid > div { min-width: 0; }
+.dark.daily-panel-page .qh-floor-summary { border-left-width: 3px; border-radius: 6px; }
+.dark.daily-panel-page .qh-map-scroll { padding-inline: 12px; }
+.dark.daily-panel-page .qh-block-header {
+  font-size: 16px; font-weight: 600; border-left-width: 3px; border-radius: 6px;
+  padding: 10px 12px; box-shadow: none; letter-spacing: normal;
+}
+.dark.daily-panel-page .qh-block-header > span { font-size: 12px; }
+.dark.daily-panel-page .qh-block-header > span:first-child { font-size: 16px; }
+.dark.daily-panel-page .qh-floor-button { border-left-width: 3px; font-family: inherit; font-weight: 600; }
+.dark.daily-panel-page .qh-daily-bed {
+  border-radius: 6px; font-family: inherit; font-size: 13px;
+}
+.dark.daily-panel-page .animate-bed-blink { animation: none; }
+.dark.daily-panel-page :is(.animate-sweep, .animate-linen) { animation-duration: 1800ms; animation-iteration-count: 1; }
+.dark.daily-panel-page .panel-surface :is(input, select, button) { border-radius: 6px; min-height: 36px; }
+:is(.tv-terminal-page, .dark.daily-panel-page) [role="dialog"] {
+  background: var(--qh-surface); border-color: var(--qh-border); border-radius: var(--qh-modal-radius);
+  color: var(--qh-text); max-width: min(610px, 100%); overflow-wrap: anywhere;
+}
+.tv-terminal-page .bed-detail-dialog :is(section, article, .bed-detail-reveal > div, [class*="bg-[#"]) {
+  background: var(--qh-surface); border-color: var(--qh-border-subtle);
+}
+.tv-terminal-page .bed-detail-dialog > div:first-child,
+.tv-terminal-page .bed-detail-dialog > div:last-child { background: var(--qh-surface-raised); border-color: var(--qh-border); }
+.tv-terminal-page .bed-detail-dialog [class*="text-[#"] { color: var(--qh-text-secondary); }
+.tv-terminal-page .bed-detail-dialog :is(h2,h3,.font-semibold) { color: var(--qh-text); }
+.tv-terminal-page .bed-detail-dialog section:first-child { border-left: 3px solid var(--bed-accent); }
+@media (hover: hover) and (pointer: fine) {
+  .tv-terminal-page :is(.tv-terminal-bed-card[role="button"], .panel-status-row):hover,
+  .dark.daily-panel-page .qh-daily-bed:hover { background-color: var(--qh-surface-hover); }
+}
+@media (pointer: coarse) {
+  :is(.tv-terminal-page, .dark.daily-panel-page) :is(button, .panel-nav-item, input, select, a[href="/control"]) { min-height: 44px; }
+  :is(.tv-terminal-page, .dark.daily-panel-page) [role="button"]:active { filter: brightness(1.12); }
+}
+@media (max-width: 639px) {
+  .tv-terminal-page > :is(main, div[class*="px-4"]) { padding-inline: 12px; }
+  .tv-terminal-page .panel-kpi-card { padding: 8px 10px; }
+  .tv-terminal-page .tv-kpi-value-change, .dark.daily-panel-page .qh-daily-kpi > div:last-child { font-size: 26px; }
+  .tv-terminal-page .tv-terminal-bed-card { padding: 8px; }
+  .tv-terminal-page .tv-terminal-bed-card > div:first-of-type > span:first-child { font-size: 16px; }
+  .tv-terminal-page .tv-name-handoff { font-size: 12px; }
+  .tv-terminal-page .qh-service-order { min-height: 44px; }
+  .dark.daily-panel-page .qh-floor-row { gap: 8px; }
+  .dark.daily-panel-page .qh-bed-tiles { gap: 8px; }
+}
+@media (min-width: 1024px) {
+  :is(.tv-terminal-page, .dark.daily-panel-page) h1 { font-size: 21px; }
+  .dark.daily-panel-page .qh-map-scroll { padding-inline: 24px; }
+  .tv-terminal-page .tv-kpi-value-change { font-size: 30px; }
+  .tv-terminal-page .tv-terminal-bed-card > div:first-of-type > span:first-child { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.tv-terminal-page, .dark.daily-panel-page) *,
+  :is(.tv-terminal-page, .dark.daily-panel-page) *::before,
+  :is(.tv-terminal-page, .dark.daily-panel-page) *::after { animation: none !important; transition: none !important; }
+}
+
+.dark.daily-panel-page .qh-block-filter[aria-pressed="true"] { box-shadow: inset 0 -2px var(--qh-text-secondary); }
+.dark.daily-panel-page .qh-block-filter { font-weight: 500; }
+
+:is(.tv-terminal-page, .dark.daily-panel-page) :is(.font-bold, .font-black) { font-weight: 600; }
+.tv-terminal-page .tv-staff-row-in .font-semibold.truncate,
+.tv-terminal-page .panel-status-row .truncate {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tv-terminal-page .panel-status-row .line-clamp-2 { display: block; -webkit-line-clamp: unset; }
+.dark.daily-panel-page .qh-daily-bed > .absolute { top: -8px; }
+@media (pointer: coarse) {
+  :is(.tv-terminal-page, .dark.daily-panel-page) button { min-width: 44px; }
 }

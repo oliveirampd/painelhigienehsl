@@ -1,0 +1,325 @@
+{
+  "source": "design/quiet-operations-1",
+  "fixture": "Synthetic operational records; fixed 2026-11-05 15:45 BRT",
+  "viewports": [
+    {
+      "route": "tv",
+      "width": 320,
+      "pageWidth": 320,
+      "viewport": 320,
+      "rootWidth": 320,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 149
+    },
+    {
+      "route": "tv",
+      "width": 360,
+      "pageWidth": 360,
+      "viewport": 360,
+      "rootWidth": 360,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 149
+    },
+    {
+      "route": "tv",
+      "width": 390,
+      "pageWidth": 390,
+      "viewport": 390,
+      "rootWidth": 390,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 149
+    },
+    {
+      "route": "tv",
+      "width": 430,
+      "pageWidth": 430,
+      "viewport": 430,
+      "rootWidth": 430,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 130
+    },
+    {
+      "route": "tv",
+      "width": 768,
+      "pageWidth": 768,
+      "viewport": 768,
+      "rootWidth": 768,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 54,
+      "firstCardHeight": 138
+    },
+    {
+      "route": "tv",
+      "width": 1024,
+      "pageWidth": 1024,
+      "viewport": 1024,
+      "rootWidth": 1024,
+      "escaped": [],
+      "visibleBeds": 4,
+      "bedCount": 54,
+      "firstCardHeight": 161
+    },
+    {
+      "route": "tv",
+      "width": 1365,
+      "pageWidth": 1365,
+      "viewport": 1365,
+      "rootWidth": 1365,
+      "escaped": [],
+      "visibleBeds": 10,
+      "bedCount": 54,
+      "firstCardHeight": 142
+    },
+    {
+      "route": "tv",
+      "width": 1920,
+      "pageWidth": 1920,
+      "viewport": 1920,
+      "rootWidth": 1920,
+      "escaped": [],
+      "visibleBeds": 15,
+      "bedCount": 54,
+      "firstCardHeight": 142
+    },
+    {
+      "route": "tv",
+      "width": 3840,
+      "pageWidth": 3840,
+      "viewport": 3840,
+      "rootWidth": 3840,
+      "escaped": [],
+      "visibleBeds": 40,
+      "bedCount": 54,
+      "firstCardHeight": 142
+    },
+    {
+      "route": "diaria",
+      "width": 320,
+      "pageWidth": 320,
+      "viewport": 320,
+      "rootWidth": 320,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 360,
+      "pageWidth": 360,
+      "viewport": 360,
+      "rootWidth": 360,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 390,
+      "pageWidth": 390,
+      "viewport": 390,
+      "rootWidth": 390,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 430,
+      "pageWidth": 430,
+      "viewport": 430,
+      "rootWidth": 430,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 768,
+      "pageWidth": 768,
+      "viewport": 768,
+      "rootWidth": 768,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 1024,
+      "pageWidth": 1024,
+      "viewport": 1024,
+      "rootWidth": 1024,
+      "escaped": [],
+      "visibleBeds": 0,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 1365,
+      "pageWidth": 1365,
+      "viewport": 1365,
+      "rootWidth": 1365,
+      "escaped": [],
+      "visibleBeds": 19,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 1920,
+      "pageWidth": 1920,
+      "viewport": 1920,
+      "rootWidth": 1920,
+      "escaped": [],
+      "visibleBeds": 76,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    },
+    {
+      "route": "diaria",
+      "width": 3840,
+      "pageWidth": 3840,
+      "viewport": 3840,
+      "rootWidth": 3840,
+      "escaped": [],
+      "visibleBeds": 309,
+      "bedCount": 468,
+      "firstCardHeight": 48
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "tv dark text contrast",
+      "checked": 452,
+      "issues": [],
+      "total": 0
+    },
+    {
+      "name": "tv manual scroll pause and resume",
+      "pausedAt": 40,
+      "pausedAfter": 40,
+      "resumedAt": 57,
+      "geometry": {
+        "height": 461,
+        "scrollHeight": 1536,
+        "reduced": false
+      },
+      "passed": true
+    },
+    {
+      "name": "tv small modal",
+      "width": 320,
+      "height": 588.796875,
+      "viewportWidth": 320,
+      "viewportHeight": 640,
+      "scrollWidth": 318,
+      "clientWidth": 318
+    },
+    {
+      "name": "tv focus stays in dialog",
+      "passed": true
+    },
+    {
+      "name": "tv Escape closes",
+      "passed": true
+    },
+    {
+      "name": "diaria dark text contrast",
+      "checked": 698,
+      "issues": [],
+      "total": 0
+    },
+    {
+      "name": "diaria manual scroll pause and resume",
+      "pausedAt": 40,
+      "pausedAfter": 40,
+      "resumedAt": 40,
+      "geometry": {
+        "height": 1080,
+        "scrollHeight": 3281,
+        "reduced": false
+      },
+      "passed": false
+    },
+    {
+      "name": "diaria small modal",
+      "width": 320,
+      "height": 424,
+      "viewportWidth": 320,
+      "viewportHeight": 640,
+      "scrollWidth": 318,
+      "clientWidth": 318
+    },
+    {
+      "name": "diaria focus stays in dialog",
+      "passed": true
+    },
+    {
+      "name": "diaria Escape closes",
+      "passed": true
+    },
+    {
+      "name": "combined daily filters",
+      "blocks": 1,
+      "text": "Bloco D\n31 leitos\n15 concorrentes\n16 camareiras\n48%\n52%\n7D\n770\n769\n768\n767\n766\n765\n×3\n764\n763\n762\n761\n760\n759\n758\n757\n756\n755\n754\n×3\n753\n752\n751\n750\n749\n748\n747\n746\n745\n744\n743\n742"
+    },
+    {
+      "name": "daily search highlight",
+      "bed": "1858",
+      "shadow": "oklch(0.74 0.18 230 / 0.9) 0px 0px 0px 3px"
+    },
+    {
+      "name": "daily completion feedback",
+      "count": 1
+    },
+    {
+      "name": "daily light theme",
+      "width": 320,
+      "overflow": false
+    },
+    {
+      "name": "daily light theme",
+      "width": 390,
+      "overflow": false
+    },
+    {
+      "name": "daily light theme",
+      "width": 768,
+      "overflow": false
+    },
+    {
+      "name": "daily light theme",
+      "width": 1920,
+      "overflow": false
+    },
+    {
+      "name": "few terminal beds",
+      "count": 3
+    },
+    {
+      "name": "320px touch controls",
+      "overflow": false,
+      "osHeight": 44,
+      "completeSize": {
+        "width": 44,
+        "height": 44
+      }
+    }
+  ],
+  "writes": [],
+  "errorSummary": []
+}
