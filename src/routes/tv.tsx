@@ -1475,7 +1475,7 @@ function TerminalBedsPanel({
                         className={`qh-bed-status inline-block min-w-0 break-words rounded py-px text-[11px] font-semibold normal-case leading-tight tracking-normal sm:text-[11px] lg:text-[11px] ${
                           version > 0 ? "tv-status-pill-morph" : ""
                         }`}
-                        style={{ color: base }}
+                        style={{ color: `color-mix(in srgb, ${base} 55%, white)` }}
                       >
                         {isDismantling ? KIND_LABEL.desmontagem : overtime ? "Estourado" : KIND_LABEL[kind]}
                       </span>

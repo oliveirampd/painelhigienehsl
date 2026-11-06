@@ -518,12 +518,6 @@
   outline: 2px solid rgba(186, 220, 253, 0.9);
   outline-offset: 2px;
 }
-@media (hover: hover) and (pointer: fine) {
-  .tv-terminal-bed-card[role="button"]:hover {
-    background-color: var(--qh-surface-hover);
-    border-color: var(--qh-border);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .tv-terminal-bed-card { transition: none !important; }
 }
@@ -777,10 +771,13 @@
 .tv-terminal-page .qh-operation .truncate { white-space: normal; overflow-wrap: anywhere; }
 .tv-terminal-page .qh-recent-item { background: var(--qh-bg); border-color: var(--qh-border-subtle); border-radius: 6px; }
 .tv-terminal-page .tv-terminal-bed-card {
-  background: var(--qh-surface); border: 1px solid var(--qh-border);
+  background-color: var(--qh-surface);
+  background-color: color-mix(in srgb, var(--qh-accent) 35%, var(--qh-surface));
+  border: 1px solid var(--qh-border);
+  border-color: color-mix(in srgb, var(--qh-accent) 28%, var(--qh-border));
   border-left: 3px solid var(--qh-accent); border-radius: 8px;
   padding: 10px; gap: 4px; box-shadow: none;
-  transition: background-color 140ms ease-out, border-color 220ms ease-out;
+  transition: background-color 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .tv-terminal-page .tv-terminal-bed-card > div:first-of-type { flex-wrap: wrap; }
 .tv-terminal-page .tv-terminal-bed-card > div:first-of-type > span:first-child { font-size: 17px; font-weight: 600; }
@@ -837,8 +834,13 @@
 .tv-terminal-page .bed-detail-dialog :is(h2,h3,.font-semibold) { color: var(--qh-text); }
 .tv-terminal-page .bed-detail-dialog section:first-child { border-left: 3px solid var(--bed-accent); }
 @media (hover: hover) and (pointer: fine) {
-  .tv-terminal-page :is(.tv-terminal-bed-card[role="button"], .panel-status-row):hover,
+  .tv-terminal-page .panel-status-row:hover,
   .dark.daily-panel-page .qh-daily-bed:hover { background-color: var(--qh-surface-hover); }
+  .tv-terminal-page .tv-terminal-bed-card[role="button"]:hover {
+    background-color: color-mix(in srgb, var(--qh-accent) 41%, var(--qh-surface));
+    border-color: color-mix(in srgb, var(--qh-accent) 35%, var(--qh-border));
+    border-left-color: var(--qh-accent);
+  }
 }
 @media (pointer: coarse) {
   :is(.tv-terminal-page, .dark.daily-panel-page) :is(button, .panel-nav-item, input, select, a[href="/control"]) { min-height: 44px; }
