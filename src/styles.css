@@ -518,12 +518,6 @@
   outline: 2px solid rgba(186, 220, 253, 0.9);
   outline-offset: 2px;
 }
-@media (hover: hover) and (pointer: fine) {
-  .tv-terminal-bed-card[role="button"]:hover {
-    background-color: color-mix(in srgb, var(--qh-accent) 41%, var(--qh-surface));
-    border-color: color-mix(in srgb, var(--qh-accent) 35%, var(--qh-border));
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .tv-terminal-bed-card { transition: none !important; }
 }
