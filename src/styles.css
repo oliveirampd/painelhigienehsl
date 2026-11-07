@@ -819,7 +819,24 @@
   border-radius: 6px; font-family: inherit; font-size: 13px;
 }
 .dark.daily-panel-page .animate-bed-blink { animation: none; }
+/* KPIs and terminal-highlighting icons keep their existing single cycle. */
 .dark.daily-panel-page :is(.animate-sweep, .animate-linen) { animation-duration: 1800ms; animation-iteration-count: 1; }
+
+@keyframes qh-concurrent-working {
+  0%, 100% { transform: translateX(-1.5px) rotate(-8deg); }
+  50% { transform: translateX(1.5px) rotate(8deg); }
+}
+@keyframes qh-linen-working {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+.dark.daily-panel-page .qh-daily-bed .animate-sweep.qh-daily-work-icon {
+  transform-origin: center;
+  animation: qh-concurrent-working 1.6s ease-in-out infinite;
+}
+.dark.daily-panel-page .qh-daily-bed .animate-linen.qh-daily-work-icon {
+  animation: qh-linen-working 2s ease-in-out infinite;
+}
 .dark.daily-panel-page .panel-surface :is(input, select, button) { border-radius: 6px; min-height: 36px; }
 :is(.tv-terminal-page, .dark.daily-panel-page) [role="dialog"] {
   background: var(--qh-surface); border-color: var(--qh-border); border-radius: var(--qh-modal-radius);

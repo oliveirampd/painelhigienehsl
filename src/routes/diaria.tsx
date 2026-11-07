@@ -1662,11 +1662,11 @@ function BedTile({
             />
           )}
           {!altaColor && activeK && (
-            <BedDouble className="h-3.5 w-3.5 animate-linen" style={{ color: CAMAREIRA_COLOR }} />
+            <BedDouble className="h-3.5 w-3.5 animate-linen qh-daily-work-icon" style={{ color: CAMAREIRA_COLOR }} />
           )}
           {!altaColor && activeC && (
             <BrushCleaning
-              className="h-3.5 w-3.5 animate-sweep"
+              className="h-3.5 w-3.5 animate-sweep qh-daily-work-icon"
               style={{ color: CONCORRENTE_COLOR }}
             />
           )}
